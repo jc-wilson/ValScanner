@@ -11,7 +11,7 @@ from PySide6.QtCore import Qt, QTimer, QSize
 from PySide6.QtGui import QPixmap, QIcon, QFontDatabase, QFont, QColor
 import sys
 import os
-import math
+import random
 import asyncio
 import qasync
 from core.api_client import ValoRank
@@ -29,7 +29,7 @@ def resource_path(relative_path):
 
 class WeaponPopup(QDialog):
     WEAPON_ORDER = [
-        "Classic", "Shorty", "Frenzy", "Ghost", "Sheriff",
+        "Classic", "Bandit", "Shorty", "Frenzy", "Ghost", "Sheriff",
         "Stinger", "Spectre",
         "Bucky", "Judge",
         "Bulldog", "Guardian", "Phantom", "Vandal",
@@ -262,12 +262,12 @@ class ValorantStatsWindow(QMainWindow):
         self.combo = QComboBox()
         self.combo.currentTextChanged.connect(self.on_selection_changed)
         self.combo.addItems([
-            "Astra", "Breach", "Brimstone", "Chamber", "Clove", "Cypher",
+            "Random", "Astra", "Breach", "Brimstone", "Chamber", "Clove", "Cypher",
             "Deadlock", "Fade", "Gekko", "Harbor", "Iso", "Jett", "KAY/O",
             "Killjoy", "Neon", "Omen", "Phoenix", "Raze", "Reyna", "Sage",
             "Skye", "Sova", "Tejo", "Veto", "Viper", "Vyse", "Waylay", "Yoru"
         ])
-        self.combo.setCurrentIndex(4)
+        self.combo.setCurrentIndex(0)
         self.combo.setMinimumWidth(200)
         self.agent = self.uuid_handler.agent_converter_reversed(self.combo.currentText())
 
@@ -1284,6 +1284,15 @@ class ValorantStatsWindow(QMainWindow):
     def instalock_agent(self):
         self.lock_agent_button.setEnabled(False)
         try:
+            if self.combo.currentText() == "Random":
+                rand_agent = random.randint(0, 28)
+                agents = [
+                    "Astra", "Breach", "Brimstone", "Chamber", "Clove", "Cypher",
+                    "Deadlock", "Fade", "Gekko", "Harbor", "Iso", "Jett", "KAY/O",
+                    "Killjoy", "Neon", "Omen", "Phoenix", "Raze", "Reyna", "Sage",
+                    "Skye", "Sova", "Tejo", "Veto", "Viper", "Vyse", "Waylay", "Yoru"
+                ]
+                self.agent = self.uuid_handler.agent_converter_reversed(agents[rand_agent])
             instalock_agent(self.agent)
         finally:
             self.lock_agent_button.setEnabled(True)

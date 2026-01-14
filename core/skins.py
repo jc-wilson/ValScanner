@@ -47,28 +47,29 @@ class SkinHandler:
         self.convert_skins(puuid)
         return {
             "Classic": self.converted_skins[puuid][1],
-            "Shorty": self.converted_skins[puuid][3],
-            "Frenzy": self.converted_skins[puuid][4],
+            "Bandit": self.converted_skins[puuid][3],
+            "Shorty": self.converted_skins[puuid][4],
+            "Frenzy": self.converted_skins[puuid][5],
             "Ghost": self.converted_skins[puuid][0],
-            "Sheriff": self.converted_skins[puuid][15],
+            "Sheriff": self.converted_skins[puuid][16],
 
-            "Stinger": self.converted_skins[puuid][18],
-            "Spectre": self.converted_skins[puuid][5],
+            "Stinger": self.converted_skins[puuid][19],
+            "Spectre": self.converted_skins[puuid][6],
 
-            "Bucky": self.converted_skins[puuid][10],
-            "Judge": self.converted_skins[puuid][16],
+            "Bucky": self.converted_skins[puuid][11],
+            "Judge": self.converted_skins[puuid][17],
 
-            "Bulldog": self.converted_skins[puuid][13],
-            "Guardian": self.converted_skins[puuid][6],
-            "Phantom": self.converted_skins[puuid][17],
-            "Vandal": self.converted_skins[puuid][11],
+            "Bulldog": self.converted_skins[puuid][14],
+            "Guardian": self.converted_skins[puuid][7],
+            "Phantom": self.converted_skins[puuid][18],
+            "Vandal": self.converted_skins[puuid][12],
 
-            "Marshal": self.converted_skins[puuid][14],
-            "Outlaw": self.converted_skins[puuid][8],
-            "Operator": self.converted_skins[puuid][12],
+            "Marshal": self.converted_skins[puuid][15],
+            "Outlaw": self.converted_skins[puuid][9],
+            "Operator": self.converted_skins[puuid][13],
 
-            "Ares": self.converted_skins[puuid][7],
-            "Odin": self.converted_skins[puuid][9],
+            "Ares": self.converted_skins[puuid][8],
+            "Odin": self.converted_skins[puuid][10],
 
             "Knife": self.converted_skins[puuid][2],
         }
