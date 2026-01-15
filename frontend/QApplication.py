@@ -4,8 +4,8 @@ from urllib.parse import quote
 from PySide6.QtWidgets import (
     QApplication, QMainWindow,
     QVBoxLayout, QGridLayout, QHBoxLayout, QWidget, QLabel, QPushButton,
-    QComboBox, QFrame, QSplitter, QScrollArea, QStackedWidget, QToolButton,
-    QButtonGroup, QDialog, QGraphicsDropShadowEffect, QSizePolicy, QProgressBar
+    QComboBox, QFrame, QSplitter, QScrollArea, QDialog,
+    QGraphicsDropShadowEffect, QSizePolicy, QProgressBar
 )
 from PySide6.QtCore import Qt, QTimer, QSize
 from PySide6.QtGui import QPixmap, QIcon, QFontDatabase, QFont, QColor
@@ -19,6 +19,7 @@ from core.dodge_button import dodge
 from core.instalock_agent import instalock_agent
 from core.valorant_uuid import UUIDHandler
 
+
 def resource_path(relative_path):
     """Get absolute path to resource, works for dev and for PyInstaller .exe"""
     try:
@@ -26,6 +27,7 @@ def resource_path(relative_path):
     except Exception:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
+
 
 class WeaponPopup(QDialog):
     WEAPON_ORDER = [
@@ -199,7 +201,7 @@ class WeaponPopup(QDialog):
                 pixmap.scaled(120, 70, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
         else:
-            preview.setText("No Preview")
+            preview.setText("No Skin")
             preview.setProperty("empty", "true")
 
         preview.style().unpolish(preview)
@@ -230,6 +232,7 @@ class WeaponPopup(QDialog):
 
         return tile
 
+
 class ValorantStatsWindow(QMainWindow):
     def __init__(self, players=None):
         super().__init__()
@@ -255,6 +258,14 @@ class ValorantStatsWindow(QMainWindow):
         self.setWindowTitle("Who Will They Be")
         self.setMinimumSize(1200, 720)
         self.setWindowIcon(QIcon(resource_path("assets/logoone.png")))
+
+        # Auto-refresh Timer Setup
+        self.refresh_interval = 60
+        self.current_countdown = self.refresh_interval
+        self.is_paused = False
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.tick_timer)
+        self.timer.start(1000)
 
         # Instalock agent list
         self.agent_label = QLabel("Agent")
@@ -284,8 +295,22 @@ class ValorantStatsWindow(QMainWindow):
         self.dodge_button.clicked.connect(self.run_dodge_button)
         self.dodge_button.setObjectName("dodgeButton")
 
+        # Refresh controls
+        self.countdown_label = QLabel(f"Refreshing in {self.current_countdown} seconds")
+        self.countdown_label.setObjectName("countdownLabel")
+        self.countdown_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+        self.pause_button = QPushButton()
+        self.pause_button.setIcon(QIcon(resource_path("assets/pause.png")))
+        self.pause_button.setCursor(Qt.PointingHandCursor)
+        self.pause_button.clicked.connect(self.toggle_pause)
+        self.pause_button.setObjectName("pauseButton")
+        self.pause_button.setIconSize(QSize(52, 52))
+        self.pause_button.setFixedSize(52, 52)
+
         self.refresh_button = QPushButton()
         self.refresh_button.setIcon(QIcon(resource_path("assets/refresh.png")))
+        self.refresh_button.setCursor(Qt.PointingHandCursor)
         self.refresh_button.setObjectName("refreshButton")
         self.refresh_button.setIconSize(QSize(52, 52))
         self.refresh_button.setFixedSize(52, 52)
@@ -294,10 +319,6 @@ class ValorantStatsWindow(QMainWindow):
         # Meta display chips
         self.gamemode_chip, self.gamemode_value = self.build_meta_chip("Gamemode")
         self.server_chip, self.server_value = self.build_meta_chip("Server")
-
-        # View toggle control
-        self.view_toggle = self.build_view_toggle()
-        self.view_mode = "cards"
 
         # Progress Bar
         self.progress_bar = QProgressBar()
@@ -337,7 +358,11 @@ class ValorantStatsWindow(QMainWindow):
         title_block.addLayout(chip_row)
 
         title_row.addLayout(title_block, stretch=1)
-        title_row.addWidget(self.view_toggle, alignment=Qt.AlignVCenter)
+
+        # Added countdown and pause button here
+        title_row.addWidget(self.countdown_label, alignment=Qt.AlignVCenter)
+        title_row.addWidget(self.pause_button, alignment=Qt.AlignVCenter)
+
         title_row.addWidget(self.refresh_button, alignment=Qt.AlignVCenter)
         header_layout.addLayout(title_row)
 
@@ -359,50 +384,49 @@ class ValorantStatsWindow(QMainWindow):
         controls_row.addWidget(self.load_more_matches_button)
         header_layout.addLayout(controls_row)
 
-        # Views
-        left_card_panel, self.card_left_layout = self.build_card_team_panel("red")
-        right_card_panel, self.card_right_layout = self.build_card_team_panel("blue")
+        # Team Panels (Compact Only)
+        left_panel, self.left_layout = self.build_team_panel("red")
+        right_panel, self.right_layout = self.build_team_panel("blue")
 
-        card_splitter = QSplitter(Qt.Horizontal)
-        card_splitter.addWidget(left_card_panel)
-        card_splitter.addWidget(right_card_panel)
-        card_splitter.setChildrenCollapsible(False)
-        card_splitter.setOpaqueResize(True)
-        card_splitter.setHandleWidth(4)
-        card_splitter.setSizes([750, 750])
-
-        # Compact Panel Splitter (Using QSplitter so users can adjust width)
-        left_compact_panel, self.compact_left_layout = self.build_compact_team_panel("red")
-        right_compact_panel, self.compact_right_layout = self.build_compact_team_panel("blue")
-
-        compact_splitter = QSplitter(Qt.Horizontal)
-        compact_splitter.addWidget(left_compact_panel)
-        compact_splitter.addWidget(right_compact_panel)
-        compact_splitter.setChildrenCollapsible(False)
-        compact_splitter.setHandleWidth(4)
-        compact_splitter.setSizes([750, 750])
-
-        self.view_stack = QStackedWidget()
-        self.view_stack.addWidget(card_splitter)
-        self.view_stack.addWidget(compact_splitter)
+        main_splitter = QSplitter(Qt.Horizontal)
+        main_splitter.addWidget(left_panel)
+        main_splitter.addWidget(right_panel)
+        main_splitter.setChildrenCollapsible(False)
+        main_splitter.setHandleWidth(4)
+        main_splitter.setSizes([750, 750])
 
         layout = QVBoxLayout()
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(10)
         layout.addWidget(header_frame)
-        layout.addWidget(self.progress_bar) # Added Progress Bar here
-        layout.addWidget(self.view_stack, 1)
+        layout.addWidget(self.progress_bar)
+        layout.addWidget(main_splitter, 1)
 
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
 
         self.apply_theme()
-        self.set_view_mode("compact")
 
         # Populate players if initial data provided
         if players:
             self.load_players(players)
+
+    # ---------------------------------------------------------
+    # Auto Refresh Logic
+    # ---------------------------------------------------------
+    def tick_timer(self):
+        if not self.is_paused:
+            self.current_countdown -= 1
+            if self.current_countdown <= 0:
+                self.current_countdown = self.refresh_interval
+                self.run_valo_stats()
+            self.countdown_label.setText(f"Refreshing in {self.current_countdown} seconds")
+
+    def toggle_pause(self):
+        self.is_paused = not self.is_paused
+        self.pause_button.setIcon(QIcon(resource_path("assets/play.png")) if self.is_paused else QIcon(resource_path("assets/pause.png")))
+
 
     # ---------------------------------------------------------
     # Utility setup methods
@@ -432,76 +456,7 @@ class ValorantStatsWindow(QMainWindow):
 
         return chip, value
 
-    def build_view_toggle(self):
-        container = QFrame()
-        container.setObjectName("viewToggle")
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(6)
-
-        button_group = QButtonGroup(container)
-        button_group.setExclusive(True)
-
-        options = [
-            ("Expanded", "cards"),
-            ("Compact", "compact"),
-        ]
-
-        self.view_buttons = {}
-        for index, (text, mode) in enumerate(options):
-            button = QToolButton()
-            button.setObjectName("viewToggleButton")
-            button.setText(text)
-            button.setCheckable(True)
-            button.setCursor(Qt.PointingHandCursor)
-            layout.addWidget(button)
-            button_group.addButton(button, index)
-            button.clicked.connect(lambda checked, m=mode: self.set_view_mode(m))
-            self.view_buttons[mode] = button
-
-        self.view_button_group = button_group
-        return container
-
-    def set_view_mode(self, mode):
-        if not hasattr(self, "view_stack"):
-            return
-
-        index = 0 if mode == "cards" else 1
-        if mode not in ("cards", "compact"):
-            return
-
-        self.view_stack.setCurrentIndex(index)
-        self.view_mode = mode
-
-        if hasattr(self, "view_buttons"):
-            for key, button in self.view_buttons.items():
-                button.blockSignals(True)
-                button.setChecked(key == mode)
-                button.blockSignals(False)
-
-    def build_card_team_panel(self, colour_key):
-        panel = QFrame()
-        panel.setObjectName("teamPanel")
-        panel.setProperty("teamColor", colour_key)
-        panel_layout = QVBoxLayout(panel)
-        panel_layout.setContentsMargins(15, 12, 15, 15)
-        panel_layout.setSpacing(12)
-
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(QFrame.NoFrame)
-
-        content = QWidget()
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(16)
-        content_layout.setAlignment(Qt.AlignTop)
-
-        scroll_area.setWidget(content)
-        panel_layout.addWidget(scroll_area)
-        return panel, content_layout
-
-    def build_compact_team_panel(self, colour_key):
+    def build_team_panel(self, colour_key):
         panel = QFrame()
         panel.setObjectName("compactPanel")
         panel.setProperty("teamColor", colour_key)
@@ -509,7 +464,6 @@ class ValorantStatsWindow(QMainWindow):
         panel_layout.setContentsMargins(15, 12, 15, 15)
         panel_layout.setSpacing(12)
 
-        # Added Scroll Area here for Compact view too
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
@@ -540,28 +494,12 @@ class ValorantStatsWindow(QMainWindow):
         safe_text = quote(str(riot_id), safe="")
         return (
             "https://tracker.gg/valorant/profile/riot/"
-            f"{safe_text}/overview?platform=pc&playlist=competitive&season=4c4b8cff-43eb-13d3-8f14-96b783c90cd2"
+            f"{safe_text}/overview?platform=pc&playlist=competitive&season=3ea2b318-423b-cf86-25da-7cbb0eefbe2d"
         )
 
     def create_stat_widget(self, title, value):
         wrapper = QFrame()
-        wrapper.setObjectName("statWidget")
-        layout = QVBoxLayout(wrapper)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
-
-        title_label = QLabel(title.upper())
-        title_label.setObjectName("statTitle")
-        value_label = QLabel(value)
-        value_label.setObjectName("statValue")
-        layout.addWidget(title_label)
-        layout.addWidget(value_label)
-        return wrapper, value_label
-
-    def create_compact_stat(self, title, value):
-        wrapper = QFrame()
         wrapper.setObjectName("compactStat")
-        # Added minimum width to prevent disappearing when resized
         wrapper.setMinimumWidth(65)
         layout = QVBoxLayout(wrapper)
         layout.setContentsMargins(8, 5, 8, 5)
@@ -575,21 +513,17 @@ class ValorantStatsWindow(QMainWindow):
         layout.addWidget(value_label, alignment=Qt.AlignCenter)
         return wrapper, value_label
 
-    def create_skin_button(self, player, compact=False):
+    def create_skin_button(self, player):
         skins = player.get("skins") or {}
         button = QPushButton()
         button.setCursor(Qt.PointingHandCursor)
-        button.setObjectName("compactSkinButton" if compact else "skinButton")
+        button.setObjectName("compactSkinButton")
 
-        if compact:
-            button.setFixedHeight(32)
-            button.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        button.setFixedHeight(32)
+        button.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        button.setText("SKINS")
 
         if skins:
-            if compact:
-                button.setText("SKINS")
-            else:
-                button.setText("SKINS")
             player_name = str(player.get("name", "Unknown"))
             button.clicked.connect(
                 lambda _, name=player_name, data=skins: self.open_skin_popup(name, data)
@@ -600,174 +534,7 @@ class ValorantStatsWindow(QMainWindow):
 
         return button
 
-    def create_player_card(self, player):
-        card = QFrame()
-        card.setObjectName("playerCard")
-        card.setMinimumHeight(0)
-
-        card_layout = QHBoxLayout(card)
-        card_layout.setContentsMargins(14, 12, 14, 12)
-        card_layout.setSpacing(24)
-
-        agent_icon_label = QLabel()
-        agent_icon_label.setObjectName("agentIcon")
-        agent_icon_label.setFixedSize(64, 64)
-        agent_icon_label.setAlignment(Qt.AlignCenter)
-
-        agent_name = str(player.get("agent", "Unknown"))
-        agent_icon = self.agent_icons.get(agent_name)
-        if agent_icon:
-            agent_icon_label.setPixmap(
-                agent_icon.scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            )
-        else:
-            agent_icon_label.setText(agent_name)
-        card_layout.addWidget(agent_icon_label)
-
-        info_column = QVBoxLayout()
-        info_column.setContentsMargins(0, 0, 0, 0)
-        info_column.setSpacing(12)
-
-        # Name and level row
-        name_row = QHBoxLayout()
-        name_row.setSpacing(12)
-
-        player_name = str(player.get("name", "Unknown"))
-        name_label = QLabel()
-        name_label.setObjectName("playerName")
-        name_label.setTextFormat(Qt.RichText)
-        name_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
-        name_label.setOpenExternalLinks(True)
-        name_label.setText(
-            f"<a href='{self.build_tracker_url(player_name)}'>{escape(player_name)}</a>"
-        )
-        name_row.addWidget(name_label, 1)
-
-        level_value = player.get("level", "N/A")
-        level_label = QLabel(f"Lv. {level_value}")
-        level_label.setObjectName("playerLevel")
-        name_row.addWidget(level_label, alignment=Qt.AlignRight)
-        info_column.addLayout(name_row)
-
-        # Rank and peak information
-        meta_row = QHBoxLayout()
-        meta_row.setSpacing(20)
-
-        rank_container = QVBoxLayout()
-        rank_container.setSpacing(6)
-        rank_title = QLabel("Rank")
-        rank_title.setObjectName("metaTitle")
-        rank_container.addWidget(rank_title)
-
-        rank_display = QHBoxLayout()
-        rank_display.setSpacing(10)
-
-        rank_icon_label = QLabel()
-        rank_icon_label.setObjectName("rankIcon")
-        rank_icon_label.setFixedSize(44, 44)
-        rank_icon_label.setAlignment(Qt.AlignCenter)
-
-        rank_name = str(player.get("rank", "Unknown"))
-        rank_icon = self.rank_icons.get(rank_name)
-        if rank_icon:
-            rank_icon_label.setPixmap(
-                rank_icon.scaled(44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            )
-        else:
-            rank_icon_label.setText(rank_name if rank_name not in ("[]", "") else "N/A")
-        rank_display.addWidget(rank_icon_label)
-
-        rank_text = QLabel(rank_name if rank_name not in ("[]", "") else "N/A")
-        rank_text.setObjectName("metaValue")
-        rank_display.addWidget(rank_text)
-
-        rr_value = str(player.get("rr", "N/A"))
-        rr_label = QLabel("RR N/A" if rr_value == "N/A" else f"{rr_value} RR")
-        rr_label.setObjectName("metaAux")
-        rank_display.addWidget(rr_label)
-
-        rank_display.addStretch(1)
-        rank_container.addLayout(rank_display)
-        meta_row.addLayout(rank_container)
-
-        peak_container = QVBoxLayout()
-        peak_container.setSpacing(6)
-        peak_title = QLabel("Peak Rank")
-        peak_title.setObjectName("metaTitle")
-        peak_container.addWidget(peak_title)
-
-        peak_display = QHBoxLayout()
-        peak_display.setSpacing(10)
-
-        peak_icon_label = QLabel()
-        peak_icon_label.setObjectName("peakIcon")
-        peak_icon_label.setFixedSize(44, 44)
-        peak_icon_label.setAlignment(Qt.AlignCenter)
-
-        peak_name = str(player.get("peak_rank", "Unknown"))
-        peak_icon = self.rank_icons.get(peak_name)
-        if peak_icon:
-            peak_icon_label.setPixmap(
-                peak_icon.scaled(44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            )
-        elif peak_name == "[]":
-            peak_icon_label.setText("N/A")
-        else:
-            peak_icon_label.setText(peak_name)
-        peak_display.addWidget(peak_icon_label)
-
-        peak_text = QLabel(peak_name if peak_name not in ("[]", "") else "N/A")
-        peak_text.setObjectName("metaValue")
-        peak_display.addWidget(peak_text)
-
-        peak_display.addStretch(1)
-        peak_container.addLayout(peak_display)
-        meta_row.addLayout(peak_container)
-
-        info_column.addLayout(meta_row)
-
-        stats_grid = QGridLayout()
-        stats_grid.setHorizontalSpacing(24)
-        stats_grid.setVerticalSpacing(10)
-
-        matches_value = str(player.get("matches", 0))
-        matches_widget, _ = self.create_stat_widget("Matches", matches_value)
-        stats_grid.addWidget(matches_widget, 0, 0)
-
-        wl_value = str(player.get("wl", "N/A"))
-        wl_widget, wl_label = self.create_stat_widget("W/L", wl_value)
-        self.apply_stat_colour(wl_label, wl_value, "wl")
-        stats_grid.addWidget(wl_widget, 0, 1)
-
-        acs_value = str(player.get("acs", "N/A"))
-        acs_widget, acs_label = self.create_stat_widget("ACS", acs_value)
-        self.apply_stat_colour(acs_label, acs_value, "acs")
-        stats_grid.addWidget(acs_widget, 0, 2)
-
-        kd_value = str(player.get("kd", "N/A"))
-        kd_widget, kd_label = self.create_stat_widget("KD", kd_value)
-        self.apply_stat_colour(kd_label, kd_value, "kd")
-        stats_grid.addWidget(kd_widget, 1, 0)
-
-        hs_raw = player.get("hs", "N/A")
-        hs_value = f"{hs_raw}%" if str(hs_raw) not in ("N/A", "[]") else str(hs_raw)
-        hs_widget, hs_label = self.create_stat_widget("HS", hs_value)
-        self.apply_stat_colour(hs_label, str(hs_raw), "hs")
-        stats_grid.addWidget(hs_widget, 1, 1)
-
-        peak_act_value = str(player.get("peak_act", "N/A"))
-        peak_act_widget, _ = self.create_stat_widget("Peak Act", peak_act_value)
-        stats_grid.addWidget(peak_act_widget, 1, 2)
-
-        info_column.addLayout(stats_grid)
-
-        skin_button = self.create_skin_button(player)
-        info_column.addWidget(skin_button, alignment=Qt.AlignLeft)
-        card_layout.addLayout(info_column, 1)
-
-        return card
-
-    def create_compact_player_row(self, player):
+    def create_player_row(self, player):
         row = QFrame()
         row.setObjectName("compactRow")
 
@@ -807,7 +574,6 @@ class ValorantStatsWindow(QMainWindow):
         name_label.setText(
             f"<a href='{self.build_tracker_url(player_name)}'>{escape(player_name)}</a>"
         )
-        # Added minimum width for name so it doesn't vanish
         name_label.setMinimumWidth(100)
         name_row.addWidget(name_label, 1)
 
@@ -877,7 +643,7 @@ class ValorantStatsWindow(QMainWindow):
         peak_act_label.setObjectName("metaAux")
         meta_bar.addWidget(peak_act_label)
 
-        skin_button = self.create_skin_button(player, compact=True)
+        skin_button = self.create_skin_button(player)
         meta_bar.addWidget(skin_button)
 
         meta_bar.addStretch(1)
@@ -887,27 +653,27 @@ class ValorantStatsWindow(QMainWindow):
         stats_row.setSpacing(10)
 
         matches_value = str(player.get("matches", 0))
-        matches_widget, _ = self.create_compact_stat("Matches", matches_value)
+        matches_widget, _ = self.create_stat_widget("Matches", matches_value)
         stats_row.addWidget(matches_widget)
 
         wl_value = str(player.get("wl", "N/A"))
-        wl_widget, wl_label = self.create_compact_stat("W/L", wl_value)
+        wl_widget, wl_label = self.create_stat_widget("W/L", wl_value)
         self.apply_stat_colour(wl_label, wl_value, "wl")
         stats_row.addWidget(wl_widget)
 
         acs_value = str(player.get("acs", "N/A"))
-        acs_widget, acs_label = self.create_compact_stat("ACS", acs_value)
+        acs_widget, acs_label = self.create_stat_widget("ACS", acs_value)
         self.apply_stat_colour(acs_label, acs_value, "acs")
         stats_row.addWidget(acs_widget)
 
         kd_value = str(player.get("kd", "N/A"))
-        kd_widget, kd_label = self.create_compact_stat("KD", kd_value)
+        kd_widget, kd_label = self.create_stat_widget("KD", kd_value)
         self.apply_stat_colour(kd_label, kd_value, "kd")
         stats_row.addWidget(kd_widget)
 
         hs_raw = player.get("hs", "N/A")
         hs_value = f"{hs_raw}%" if str(hs_raw) not in ("N/A", "[]") else str(hs_raw)
-        hs_widget, hs_label = self.create_compact_stat("HS", hs_value)
+        hs_widget, hs_label = self.create_stat_widget("HS", hs_value)
         self.apply_stat_colour(hs_label, str(hs_raw), "hs")
         stats_row.addWidget(hs_widget)
 
@@ -988,14 +754,6 @@ class ValorantStatsWindow(QMainWindow):
             "QProgressBar#loadingBar::chunk {"
             " background-color: #355cff;"
             "}"
-            "QLabel#appTitle {"
-            " font-size: 24px;"
-            " font-weight: 800;"
-            " letter-spacing: 1.4px;"
-            "}"
-            "QLabel#headerLogo {"
-            " min-height: 96px;"
-            "}"
             "QLabel#sectionLabel {"
             " color: #9aa4c4;"
             " font-size: 12px;"
@@ -1014,28 +772,7 @@ class ValorantStatsWindow(QMainWindow):
             " border: 1px solid rgba(63, 76, 107, 0.35);"
             " min-width: 160px;"
             "}"
-            "QFrame#viewToggle {"
-            " background-color: rgba(18, 27, 42, 0.9);"
-            " border-radius: 18px;"
-            " border: 1px solid rgba(63, 76, 107, 0.4);"
-            "}"
-            "QToolButton#viewToggleButton {"
-            " background: transparent;"
-            " border: none;"
-            " color: #8f9abd;"
-            " font-weight: 600;"
-            " padding: 6px 14px;"
-            " border-radius: 14px;"
-            "}"
-            "QToolButton#viewToggleButton:hover {"
-            " background-color: rgba(53, 92, 255, 0.15);"
-            " color: #c7d3ff;"
-            "}"
-            "QToolButton#viewToggleButton:checked {"
-            " background-color: #355cff;"
-            " color: #ffffff;"
-            "}"
-            "QFrame#teamPanel, QFrame#compactPanel {"
+            "QFrame#compactPanel {"
             " background-color: rgba(11, 15, 25, 0.92);"
             " border-radius: 22px;"
             " border: 1px solid rgba(63, 76, 107, 0.35);"
@@ -1073,11 +810,11 @@ class ValorantStatsWindow(QMainWindow):
             " color: #8b96b6;"
             " font-size: 12px;"
             "}"
-            "QLabel#metaTitle {"
+            "QLabel#countdownLabel {"
             " color: #7e8aa7;"
-            " font-size: 11px;"
-            " letter-spacing: 1.2px;"
-            " text-transform: uppercase;"
+            " font-size: 13px;"
+            " letter-spacing: 0.5px;"
+            " margin-right: 8px;"
             "}"
             "QLabel#playerName {"
             " font-size: 18px;"
@@ -1102,34 +839,10 @@ class ValorantStatsWindow(QMainWindow):
             " font-style: italic;"
             " letter-spacing: 0.6px;"
             "}"
-            "QFrame#playerCard {"
-            " background-color: rgba(13, 18, 30, 0.92);"
-            " border-radius: 18px;"
-            " border: 1px solid rgba(63, 76, 107, 0.35);"
-            "}"
-            "QFrame#playerCard:hover {"
-            " border: 1px solid rgba(86, 104, 138, 0.65);"
-            "}"
             "QFrame#compactStat {"
             " background-color: rgba(20, 28, 44, 0.82);"
             " border-radius: 12px;"
             " padding: 6px 9px;"
-            "}"
-            "QFrame#statWidget {"
-            " background-color: rgba(20, 28, 44, 0.85);"
-            " border-radius: 12px;"
-            " padding: 9px 11px;"
-            "}"
-            "QLabel#statTitle {"
-            " color: #7e8aa7;"
-            " font-size: 11px;"
-            " letter-spacing: 1.2px;"
-            " text-transform: uppercase;"
-            "}"
-            "QLabel#statValue {"
-            " font-size: 16px;"
-            " font-weight: 600;"
-            " color: #f4f6ff;"
             "}"
             "QLabel#compactStatTitle {"
             " color: #7e8aa7;"
@@ -1204,20 +917,6 @@ class ValorantStatsWindow(QMainWindow):
             "QPushButton#refreshButton:hover {"
             " background-color: rgba(44, 63, 95, 0.95);"
             "}"
-            "QPushButton#skinButton {"
-            " background-color: rgba(18, 27, 42, 0.9);"
-            " border-radius: 12px;"
-            " text-align: left;"
-            " padding: 8px 14px;"
-            " border: 1px solid rgba(86, 104, 138, 0.45);"
-            " font-size: 12px;"
-            " letter-spacing: 0.4px;"
-            " color: #dfe6ff;"
-            "}"
-            "QPushButton#skinButton:hover {"
-            " background-color: rgba(30, 43, 65, 0.95);"
-            " border: 1px solid rgba(128, 151, 196, 0.7);"
-            "}"
             "QPushButton#compactSkinButton {"
             " background-color: rgba(18, 27, 42, 0.9);"
             " border-radius: 12px;"
@@ -1228,6 +927,19 @@ class ValorantStatsWindow(QMainWindow):
             " color: #dfe6ff;"
             "}"
             "QPushButton#compactSkinButton:hover {"
+            " background-color: rgba(30, 43, 65, 0.95);"
+            " border: 1px solid rgba(128, 151, 196, 0.7);"
+            "}"
+            "QPushButton#pauseButton {"
+            " background-color: rgba(18, 27, 42, 0.9);"
+            " border-radius: 10px;"
+            " padding: 4px 10px;"
+            " border: 1px solid rgba(86, 104, 138, 0.45);"
+            " font-size: 11px;"
+            " letter-spacing: 0.4px;"
+            " color: #dfe6ff;"
+            "}"
+            "QPushButton#pauseButton:hover {"
             " background-color: rgba(30, 43, 65, 0.95);"
             " border: 1px solid rgba(128, 151, 196, 0.7);"
             "}"
@@ -1335,9 +1047,13 @@ class ValorantStatsWindow(QMainWindow):
         if not self.refresh_button.isEnabled():
             return
 
+        # Reset the timer whenever a refresh is triggered (auto or manual)
+        self.current_countdown = self.refresh_interval
+        self.countdown_label.setText(f"Refreshing in {self.current_countdown} seconds")
+
         self.refresh_button.setEnabled(False)
         self.progress_bar.show()
-        self.progress_bar.setRange(0, 0) # Indeterminate mode
+        self.progress_bar.setRange(0, 0)
         try:
             print("Fetching latest Valorant stats...")
             await self.valo_rank.valo_stats()
@@ -1349,25 +1065,22 @@ class ValorantStatsWindow(QMainWindow):
             self.progress_bar.hide()
 
     # ---------------------------------------------------------
-    # Main data-loading logic (two-column layout)
+    # Main data-loading logic
     # ---------------------------------------------------------
     def load_players(self, players):
         self.left_players = []
         self.right_players = []
 
         if not players:
-            self.populate_card_layout(self.card_left_layout, [], "Waiting for Red team...")
-            self.populate_card_layout(self.card_right_layout, [], "Waiting for Blue team...")
-            self.populate_compact_layout(self.compact_left_layout, [], "Waiting for Red team...")
-            self.populate_compact_layout(self.compact_right_layout, [], "Waiting for Blue team...")
+            self.populate_team_layout(self.left_layout, [], "Waiting for Red team...")
+            self.populate_team_layout(self.right_layout, [], "Waiting for Blue team...")
             self.update_metadata()
             return
 
         player_iterable = players.values() if isinstance(players, dict) else players
         for i, player in enumerate(player_iterable):
             if self.valo_rank.gs[0] == "Deathmatch":
-                print(str(i/2)[2])
-                if str(i/2)[2] == "0":
+                if str(i / 2)[2] == "0":
                     self.left_players.append(player)
                 else:
                     self.right_players.append(player)
@@ -1378,13 +1091,11 @@ class ValorantStatsWindow(QMainWindow):
                 elif team == "Blue":
                     self.right_players.append(player)
 
-        self.populate_card_layout(self.card_left_layout, self.left_players, "Waiting for Red team...")
-        self.populate_card_layout(self.card_right_layout, self.right_players, "Waiting for Blue team...")
-        self.populate_compact_layout(self.compact_left_layout, self.left_players, "Waiting for Red team...")
-        self.populate_compact_layout(self.compact_right_layout, self.right_players, "Waiting for Blue team...")
+        self.populate_team_layout(self.left_layout, self.left_players, "Waiting for Red team...")
+        self.populate_team_layout(self.right_layout, self.right_players, "Waiting for Blue team...")
         self.update_metadata()
 
-    def populate_card_layout(self, layout, players, empty_message):
+    def populate_team_layout(self, layout, players, empty_message):
         self.clear_layout(layout)
         if not players:
             placeholder = QLabel(empty_message)
@@ -1394,19 +1105,7 @@ class ValorantStatsWindow(QMainWindow):
             return
 
         for player in players:
-            layout.addWidget(self.create_player_card(player))
-
-    def populate_compact_layout(self, layout, players, empty_message):
-        self.clear_layout(layout)
-        if not players:
-            placeholder = QLabel(empty_message)
-            placeholder.setObjectName("emptyState")
-            placeholder.setAlignment(Qt.AlignCenter)
-            layout.addWidget(placeholder)
-            return
-
-        for player in players:
-            layout.addWidget(self.create_compact_player_row(player))
+            layout.addWidget(self.create_player_row(player))
 
     def update_metadata(self):
         gamemode = "Unknown"
@@ -1435,6 +1134,7 @@ async def main():
 
 if __name__ == "__main__":
     from PySide6 import QtCore
+
     app = QApplication(sys.argv)
     app.setWindowIcon(QIcon(resource_path("assets/logoone.png")))
     loop = qasync.QEventLoop(app)

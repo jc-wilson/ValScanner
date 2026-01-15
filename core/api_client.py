@@ -248,7 +248,7 @@ class ValoRank:
                     headers=self.modified_header
                 ).json()
 
-                print(self.valorant_mmr)
+                print("self.valorant_mmr:", self.valorant_mmr)
 
                 if self.valorant_mmr["LatestCompetitiveUpdate"]:
                     peak_rank = 0
@@ -262,7 +262,8 @@ class ValoRank:
                         except TypeError:
                             continue
 
-                    prefix = self.uuid_handler.season_uuid_function(peak_act)[0:2]
+                    peak_act_final = self.uuid_handler.season_uuid_function(peak_act)
+                    prefix = peak_act_final[0:2]
 
                     if prefix in ("e1", "e2", "e3", "e4") and peak_rank > 20:
                         self.mmr[puuid] = {
@@ -273,22 +274,22 @@ class ValoRank:
                             },
                             "highest_rank": {
                                 "patched_tier": self.ttr[peak_rank + 3],
-                                "peak_act": self.uuid_handler.season_uuid_function(peak_act),
-                                "season": self.uuid_handler.season_uuid_function(peak_act)
+                                "peak_act": peak_act_final,
+                                "season": peak_act_final
                             }
                         }
-
-                    self.mmr[puuid] = {
-                        "current_data": {
-                            "currenttierpatched": self.ttr[self.valorant_mmr["LatestCompetitiveUpdate"]["TierAfterUpdate"]],
-                            "ranking_in_tier": self.valorant_mmr["LatestCompetitiveUpdate"]["RankedRatingAfterUpdate"]
-                        },
-                        "highest_rank": {
-                            "patched_tier": self.ttr[peak_rank],
-                            "peak_act": self.uuid_handler.season_uuid_function(peak_act),
-                            "season": self.uuid_handler.season_uuid_function(peak_act)
+                    else:
+                        self.mmr[puuid] = {
+                            "current_data": {
+                                "currenttierpatched": self.ttr[self.valorant_mmr["LatestCompetitiveUpdate"]["TierAfterUpdate"]],
+                                "ranking_in_tier": self.valorant_mmr["LatestCompetitiveUpdate"]["RankedRatingAfterUpdate"]
+                            },
+                            "highest_rank": {
+                                "patched_tier": self.ttr[peak_rank],
+                                "peak_act": peak_act_final,
+                                "season": peak_act_final
+                            }
                         }
-                    }
                 else:
                     self.mmr[puuid] = {
                         "current_data": {
