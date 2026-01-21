@@ -271,6 +271,7 @@ class ValorantStatsWindow(QMainWindow):
         self.agent_label = QLabel("Agent")
         self.agent_label.setObjectName("sectionLabel")
         self.combo = QComboBox()
+        self.combo.setCursor(Qt.PointingHandCursor)
         self.combo.currentTextChanged.connect(self.on_selection_changed)
         self.combo.addItems([
             "Random", "Astra", "Breach", "Brimstone", "Chamber", "Clove", "Cypher",
@@ -284,14 +285,17 @@ class ValorantStatsWindow(QMainWindow):
 
         # Primary actions
         self.lock_agent_button = QPushButton("Lock Agent")
+        self.lock_agent_button.setCursor(Qt.PointingHandCursor)
         self.lock_agent_button.clicked.connect(self.instalock_agent)
         self.lock_agent_button.setObjectName("accentButton")
 
         self.load_more_matches_button = QPushButton("Load More Matches (10)")
+        self.load_more_matches_button.setCursor(Qt.PointingHandCursor)
         self.load_more_matches_button.clicked.connect(self.run_load_more_matches_button)
         self.load_more_matches_button.setObjectName("secondaryButton")
 
         self.dodge_button = QPushButton("Dodge Game")
+        self.dodge_button.setCursor(Qt.PointingHandCursor)
         self.dodge_button.clicked.connect(self.run_dodge_button)
         self.dodge_button.setObjectName("dodgeButton")
 

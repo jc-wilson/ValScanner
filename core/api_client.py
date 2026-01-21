@@ -12,21 +12,22 @@ import asyncio
 import json
 import aiohttp
 
+
 class ValoRank:
     def __init__(self):
         self.used_puuids = []
         self.last_match_id = None
-        self.frontend_data = {}     # Dictionary of stats for each player
-        self.cmp = []   #Current Match PUUIDs
+        self.frontend_data = {}  # Dictionary of stats for each player
+        self.cmp = []  # Current Match PUUIDs
         self.ca = {}  # Current Agent
-        self.zero_check = {}    # Total amount of competitive matches a player has that can be loaded
+        self.zero_check = {}  # Total amount of competitive matches a player has that can be loaded
         self.mmr = {}
         self.match_stats = {}
-        self.pip = {}   # Duplicate of player_info_pre so that it doesn't get lost when you load into a match
+        self.pip = {}  # Duplicate of player_info_pre so that it doesn't get lost when you load into a match
         self.handler = None
         self.start = 5
         self.end = 15
-        self.gs = []    # Gamemode and Server
+        self.gs = []  # Gamemode and Server
         self.skins = {}
         self.done = 0
         self.uuid_handler = UUIDHandler()
@@ -84,15 +85,15 @@ class ValoRank:
                 self.handler.party_id = self.handler.party_id.json()
                 print(self.handler.party_id["CurrentPartyID"])
                 party_info = requests.get(
-                    f"https://glz-eu-1.eu.a.pvp.net/parties/v1/parties/{self.handler.party_id["CurrentPartyID"]}",
+                    f"https://glz-eu-1.eu.a.pvp.net/parties/v1/parties/{self.handler.party_id['CurrentPartyID']}",
                     headers=self.handler.match_id_header
                 ).json()
-                pmi = []    # Party Members Info
+                pmi = []  # Party Members Info
                 print(party_info)
                 for player in party_info["Members"]:
                     pmi.append({
                         "puuid": player.get("Subject"),
-                        "rank_up": player.get("CompetitiveTier"),    # Rank unpatched
+                        "rank_up": player.get("CompetitiveTier"),  # Rank unpatched
                         "level": player.get("PlayerIdentity")("AccountLevel"),
                         "name": None,
                         "tag": None
@@ -237,25 +238,26 @@ class ValoRank:
         self.modified_header["X-Riot-ClientVersion"] = self.version_data["data"]["riotClientVersion"]
 
         print(self.cmp)
-        async def stat_collector(puuid):
+
+        async def stat_collector(puuid, session):
             if puuid in self.used_puuids:
                 return
             else:
-                self.valorant_mmr = None
+                valorant_mmr = None
 
-                self.valorant_mmr = requests.get(
-                    f"https://pd.eu.a.pvp.net/mmr/v1/players/{puuid}",
-                    headers=self.modified_header
-                ).json()
+                async with session.get(f"https://pd.eu.a.pvp.net/mmr/v1/players/{puuid}",
+                                       headers=self.modified_header) as resp:
+                    valorant_mmr = await resp.json(content_type=None)
 
-                print("self.valorant_mmr:", self.valorant_mmr)
+                print("valorant_mmr:", valorant_mmr)
 
-                if self.valorant_mmr["LatestCompetitiveUpdate"]:
+                if valorant_mmr["LatestCompetitiveUpdate"]:
                     peak_rank = 0
                     peak_act = None
-                    for season in self.valorant_mmr["QueueSkills"]["competitive"]["SeasonalInfoBySeasonID"]:
+                    for season in valorant_mmr["QueueSkills"]["competitive"]["SeasonalInfoBySeasonID"]:
                         try:
-                            for tier in self.valorant_mmr["QueueSkills"]["competitive"]["SeasonalInfoBySeasonID"][season]["WinsByTier"]:
+                            for tier in valorant_mmr["QueueSkills"]["competitive"]["SeasonalInfoBySeasonID"][season][
+                                "WinsByTier"]:
                                 if int(tier) > peak_rank:
                                     peak_rank = int(tier)
                                     peak_act = season
@@ -268,8 +270,9 @@ class ValoRank:
                     if prefix in ("e1", "e2", "e3", "e4") and peak_rank > 20:
                         self.mmr[puuid] = {
                             "current_data": {
-                                "currenttierpatched": self.ttr[self.valorant_mmr["LatestCompetitiveUpdate"]["TierAfterUpdate"]],
-                                "ranking_in_tier": self.valorant_mmr["LatestCompetitiveUpdate"][
+                                "currenttierpatched": self.ttr[
+                                    valorant_mmr["LatestCompetitiveUpdate"]["TierAfterUpdate"]],
+                                "ranking_in_tier": valorant_mmr["LatestCompetitiveUpdate"][
                                     "RankedRatingAfterUpdate"]
                             },
                             "highest_rank": {
@@ -281,8 +284,9 @@ class ValoRank:
                     else:
                         self.mmr[puuid] = {
                             "current_data": {
-                                "currenttierpatched": self.ttr[self.valorant_mmr["LatestCompetitiveUpdate"]["TierAfterUpdate"]],
-                                "ranking_in_tier": self.valorant_mmr["LatestCompetitiveUpdate"]["RankedRatingAfterUpdate"]
+                                "currenttierpatched": self.ttr[
+                                    valorant_mmr["LatestCompetitiveUpdate"]["TierAfterUpdate"]],
+                                "ranking_in_tier": valorant_mmr["LatestCompetitiveUpdate"]["RankedRatingAfterUpdate"]
                             },
                             "highest_rank": {
                                 "patched_tier": self.ttr[peak_rank],
@@ -303,36 +307,46 @@ class ValoRank:
                         }
                     }
 
-                self.mmr[puuid]["highest_rank"]["season"] = self.mmr[puuid]["highest_rank"]["season"].replace("e10", "v25")
-                self.mmr[puuid]["highest_rank"]["season"] = self.mmr[puuid]["highest_rank"]["season"].replace("e11", "v26")
+                self.mmr[puuid]["highest_rank"]["season"] = self.mmr[puuid]["highest_rank"]["season"].replace("e10",
+                                                                                                              "v25")
+                self.mmr[puuid]["highest_rank"]["season"] = self.mmr[puuid]["highest_rank"]["season"].replace("e11",
+                                                                                                              "v26")
 
-                self.mmr[puuid]["highest_rank"]["patched_tier"] = self.mmr[puuid]["highest_rank"]["patched_tier"].replace("Unset","Unranked")
-                self.mmr[puuid]["highest_rank"]["patched_tier"] = self.mmr[puuid]["highest_rank"]["patched_tier"].replace("Unrated", "Unranked")
+                self.mmr[puuid]["highest_rank"]["patched_tier"] = self.mmr[puuid]["highest_rank"][
+                    "patched_tier"].replace("Unset", "Unranked")
+                self.mmr[puuid]["highest_rank"]["patched_tier"] = self.mmr[puuid]["highest_rank"][
+                    "patched_tier"].replace("Unrated", "Unranked")
 
-                self.mmr[puuid]["current_data"]["currenttierpatched"] = self.mmr[puuid]["current_data"]["currenttierpatched"].replace("Unset", "Unranked")
-                self.mmr[puuid]["current_data"]["currenttierpatched"] = self.mmr[puuid]["current_data"]["currenttierpatched"].replace("Unrated", "Unranked")
+                self.mmr[puuid]["current_data"]["currenttierpatched"] = self.mmr[puuid]["current_data"][
+                    "currenttierpatched"].replace("Unset", "Unranked")
+                self.mmr[puuid]["current_data"]["currenttierpatched"] = self.mmr[puuid]["current_data"][
+                    "currenttierpatched"].replace("Unrated", "Unranked")
 
-                self.riot_matches = requests.get(
-                    f"https://pd.eu.a.pvp.net/match-history/v1/history/{puuid}?startIndex={0}&endIndex={5}&queue=competitive",
-                    headers=self.handler.match_id_header
-                ).json()
-
-                self.zero_check[puuid] = (self.riot_matches["Total"])
-
-                if self.riot_matches["Total"] == 0:
-                    self.riot_name = requests.get(
-                        f"https://pd.eu.a.pvp.net/match-history/v1/history/{puuid}?startIndex={0}&endIndex={1}",
+                async with session.get(
+                        f"https://pd.eu.a.pvp.net/match-history/v1/history/{puuid}?startIndex={0}&endIndex={5}&queue=competitive",
                         headers=self.handler.match_id_header
-                    ).json()
+                ) as resp:
+                    riot_matches = await resp.json(content_type=None)
 
-                    if self.riot_name["Total"] == 0:
-                        nt = requests.put(
-                            "https://pd.eu.a.pvp.net/name-service/v2/players",
-                            json = [puuid],
-                            headers={**self.handler.match_id_header, "Content-Type": "application/json"}
-                        ).json()
+                self.zero_check[puuid] = (riot_matches["Total"])
 
-                        print(f"{nt[0]["GameName"]}#{nt[0]["TagLine"]} ({self.uuid_handler.agent_converter(self.ca[puuid])}) has not played a game in the last 30 days")
+                if riot_matches["Total"] == 0:
+                    async with session.get(
+                            f"https://pd.eu.a.pvp.net/match-history/v1/history/{puuid}?startIndex={0}&endIndex={1}",
+                            headers=self.handler.match_id_header
+                    ) as resp:
+                        riot_name = await resp.json(content_type=None)
+
+                    if riot_name["Total"] == 0:
+                        async with session.put(
+                                "https://pd.eu.a.pvp.net/name-service/v2/players",
+                                json=[puuid],
+                                headers={**self.handler.match_id_header, "Content-Type": "application/json"}
+                        ) as resp:
+                            nt = await resp.json(content_type=None)
+
+                        print(
+                            f"{nt[0]['GameName']}#{nt[0]['TagLine']} ({self.uuid_handler.agent_converter(self.ca[puuid])}) has not played a game in the last 30 days")
 
                         if self.handler.player_info:
                             for player in self.handler.player_info["Players"]:
@@ -360,12 +374,15 @@ class ValoRank:
                         await self.assign_skins()
                         return
 
-                    match_id_name = self.riot_name["History"][0]["MatchID"]
-                    match_stats_name = requests.get(
-                        f"https://pd.eu.a.pvp.net/match-details/v1/matches/{match_id_name}",
-                        headers=self.handler.match_id_header
-                    ).json()
-                    ntl = []    # Name Tag Level
+                    match_id_name = riot_name["History"][0]["MatchID"]
+
+                    async with session.get(
+                            f"https://pd.eu.a.pvp.net/match-details/v1/matches/{match_id_name}",
+                            headers=self.handler.match_id_header
+                    ) as resp:
+                        match_stats_name = await resp.json(content_type=None)
+
+                    ntl = []  # Name Tag Level
                     for player in match_stats_name["players"]:
                         if player["subject"] == puuid:
                             ntl.append({
@@ -374,7 +391,8 @@ class ValoRank:
                                 "level": player.get("accountLevel"),
                             })
 
-                    print(f"{ntl[0]["name"]}#{ntl[0]["tag"]} ({self.uuid_handler.agent_converter(self.ca[puuid])}) has not played competitive in the last 30 days/100 matches")
+                    print(
+                        f"{ntl[0]['name']}#{ntl[0]['tag']} ({self.uuid_handler.agent_converter(self.ca[puuid])}) has not played competitive in the last 30 days/100 matches")
 
                     if self.handler.player_info:
                         for player in self.handler.player_info["Players"]:
@@ -403,26 +421,24 @@ class ValoRank:
                     return
 
                 riot_match_ids = []
-                for match in self.riot_matches["History"]:
+                for match in riot_matches["History"]:
                     riot_match_ids.append(match["MatchID"])
-
 
                 match_urls = []
                 for matchID in riot_match_ids:
                     match_urls.append(f"https://pd.eu.a.pvp.net/match-details/v1/matches/{matchID}")
 
-
                 async def gather_matches():
-                    async with aiohttp.ClientSession(headers=self.handler.match_id_header) as session:
-                        tasks = [self.fetch(session, match_url) for match_url in match_urls]
-                        self.match_stats[puuid] = await asyncio.gather(*tasks)
+                    tasks = [self.fetch(session, match_url) for match_url in match_urls]
+                    self.match_stats[puuid] = await asyncio.gather(*tasks)
 
                 await gather_matches()
                 self.used_puuids.append(puuid)
                 await self.calc_stats(puuid)
 
-        tasks = [asyncio.create_task(stat_collector(puuid)) for puuid in self.cmp]
-        await asyncio.gather(*tasks)
+        async with aiohttp.ClientSession(headers=self.modified_header) as session:
+            tasks = [asyncio.create_task(stat_collector(puuid, session)) for puuid in self.cmp]
+            await asyncio.gather(*tasks)
 
         for index, puuid in enumerate(self.cmp):
             self.frontend_data[puuid]["agent"] = self.uuid_handler.agent_converter(self.ca[puuid])
@@ -446,7 +462,6 @@ class ValoRank:
             for team in match["teams"]:
                 if team["teamId"] == stats_list[i]["team"]:
                     wl_list.append(team.get("won"))
-
 
         for match in self.match_stats[puuid]:
             for round in match["roundResults"]:
@@ -559,15 +574,23 @@ class ValoRank:
 
     async def assign_skins(self, on_update=None):
         if len(self.used_puuids) == len(self.cmp):
-            for puuid in self.used_puuids:
-                self.frontend_data[puuid]["skins"] = self.skin_handler.assign_skins(puuid, self.handler.in_match, self.handler.match_id_header)
+            # Create a temporary session for this specific task
+            async with aiohttp.ClientSession(headers=self.handler.match_id_header) as session:
+                for puuid in self.used_puuids:
+                    # We must now AWAIT the result and pass the SESSION
+                    self.frontend_data[puuid]["skins"] = await self.skin_handler.assign_skins(
+                        puuid,
+                        self.handler.in_match,
+                        self.handler.match_id_header,
+                        session
+                    )
 
     async def fetch(self, session, url, retries=3):
         for attempt in range(retries):
             async with session.get(url) as response:
                 if response.status == 200:
                     try:
-                        return await response.json()
+                        return await response.json(content_type=None)
                     except aiohttp.ContentTypeError:
                         text = await response.text()
                         print(f"⚠️ Unexpected response type at {url}:\n{text[:200]}...")
