@@ -1,9 +1,18 @@
 import os
+import sys
 import re
 import requests
 import asyncio
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from PySide6.QtGui import QPixmap
+
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller .exe"""
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 def download_and_cache_agent_icons(cache_dir="assets/agents"):
     """Download agent icons once and save them locally (if not already cached)."""
@@ -155,5 +164,3 @@ async def download_and_cache_skins(cache_dir="assets/skins", threads=40):
 
     print(f"🎉 Loaded {len(pixmaps)} total icons.")
     return pixmaps
-
-

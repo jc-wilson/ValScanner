@@ -26,7 +26,7 @@ class ValoRank:
         self.pip = {}  # Duplicate of player_info_pre so that it doesn't get lost when you load into a match
         self.handler = None
         self.start = 5
-        self.end = 15
+        self.end = 10
         self.gs = []  # Gamemode and Server
         self.skins = {}
         self.done = 0
@@ -197,7 +197,7 @@ class ValoRank:
             self.match_stats = {}
             self.pip = {}
             self.start = 5
-            self.end = 15
+            self.end = 10
             self.gs = []
             self.gs_func()
             self.done = 0
@@ -538,46 +538,43 @@ class ValoRank:
             f"{stats_list[0]['name']}#{stats_list[0]['tag']}'s ({self.uuid_handler.agent_converter(self.ca[puuid])}) level is {stats_list[0]['level']} | W/L % in last {match_count_kd} matches: {wl} | ACS in the last {match_count_kd} matches: {str(acs)[:5]} | KD in last {match_count_kd} matches: {str(kd)[0:4]} | HS in last {match_count_kd} matches: hs is: {str(hs)[:4]}% | current rank is: {self.mmr[puuid]['current_data']['currenttierpatched']} | current rr is: {self.mmr[puuid]['current_data']['ranking_in_tier']} | highest rank was: {self.mmr[puuid]['highest_rank']['patched_tier']} | peak act was: {self.mmr[puuid]['highest_rank']['season']}")
 
     async def load_more_matches(self):
-        for puuid in self.cmp:
-            if self.zero_check[puuid] <= self.start:
-                continue
-            else:
-                self.riot_matches_new = requests.get(
-                    f"https://pd.eu.a.pvp.net/match-history/v1/history/{puuid}?startIndex={self.start}&endIndex={self.end}&queue=competitive",
-                    headers=self.handler.match_id_header
-                ).json()
+        # Create a single session to reuse for efficient connection pooling
+        async with aiohttp.ClientSession(headers=self.handler.match_id_header) as session:
+            for puuid in self.cmp:
+                if self.zero_check[puuid] <= self.start:
+                    continue
+
+
+                url = f"https://pd.eu.a.pvp.net/match-history/v1/history/{puuid}?startIndex={self.start}&endIndex={self.end}&queue=competitive"
+                async with session.get(url) as response:
+                    if response.status != 200:
+                        continue
+                    self.riot_matches_new = await response.json()
 
                 if self.riot_matches_new["Total"] == 0:
                     continue
 
-                riot_match_ids_new = []
-                for match in self.riot_matches_new["History"]:
-                    riot_match_ids_new.append(match["MatchID"])
+                riot_match_ids_new = [match["MatchID"] for match in self.riot_matches_new["History"]]
+                match_urls_new = [f"https://pd.eu.a.pvp.net/match-details/v1/matches/{mid}" for mid in
+                                  riot_match_ids_new]
 
-                match_urls_new = []
-                for matchID in riot_match_ids_new:
-                    match_urls_new.append(f"https://pd.eu.a.pvp.net/match-details/v1/matches/{matchID}")
+                # Reuse the existing 'session' instead of creating a new one inside the loop
+                tasks = [self.fetch(session, match_url) for match_url in match_urls_new]
+                new_matches = await asyncio.gather(*tasks)
 
-                async def gather_matches():
-                    async with aiohttp.ClientSession(headers=self.handler.match_id_header) as session:
-                        tasks = [self.fetch(session, match_url) for match_url in match_urls_new]
-                        self.match_stats[puuid].extend(await asyncio.gather(*tasks))
-
-                await gather_matches()
+                self.match_stats[puuid].extend(new_matches)
 
                 await self.calc_stats(puuid)
 
                 print("load more matches finished")
 
-        self.start += 10
-        self.end += 10
+        self.start += 5
+        self.end += 5
 
     async def assign_skins(self, on_update=None):
         if len(self.used_puuids) == len(self.cmp):
-            # Create a temporary session for this specific task
             async with aiohttp.ClientSession(headers=self.handler.match_id_header) as session:
                 for puuid in self.used_puuids:
-                    # We must now AWAIT the result and pass the SESSION
                     self.frontend_data[puuid]["skins"] = await self.skin_handler.assign_skins(
                         puuid,
                         self.handler.in_match,

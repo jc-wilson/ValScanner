@@ -40,19 +40,15 @@ class WeaponPopup(QDialog):
         "Knife",
     ]
 
-    def __init__(self, player_name, skins, skin_icons, parent=None):
+    def __init__(self, player_name, skins, skin_icons, uuid_handler, parent=None):
         super().__init__(parent)
 
         self.skins = skins or {}
         self.skin_icons = skin_icons or {}
+        self.uuid_handler = uuid_handler
         player_display = player_name or "Unknown"
 
-        self.setWindowFlags(
-            Qt.Dialog |
-            Qt.FramelessWindowHint |
-            Qt.Popup
-        )
-
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
         self.setAttribute(Qt.WA_TranslucentBackground)
 
         container = QWidget()
@@ -79,21 +75,25 @@ class WeaponPopup(QDialog):
 
         self.tile_width = 170
         self.tile_height = 120
+        columns = 4
 
         grid = QGridLayout()
         grid.setSpacing(16)
         grid.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
-        columns = 4
 
+        # 1. Add Weapons
+        current_row = 0
         for index, weapon in enumerate(self.WEAPON_ORDER):
             row = index // columns
             column = index % columns
             grid.addWidget(self.build_skin_tile(weapon, self.skins.get(weapon)), row, column)
+            current_row = row
 
-        exit_tile_index = len(self.WEAPON_ORDER)
-        exit_row = exit_tile_index // columns
-        exit_col = exit_tile_index % columns
-        grid.addWidget(self.build_exit_tile(), exit_row, exit_col)
+        # 2. Add Exit Tile (Full Width)
+        # Calculate the next available row
+        exit_row = current_row + 1
+        # Add widget at (exit_row, 0) spanning (1 row, 4 columns)
+        grid.addWidget(self.build_exit_tile(), exit_row, 0, 1, 4)
 
         main_layout.addLayout(grid)
 
@@ -112,27 +112,16 @@ class WeaponPopup(QDialog):
                 border-radius: 22px;
                 border: 1px solid rgba(255, 255, 255, 0.05);
             }
-            #title {
-                color: #e3e8ff;
-                font-size: 22px;
-                font-weight: 600;
-            }
-            #subtitle {
-                color: #a0abcc;
-                font-size: 14px;
-            }
+            #title { color: #e3e8ff; font-size: 22px; font-weight: 600; }
+            #subtitle { color: #a0abcc; font-size: 14px; }
             #weaponLabel {
-                color: #8c95b4;
-                font-size: 12px;
-                letter-spacing: 1px;
+                color: #8c95b4; font-size: 12px; letter-spacing: 1px;
                 text-transform: uppercase;
             }
             #skinTile {
                 background-color: #13192a;
                 border-radius: 18px;
                 border: 1px solid rgba(255, 255, 255, 0.05);
-                min-width: 150px;
-                min-height: 110px;
             }
             #skinTile:hover {
                 border: 1px solid rgba(77, 108, 255, 0.6);
@@ -144,9 +133,7 @@ class WeaponPopup(QDialog):
                 border: 1px dashed rgba(255, 255, 255, 0.08);
             }
             #skinPreview[empty="true"] {
-                color: #8c95b4;
-                font-size: 11px;
-                letter-spacing: 1px;
+                color: #8c95b4; font-size: 11px; letter-spacing: 1px;
             }
             #exitTile {
                 background-color: #1f2436;
@@ -155,18 +142,20 @@ class WeaponPopup(QDialog):
             }
             #exitTile QPushButton {
                 background-color: rgba(255, 255, 255, 0.06);
-                border: none;
-                color: #f4f6ff;
-                font-size: 28px;
-                font-weight: 700;
-                border-radius: 16px;
+                border: none; color: #f4f6ff; font-size: 28px;
+                font-weight: 700; border-radius: 16px;
             }
             #exitTile QPushButton:hover {
                 background-color: rgba(255, 87, 107, 0.35);
             }
+            QToolTip {
+                background-color: #0b0f19; color: #f4f6ff;
+                border: 1px solid rgba(77, 108, 255, 0.3);
+                border-radius: 4px; padding: 4px 8px; font-size: 12px;
+            }
         """)
 
-        self.resize(960, 540)
+        self.resize(960, 600)
 
     def build_skin_tile(self, weapon, skin_id):
         tile = QFrame()
@@ -196,6 +185,16 @@ class WeaponPopup(QDialog):
             else:
                 pixmap = None
 
+            # Tooltip Logic
+            if self.uuid_handler:
+                try:
+                    skin_name = self.uuid_handler.skin_converter(skin_id)
+                    if isinstance(skin_name, list):
+                        skin_name = str(skin_name[0]) if skin_name else "Unknown Skin"
+                    tile.setToolTip(str(skin_name))
+                except Exception:
+                    pass
+
         if pixmap:
             preview.setPixmap(
                 pixmap.scaled(120, 70, Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -213,7 +212,11 @@ class WeaponPopup(QDialog):
     def build_exit_tile(self):
         tile = QFrame()
         tile.setObjectName("exitTile")
-        tile.setFixedSize(self.tile_width, self.tile_height)
+
+        # Calculate full width for spanning 4 columns + 3 spaces
+        # (170 * 4) + (16 * 3) = 680 + 48 = 728
+        full_width = (self.tile_width * 4) + (16 * 3)
+        tile.setFixedSize(full_width, self.tile_height)
 
         layout = QVBoxLayout(tile)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -227,6 +230,7 @@ class WeaponPopup(QDialog):
 
         exit_button = QPushButton("×")
         exit_button.setFixedSize(96, 48)
+        exit_button.setCursor(Qt.PointingHandCursor)
         exit_button.clicked.connect(self.close)
         layout.addWidget(exit_button, alignment=Qt.AlignCenter)
 
@@ -241,6 +245,7 @@ class ValorantStatsWindow(QMainWindow):
         self.dodge_game = dodge()
         self.uuid_handler = UUIDHandler()
         self.uuid_handler.agent_uuid_function()
+        self.uuid_handler.skin_uuid_function()
 
         font_path = resource_path("assets/fonts/proximanova_regular.ttf")
         print("🔍 Loading font from:", font_path)
@@ -256,11 +261,11 @@ class ValorantStatsWindow(QMainWindow):
             print("⚠️ Failed to load custom font, falling back to default.")
 
         self.setWindowTitle("Who Will They Be")
-        self.setMinimumSize(1200, 720)
+        self.setMinimumSize(1500, 860)
         self.setWindowIcon(QIcon(resource_path("assets/logoone.png")))
 
         # Auto-refresh Timer Setup
-        self.refresh_interval = 60
+        self.refresh_interval = 90
         self.current_countdown = self.refresh_interval
         self.is_paused = False
         self.timer = QTimer(self)
@@ -277,7 +282,8 @@ class ValorantStatsWindow(QMainWindow):
             "Random", "Astra", "Breach", "Brimstone", "Chamber", "Clove", "Cypher",
             "Deadlock", "Fade", "Gekko", "Harbor", "Iso", "Jett", "KAY/O",
             "Killjoy", "Neon", "Omen", "Phoenix", "Raze", "Reyna", "Sage",
-            "Skye", "Sova", "Tejo", "Veto", "Viper", "Vyse", "Waylay", "Yoru"
+            "Skye", "Sova", "Tejo", "Veto", "Viper", "Vyse", "Waylay", "Yoru", "Random Duelist",
+            "Random Initiator", "Random Controller", "Random Sentinel"
         ])
         self.combo.setCurrentIndex(0)
         self.combo.setMinimumWidth(200)
@@ -289,7 +295,7 @@ class ValorantStatsWindow(QMainWindow):
         self.lock_agent_button.clicked.connect(self.instalock_agent)
         self.lock_agent_button.setObjectName("accentButton")
 
-        self.load_more_matches_button = QPushButton("Load More Matches (10)")
+        self.load_more_matches_button = QPushButton("Load More Matches (5)")
         self.load_more_matches_button.setCursor(Qt.PointingHandCursor)
         self.load_more_matches_button.clicked.connect(self.run_load_more_matches_button)
         self.load_more_matches_button.setObjectName("secondaryButton")
@@ -345,34 +351,19 @@ class ValorantStatsWindow(QMainWindow):
         # ─────────────── Layout ───────────────
         header_frame = QFrame()
         header_frame.setObjectName("headerFrame")
-        header_layout = QVBoxLayout(header_frame)
+
+        # Use QHBoxLayout to keep everything on one line
+        header_layout = QHBoxLayout(header_frame)
         header_layout.setContentsMargins(18, 15, 18, 14)
         header_layout.setSpacing(14)
 
-        title_row = QHBoxLayout()
-        title_row.setSpacing(18)
+        # --- Left Side: Chips & Agent Select ---
 
-        title_block = QVBoxLayout()
-        title_block.setSpacing(4)
-        chip_row = QHBoxLayout()
-        chip_row.setSpacing(12)
-        chip_row.addWidget(self.gamemode_chip)
-        chip_row.addWidget(self.server_chip)
-        chip_row.addStretch(1)
-        title_block.addLayout(chip_row)
+        # 1. Gamemode & Server Chips
+        header_layout.addWidget(self.gamemode_chip, alignment=Qt.AlignVCenter)
+        header_layout.addWidget(self.server_chip, alignment=Qt.AlignVCenter)
 
-        title_row.addLayout(title_block, stretch=1)
-
-        # Added countdown and pause button here
-        title_row.addWidget(self.countdown_label, alignment=Qt.AlignVCenter)
-        title_row.addWidget(self.pause_button, alignment=Qt.AlignVCenter)
-
-        title_row.addWidget(self.refresh_button, alignment=Qt.AlignVCenter)
-        header_layout.addLayout(title_row)
-
-        controls_row = QHBoxLayout()
-        controls_row.setSpacing(14)
-
+        # 2. Agent Selector Block
         agent_block = QFrame()
         agent_block.setObjectName("agentBlock")
         agent_layout = QHBoxLayout(agent_block)
@@ -382,11 +373,45 @@ class ValorantStatsWindow(QMainWindow):
         agent_layout.addWidget(self.combo)
         agent_layout.addWidget(self.lock_agent_button)
 
-        controls_row.addWidget(agent_block, stretch=0)
-        controls_row.addStretch(1)
-        controls_row.addWidget(self.dodge_button)
-        controls_row.addWidget(self.load_more_matches_button)
-        header_layout.addLayout(controls_row)
+        header_layout.addWidget(agent_block, alignment=Qt.AlignVCenter)
+
+        # --- Spacer to push remaining items to the right ---
+        header_layout.addStretch(1)
+
+        # --- Right Side: Actions & Refresh Controls ---
+
+        # 3. Action Buttons
+        header_layout.addWidget(self.dodge_button, alignment=Qt.AlignVCenter)
+        header_layout.addWidget(self.load_more_matches_button, alignment=Qt.AlignVCenter)
+
+        # 4. Refresh & Timer
+        header_layout.addWidget(self.countdown_label, alignment=Qt.AlignVCenter)
+        header_layout.addWidget(self.pause_button, alignment=Qt.AlignVCenter)
+        header_layout.addWidget(self.refresh_button, alignment=Qt.AlignVCenter)
+
+        # --- Main Layout Assembly ---
+        # (This part remains the same)
+        # Team Panels (Compact Only)
+        left_panel, self.left_layout = self.build_team_panel("red")
+        right_panel, self.right_layout = self.build_team_panel("blue")
+
+        main_splitter = QSplitter(Qt.Horizontal)
+        main_splitter.addWidget(left_panel)
+        main_splitter.addWidget(right_panel)
+        main_splitter.setChildrenCollapsible(False)
+        main_splitter.setHandleWidth(4)
+        main_splitter.setSizes([750, 750])
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(10)
+        layout.addWidget(header_frame)
+        layout.addWidget(self.progress_bar)
+        layout.addWidget(main_splitter, 1)
+
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
 
         # Team Panels (Compact Only)
         left_panel, self.left_layout = self.build_team_panel("red")
@@ -425,7 +450,7 @@ class ValorantStatsWindow(QMainWindow):
             if self.current_countdown <= 0:
                 self.current_countdown = self.refresh_interval
                 self.run_valo_stats()
-            self.countdown_label.setText(f"Refreshing in {self.current_countdown} seconds")
+            self.countdown_label.setText(f"Refreshing in: {self.current_countdown}s")
 
     def toggle_pause(self):
         self.is_paused = not self.is_paused
@@ -440,7 +465,7 @@ class ValorantStatsWindow(QMainWindow):
         self.safe_load_players(self.valo_rank.frontend_data)
 
     def open_skin_popup(self, player_name, skins):
-        popup = WeaponPopup(player_name, skins, getattr(self, "skin_icons", {}), self)
+        popup = WeaponPopup(player_name, skins, getattr(self, "skin_icons", {}), self.uuid_handler, self)
         popup.exec()
 
     def build_meta_chip(self, label_text):
@@ -546,22 +571,48 @@ class ValorantStatsWindow(QMainWindow):
         row_layout.setContentsMargins(12, 9, 12, 9)
         row_layout.setSpacing(18)
 
+        # --- Agent Icon Area (Wrapper with Overlay) ---
+        icon_wrapper = QFrame()
+        icon_wrapper.setFixedSize(138, 138)
+
+        # Use Grid to stack the label on top of the image
+        icon_layout = QGridLayout(icon_wrapper)
+        icon_layout.setContentsMargins(0, 0, 0, 0)
+        icon_layout.setSpacing(0)
+
         agent_icon_label = QLabel()
         agent_icon_label.setObjectName("compactAgentIcon")
-        agent_icon_label.setFixedSize(48, 48)
         agent_icon_label.setAlignment(Qt.AlignCenter)
+        # Ensure it fills the wrapper
+        agent_icon_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         agent_name = str(player.get("agent", "Unknown"))
-        agent_icon = self.agent_icons.get(agent_name)
-        if agent_icon:
-            agent_icon_label.setPixmap(
-                agent_icon.scaled(44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            )
+        # Use pre-loaded small icons if you added that optimization, otherwise scale here
+        if hasattr(self, "small_agent_icons") and agent_name in self.small_agent_icons:
+            agent_icon_label.setPixmap(self.small_agent_icons[agent_name])
         else:
-            agent_icon_label.setText(agent_name)
+            agent_icon = self.agent_icons.get(agent_name)
+            if agent_icon:
+                agent_icon_label.setPixmap(
+                    agent_icon.scaled(134, 134, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                )
+            else:
+                agent_icon_label.setText(agent_name)
 
-        row_layout.addWidget(agent_icon_label)
+        # Level Label (Moved to overlay)
+        level_value = player.get("level", "N/A")
+        level_label = QLabel(f"{level_value}")
+        level_label.setObjectName("playerLevelBadge")  # New ID for styling
+        level_label.setAlignment(Qt.AlignCenter)
 
+        # Add widgets to grid (row 0, col 0 for both creates the overlay)
+        icon_layout.addWidget(agent_icon_label, 0, 0)
+        # Align bottom-left
+        icon_layout.addWidget(level_label, 0, 0, Qt.AlignBottom | Qt.AlignLeft)
+
+        row_layout.addWidget(icon_wrapper)
+
+        # --- Info Column ---
         info_column = QVBoxLayout()
         info_column.setContentsMargins(0, 0, 0, 0)
         info_column.setSpacing(6)
@@ -581,13 +632,9 @@ class ValorantStatsWindow(QMainWindow):
         name_label.setMinimumWidth(100)
         name_row.addWidget(name_label, 1)
 
-        level_value = player.get("level", "N/A")
-        level_label = QLabel(f"Lv. {level_value}")
-        level_label.setObjectName("playerLevel")
-        name_row.addWidget(level_label, alignment=Qt.AlignRight)
-
         info_column.addLayout(name_row)
 
+        # --- Meta Bar (Rank, Peak, etc.) ---
         meta_bar = QHBoxLayout()
         meta_bar.setSpacing(12)
 
@@ -653,6 +700,7 @@ class ValorantStatsWindow(QMainWindow):
         meta_bar.addStretch(1)
         info_column.addLayout(meta_bar)
 
+        # --- Stats Row ---
         stats_row = QHBoxLayout()
         stats_row.setSpacing(10)
 
@@ -682,7 +730,6 @@ class ValorantStatsWindow(QMainWindow):
         stats_row.addWidget(hs_widget)
 
         info_column.addLayout(stats_row)
-
         row_layout.addLayout(info_column, 1)
 
         return row
@@ -815,8 +862,9 @@ class ValorantStatsWindow(QMainWindow):
             " font-size: 12px;"
             "}"
             "QLabel#countdownLabel {"
-            " color: #7e8aa7;"
-            " font-size: 13px;"
+            " color: #5dd8fc;"
+            " font-size: 18px;"
+            " font-weight: 700;"
             " letter-spacing: 0.5px;"
             " margin-right: 8px;"
             "}"
@@ -832,11 +880,14 @@ class ValorantStatsWindow(QMainWindow):
             "QLabel#playerName a:hover {"
             " color: #6bc2ff;"
             "}"
-            "QLabel#playerLevel {"
-            " color: #9aa4c4;"
-            " font-size: 13px;"
-            " font-weight: 600;"
-            " letter-spacing: 0.8px;"
+            "QLabel#playerLevelBadge {"
+            " background-color: #5dd8fc;"
+            " color: #000000;"
+            " font-size: 16px;"
+            " font-weight: 700;"
+            " padding: 1px 4px;"
+            " border-radius: 4px;"
+            " margin: 2px;"
             "}"
             "QLabel#emptyState {"
             " color: #7e8aa7;"
@@ -1001,12 +1052,36 @@ class ValorantStatsWindow(QMainWindow):
         self.lock_agent_button.setEnabled(False)
         try:
             if self.combo.currentText() == "Random":
-                rand_agent = random.randint(0, 28)
+                rand_agent = random.randint(0, 27)
                 agents = [
                     "Astra", "Breach", "Brimstone", "Chamber", "Clove", "Cypher",
                     "Deadlock", "Fade", "Gekko", "Harbor", "Iso", "Jett", "KAY/O",
                     "Killjoy", "Neon", "Omen", "Phoenix", "Raze", "Reyna", "Sage",
                     "Skye", "Sova", "Tejo", "Veto", "Viper", "Vyse", "Waylay", "Yoru"
+                ]
+                self.agent = self.uuid_handler.agent_converter_reversed(agents[rand_agent])
+            elif self.combo.currentText() == "Random Duelist":
+                rand_agent = random.randint(0, 7)
+                agents = [
+                    "Iso", "Jett", "Neon", "Phoenix", "Raze", "Reyna", "Waylay", "Yoru"
+                ]
+                self.agent = self.uuid_handler.agent_converter_reversed(agents[rand_agent])
+            elif self.combo.currentText() == "Random Initiator":
+                rand_agent = random.randint(0, 6)
+                agents = [
+                    "Breach", "Fade", "Gekko", "KAY/O", "Skye", "Sova", "Tejo"
+                ]
+                self.agent = self.uuid_handler.agent_converter_reversed(agents[rand_agent])
+            elif self.combo.currentText() == "Random Controller":
+                rand_agent = random.randint(0, 5)
+                agents = [
+                    "Astra", "Brimstone", "Clove", "Harbor", "Omen", "Viper"
+                ]
+                self.agent = self.uuid_handler.agent_converter_reversed(agents[rand_agent])
+            elif self.combo.currentText() == "Random Sentinel":
+                rand_agent = random.randint(0, 6)
+                agents = [
+                    "Chamber", "Cypher", "Deadlock", "Killjoy", "Sage", "Veto", "Vyse"
                 ]
                 self.agent = self.uuid_handler.agent_converter_reversed(agents[rand_agent])
             instalock_agent(self.agent)
@@ -1053,7 +1128,7 @@ class ValorantStatsWindow(QMainWindow):
 
         # Reset the timer whenever a refresh is triggered (auto or manual)
         self.current_countdown = self.refresh_interval
-        self.countdown_label.setText(f"Refreshing in {self.current_countdown} seconds")
+        self.countdown_label.setText(f"Refreshing in: {self.current_countdown}s")
 
         self.refresh_button.setEnabled(False)
         self.progress_bar.show()
@@ -1076,8 +1151,8 @@ class ValorantStatsWindow(QMainWindow):
         self.right_players = []
 
         if not players:
-            self.populate_team_layout(self.left_layout, [], "Waiting for Red team...")
-            self.populate_team_layout(self.right_layout, [], "Waiting for Blue team...")
+            self.populate_team_layout(self.left_layout, [], "Waiting for Attacking team...")
+            self.populate_team_layout(self.right_layout, [], "Waiting for Defending team...")
             self.update_metadata()
             return
 
@@ -1095,8 +1170,8 @@ class ValorantStatsWindow(QMainWindow):
                 elif team == "Blue":
                     self.right_players.append(player)
 
-        self.populate_team_layout(self.left_layout, self.left_players, "Waiting for Red team...")
-        self.populate_team_layout(self.right_layout, self.right_players, "Waiting for Blue team...")
+        self.populate_team_layout(self.left_layout, self.left_players, "Waiting for Attacking team...")
+        self.populate_team_layout(self.right_layout, self.right_players, "Waiting for Defending team...")
         self.update_metadata()
 
     def populate_team_layout(self, layout, players, empty_message):

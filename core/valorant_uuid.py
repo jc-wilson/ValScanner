@@ -52,7 +52,7 @@ class UUIDHandler:
             with open("skin_uuids.json", "w", encoding="utf-8") as f:
                 json.dump(self.skin_uuid_request, f, indent=2)
 
-            with open("agent_uuids.json") as a:
+            with open("skin_uuids.json") as a:
                 self.skin_uuids = json.load(a)
 
     def skin_converter(self, skin_uuid):
@@ -60,6 +60,7 @@ class UUIDHandler:
         for skin in self.skin_uuids["data"]:
             if skin["uuid"] == skin_uuid:
                 result = skin["displayName"]
+                return result
             for chroma in skin["chromas"]:
                 if chroma["uuid"] == skin_uuid:
                     result = chroma["displayName"]
