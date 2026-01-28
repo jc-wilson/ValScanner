@@ -22,6 +22,7 @@ class ValoRank:
         self.ca = {}  # Current Agent
         self.zero_check = {}  # Total amount of competitive matches a player has that can be loaded
         self.mmr = {}
+        self.rating_changes = {}
         self.match_stats = {}
         self.pip = {}  # Duplicate of player_info_pre so that it doesn't get lost when you load into a match
         self.handler = None
@@ -194,6 +195,7 @@ class ValoRank:
             self.ca = {}
             self.zero_check = {}
             self.mmr = {}
+            self.rating_changes = {}
             self.match_stats = {}
             self.pip = {}
             self.start = 5
@@ -249,6 +251,7 @@ class ValoRank:
                                        headers=self.modified_header) as resp:
                     valorant_mmr = await resp.json(content_type=None)
 
+
                 print("valorant_mmr:", valorant_mmr)
 
                 if valorant_mmr["LatestCompetitiveUpdate"]:
@@ -266,6 +269,7 @@ class ValoRank:
 
                     peak_act_final = self.uuid_handler.season_uuid_function(peak_act)
                     prefix = peak_act_final[0:2]
+
 
                     if prefix in ("e1", "e2", "e3", "e4") and peak_rank > 20:
                         self.mmr[puuid] = {
@@ -368,7 +372,8 @@ class ValoRank:
                             "rr": self.mmr[puuid]["current_data"]["ranking_in_tier"],
                             "peak_rank": self.mmr[puuid]["highest_rank"]["patched_tier"],
                             "peak_act": self.mmr[puuid]["highest_rank"]["season"].upper(),
-                            "team": bor
+                            "team": bor,
+                            "rating_change": [0, 0, 0, 0, 0]
                         }
                         self.used_puuids.append(puuid)
                         await self.assign_skins()
@@ -414,11 +419,28 @@ class ValoRank:
                         "rr": self.mmr[puuid]["current_data"]["ranking_in_tier"],
                         "peak_rank": self.mmr[puuid]["highest_rank"]["patched_tier"],
                         "peak_act": self.mmr[puuid]["highest_rank"]["season"].upper(),
-                        "team": bor
+                        "team": bor,
+                        "rating_change": [0, 0, 0, 0, 0]
                     }
                     self.used_puuids.append(puuid)
                     await self.assign_skins()
                     return
+                else:
+                    if self.zero_check[puuid] >= 6:
+                        end_index = 5
+                    else:
+                        end_index = self.zero_check[puuid]
+                    async with session.get(
+                            f"https://pd.eu.a.pvp.net/mmr/v1/players/{puuid}/competitiveupdates?startIndex=0&endIndex={end_index}&queue=competitive",
+                            headers=self.handler.match_id_header
+                    ) as resp:
+                        rating_change = await resp.json(content_type=None)
+
+                    self.rating_changes[puuid] = []
+                    for match in rating_change["Matches"]:
+                        self.rating_changes[puuid].append(match["RankedRatingEarned"])
+
+                    print(self.rating_changes[puuid])
 
                 riot_match_ids = []
                 for match in riot_matches["History"]:
@@ -450,6 +472,7 @@ class ValoRank:
         for match in self.match_stats[puuid]:
             for player in match["players"]:
                 if player["subject"] == puuid:
+                    print(f"player: {player}")
                     stats_list.append({
                         "name": player.get("gameName"),
                         "tag": player.get("tagLine"),
@@ -515,6 +538,10 @@ class ValoRank:
         elif self.handler.player_info_pre:
             bor = self.handler.player_info_pre["Teams"][0]["TeamID"]
 
+        if len(self.rating_changes[puuid]) < 5:
+            for i in range(5 - len(self.rating_changes[puuid])):
+                self.rating_changes[puuid].append(0)
+
         if self.mmr[puuid]["current_data"]["currenttierpatched"] == "Unrated":
             self.mmr[puuid]["current_data"]["currenttierpatched"] = "Unranked"
         self.frontend_data[puuid] = {
@@ -530,15 +557,15 @@ class ValoRank:
             "rr": self.mmr[puuid]["current_data"]["ranking_in_tier"],
             "peak_rank": self.mmr[puuid]["highest_rank"]["patched_tier"],
             "peak_act": self.mmr[puuid]["highest_rank"]["season"].upper(),
-            "team": bor
+            "team": bor,
+            "rating_change": self.rating_changes[puuid]
         }
         await self.assign_skins()
 
         print(
-            f"{stats_list[0]['name']}#{stats_list[0]['tag']}'s ({self.uuid_handler.agent_converter(self.ca[puuid])}) level is {stats_list[0]['level']} | W/L % in last {match_count_kd} matches: {wl} | ACS in the last {match_count_kd} matches: {str(acs)[:5]} | KD in last {match_count_kd} matches: {str(kd)[0:4]} | HS in last {match_count_kd} matches: hs is: {str(hs)[:4]}% | current rank is: {self.mmr[puuid]['current_data']['currenttierpatched']} | current rr is: {self.mmr[puuid]['current_data']['ranking_in_tier']} | highest rank was: {self.mmr[puuid]['highest_rank']['patched_tier']} | peak act was: {self.mmr[puuid]['highest_rank']['season']}")
+            f"{stats_list[0]['name']}#{stats_list[0]['tag']}'s ({self.uuid_handler.agent_converter(self.ca[puuid])}) level is {stats_list[0]['level']} | W/L % in last {match_count_kd} matches: {wl} | ACS in the last {match_count_kd} matches: {str(acs)[:5]} | KD in last {match_count_kd} matches: {str(kd)[0:4]} | HS in last {match_count_kd} matches: hs is: {str(hs)[:4]}% | current rank is: {self.mmr[puuid]['current_data']['currenttierpatched']} | current rr is: {self.mmr[puuid]['current_data']['ranking_in_tier']} | rr changes in last 5 matches: {self.rating_changes[puuid][0]}, {self.rating_changes[puuid][1]}, {self.rating_changes[puuid][2]}, {self.rating_changes[puuid][3]}, {self.rating_changes[puuid][4]} | highest rank was: {self.mmr[puuid]['highest_rank']['patched_tier']} | peak act was: {self.mmr[puuid]['highest_rank']['season']}")
 
     async def load_more_matches(self):
-        # Create a single session to reuse for efficient connection pooling
         async with aiohttp.ClientSession(headers=self.handler.match_id_header) as session:
             for puuid in self.cmp:
                 if self.zero_check[puuid] <= self.start:
@@ -558,7 +585,6 @@ class ValoRank:
                 match_urls_new = [f"https://pd.eu.a.pvp.net/match-details/v1/matches/{mid}" for mid in
                                   riot_match_ids_new]
 
-                # Reuse the existing 'session' instead of creating a new one inside the loop
                 tasks = [self.fetch(session, match_url) for match_url in match_urls_new]
                 new_matches = await asyncio.gather(*tasks)
 

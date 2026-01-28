@@ -454,8 +454,8 @@ class ValorantStatsWindow(QMainWindow):
 
     def toggle_pause(self):
         self.is_paused = not self.is_paused
-        self.pause_button.setIcon(QIcon(resource_path("assets/play.png")) if self.is_paused else QIcon(resource_path("assets/pause.png")))
-
+        self.pause_button.setIcon(
+            QIcon(resource_path("assets/play.png")) if self.is_paused else QIcon(resource_path("assets/pause.png")))
 
     # ---------------------------------------------------------
     # Utility setup methods
@@ -630,7 +630,12 @@ class ValorantStatsWindow(QMainWindow):
             f"<a href='{self.build_tracker_url(player_name)}'>{escape(player_name)}</a>"
         )
         name_label.setMinimumWidth(100)
-        name_row.addWidget(name_label, 1)
+        name_row.addWidget(name_label)  # Removed '1' stretch to prevent it pushing button away
+
+        # --- MOVED: Skin Button to Name Row ---
+        skin_button = self.create_skin_button(player)
+        name_row.addWidget(skin_button)
+        name_row.addStretch(1)  # Add stretch after button to align everything left
 
         info_column.addLayout(name_row)
 
@@ -694,10 +699,43 @@ class ValorantStatsWindow(QMainWindow):
         peak_act_label.setObjectName("metaAux")
         meta_bar.addWidget(peak_act_label)
 
-        skin_button = self.create_skin_button(player)
-        meta_bar.addWidget(skin_button)
+        # --- NEW: Rating Change Circles (Pushed to Right) ---
+        meta_bar.addStretch(1)  # This stretch pushes everything after it to the right
 
-        meta_bar.addStretch(1)
+        rating_changes = player.get("rating_change", [])
+        for change in rating_changes:
+            # Change text to show number without '-'
+            text_val = str(change).replace("-", "")
+
+            circle_label = QLabel(text_val)
+            circle_label.setFixedSize(32, 32)
+            circle_label.setAlignment(Qt.AlignCenter)
+
+            try:
+                val = float(change)
+                if val > 0:
+                    bg_color = "#32e2b2"
+                    text_color = "#000000"
+                elif val < 0:
+                    bg_color = "#ff4654"
+                    text_color = "#ffffff"
+                else:
+                    bg_color = "#7f7f7f"
+                    text_color = "#ffffff"
+            except (ValueError, TypeError):
+                bg_color = "#7f7f7f"
+                text_color = "#ffffff"
+
+            circle_label.setStyleSheet(f"""
+                background-color: {bg_color};
+                color: {text_color};
+                border-radius: 16px;
+                font-weight: 700;
+                font-size: 11px;
+            """)
+            meta_bar.addWidget(circle_label)
+        # ----------------------------------
+
         info_column.addLayout(meta_bar)
 
         # --- Stats Row ---
