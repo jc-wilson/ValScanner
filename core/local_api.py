@@ -4,6 +4,7 @@ import requests
 import pathlib
 import base64
 import urllib3
+import re
 from pathlib import Path
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -16,6 +17,8 @@ class LockfileHandler:
         self.entitlement_token = []
         self.puuid = []
         self.client_version = []
+        self.port = None
+        self.password = None
 
     def lockfile_data_function(self):
         # Finds Lockfile
@@ -30,20 +33,20 @@ class LockfileHandler:
 
             # Finds and defines port and password from lockfile
             lockfile_data_colon_loc = [i for i, x in enumerate(lockfile_data) if x == ":"]
-            port = lockfile_data[lockfile_data_colon_loc[1] + 1:lockfile_data_colon_loc[2]]
-            password = lockfile_data[lockfile_data_colon_loc[2] + 1:lockfile_data_colon_loc[3]]
+            self.port = lockfile_data[lockfile_data_colon_loc[1] + 1:lockfile_data_colon_loc[2]]
+            self.password = lockfile_data[lockfile_data_colon_loc[2] + 1:lockfile_data_colon_loc[3]]
 
             # Retrieves user's access and entitlement tokens
             tokens_response = requests.get(
-                f"https://127.0.0.1:{port}/entitlements/v1/token",
-                auth=("riot", password),
+                f"https://127.0.0.1:{self.port}/entitlements/v1/token",
+                auth=("riot", self.password),
                 verify=False
             )
 
             # Retrives user's client version
             session_response = requests.get(
-                f"https://127.0.0.1:{port}/product-session/v1/external-sessions",
-                auth=("riot", password),
+                f"https://127.0.0.1:{self.port}/product-session/v1/external-sessions",
+                auth=("riot", self.password),
                 verify=False
             )
 

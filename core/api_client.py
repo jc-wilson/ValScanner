@@ -25,7 +25,7 @@ class ValoRank:
         self.rating_changes = {}
         self.match_stats = {}
         self.pip = {}  # Duplicate of player_info_pre so that it doesn't get lost when you load into a match
-        self.handler = None
+        self.handler = MatchDetectionHandler()
         self.start = 5
         self.end = 10
         self.gs = []  # Gamemode and Server
@@ -86,7 +86,7 @@ class ValoRank:
                 self.handler.party_id = self.handler.party_id.json()
                 print(self.handler.party_id["CurrentPartyID"])
                 party_info = requests.get(
-                    f"https://glz-eu-1.eu.a.pvp.net/parties/v1/parties/{self.handler.party_id['CurrentPartyID']}",
+                    f"https://glz-{self.handler.region}-1.{self.handler.shard}.a.pvp.net/parties/v1/parties/{self.handler.party_id['CurrentPartyID']}",
                     headers=self.handler.match_id_header
                 ).json()
                 pmi = []  # Party Members Info
@@ -103,7 +103,7 @@ class ValoRank:
                 for player in pmi:
                     puuids.append(player.get("puuid"))
                 nt = requests.put(
-                    "https://pd.eu.a.pvp.net/name-service/v2/players",
+                    f"https://pd.{self.handler.shard}.a.pvp.net/name-service/v2/players",
                     json=[puuids],
                     headers={**self.handler.match_id_header, "Content-Type": "application/json"}
                 ).json()
@@ -127,7 +127,7 @@ class ValoRank:
             else:
                 puuid = self.handler.user_puuid
                 nt = requests.put(
-                    "https://pd.eu.a.pvp.net/name-service/v2/players",
+                    f"https://pd.{self.handler.shard}.a.pvp.net/name-service/v2/players",
                     json=[puuid],
                     headers={**self.handler.match_id_header, "Content-Type": "application/json"}
                 ).json()
@@ -247,7 +247,7 @@ class ValoRank:
             else:
                 valorant_mmr = None
 
-                async with session.get(f"https://pd.eu.a.pvp.net/mmr/v1/players/{puuid}",
+                async with session.get(f"https://pd.{self.handler.shard}.a.pvp.net/mmr/v1/players/{puuid}",
                                        headers=self.modified_header) as resp:
                     valorant_mmr = await resp.json(content_type=None)
 
@@ -327,7 +327,7 @@ class ValoRank:
                     "currenttierpatched"].replace("Unrated", "Unranked")
 
                 async with session.get(
-                        f"https://pd.eu.a.pvp.net/match-history/v1/history/{puuid}?startIndex={0}&endIndex={5}&queue=competitive",
+                        f"https://pd.{self.handler.shard}.a.pvp.net/match-history/v1/history/{puuid}?startIndex={0}&endIndex={5}&queue=competitive",
                         headers=self.handler.match_id_header
                 ) as resp:
                     riot_matches = await resp.json(content_type=None)
@@ -336,14 +336,14 @@ class ValoRank:
 
                 if riot_matches["Total"] == 0:
                     async with session.get(
-                            f"https://pd.eu.a.pvp.net/match-history/v1/history/{puuid}?startIndex={0}&endIndex={1}",
+                            f"https://pd.{self.handler.shard}.a.pvp.net/match-history/v1/history/{puuid}?startIndex={0}&endIndex={1}",
                             headers=self.handler.match_id_header
                     ) as resp:
                         riot_name = await resp.json(content_type=None)
 
                     if riot_name["Total"] == 0:
                         async with session.put(
-                                "https://pd.eu.a.pvp.net/name-service/v2/players",
+                                f"https://pd.{self.handler.shard}.a.pvp.net/name-service/v2/players",
                                 json=[puuid],
                                 headers={**self.handler.match_id_header, "Content-Type": "application/json"}
                         ) as resp:
@@ -382,7 +382,7 @@ class ValoRank:
                     match_id_name = riot_name["History"][0]["MatchID"]
 
                     async with session.get(
-                            f"https://pd.eu.a.pvp.net/match-details/v1/matches/{match_id_name}",
+                            f"https://pd.{self.handler.shard}.a.pvp.net/match-details/v1/matches/{match_id_name}",
                             headers=self.handler.match_id_header
                     ) as resp:
                         match_stats_name = await resp.json(content_type=None)
@@ -431,7 +431,7 @@ class ValoRank:
                     else:
                         end_index = self.zero_check[puuid]
                     async with session.get(
-                            f"https://pd.eu.a.pvp.net/mmr/v1/players/{puuid}/competitiveupdates?startIndex=0&endIndex={end_index}&queue=competitive",
+                            f"https://pd.{self.handler.shard}.a.pvp.net/mmr/v1/players/{puuid}/competitiveupdates?startIndex=0&endIndex={end_index}&queue=competitive",
                             headers=self.handler.match_id_header
                     ) as resp:
                         rating_change = await resp.json(content_type=None)
@@ -448,7 +448,7 @@ class ValoRank:
 
                 match_urls = []
                 for matchID in riot_match_ids:
-                    match_urls.append(f"https://pd.eu.a.pvp.net/match-details/v1/matches/{matchID}")
+                    match_urls.append(f"https://pd.{self.handler.shard}.a.pvp.net/match-details/v1/matches/{matchID}")
 
                 async def gather_matches():
                     tasks = [self.fetch(session, match_url) for match_url in match_urls]
@@ -529,7 +529,10 @@ class ValoRank:
             legshots += round["legshots"]
             bodyshots += round["bodyshots"]
             headshots += round["headshots"]
-        hs = (headshots / (legshots + bodyshots + headshots)) * 100
+        try:
+            hs = (headshots / (legshots + bodyshots + headshots)) * 100
+        except ZeroDivisionError:
+            hs = 0
 
         if self.handler.player_info:
             for player in self.handler.player_info["Players"]:
@@ -572,7 +575,7 @@ class ValoRank:
                     continue
 
 
-                url = f"https://pd.eu.a.pvp.net/match-history/v1/history/{puuid}?startIndex={self.start}&endIndex={self.end}&queue=competitive"
+                url = f"https://pd.{self.handler.shard}.a.pvp.net/match-history/v1/history/{puuid}?startIndex={self.start}&endIndex={self.end}&queue=competitive"
                 async with session.get(url) as response:
                     if response.status != 200:
                         continue
@@ -582,7 +585,7 @@ class ValoRank:
                     continue
 
                 riot_match_ids_new = [match["MatchID"] for match in self.riot_matches_new["History"]]
-                match_urls_new = [f"https://pd.eu.a.pvp.net/match-details/v1/matches/{mid}" for mid in
+                match_urls_new = [f"https://pd.{self.handler.shard}.a.pvp.net/match-details/v1/matches/{mid}" for mid in
                                   riot_match_ids_new]
 
                 tasks = [self.fetch(session, match_url) for match_url in match_urls_new]
@@ -605,6 +608,8 @@ class ValoRank:
                         puuid,
                         self.handler.in_match,
                         self.handler.match_id_header,
+                        self.handler.region,
+                        self.handler.shard,
                         session
                     )
 

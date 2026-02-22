@@ -56,7 +56,7 @@ class UUIDHandler:
                 self.skin_uuids = json.load(a)
 
     def skin_converter(self, skin_uuid):
-        result = []
+        result = None
         for skin in self.skin_uuids["data"]:
             if skin["uuid"] == skin_uuid:
                 result = skin["displayName"]
@@ -64,7 +64,13 @@ class UUIDHandler:
             for chroma in skin["chromas"]:
                 if chroma["uuid"] == skin_uuid:
                     result = chroma["displayName"]
+                    return result
+            for level in skin["levels"]:
+                if level["uuid"] == skin_uuid:
+                    result = skin["displayName"]
+                    return result
         return result
+
 
     def season_uuid_function(self, season_uuid):
         response = requests.get(f"https://valorant-api.com/v1/seasons/{season_uuid}").json()

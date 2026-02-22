@@ -11,19 +11,18 @@ class SkinHandler:
         self.skins = None
         self.skins_pre = None
 
-    async def get_skins(self, match_uuid, match_id_header, session):
+    async def get_skins(self, match_uuid, match_id_header, region, shard, session):
         async with session.get(
-                f"https://glz-eu-1.eu.a.pvp.net/core-game/v1/matches/{match_uuid}/loadouts",
+                f"https://glz-{region}-1.{shard}.a.pvp.net/core-game/v1/matches/{match_uuid}/loadouts",
                 headers=match_id_header
         ) as resp:
             self.skins = await resp.json(content_type=None)
 
         try:
-            # If the response contains an httpStatus code that isn't 200, try pregame
             if self.skins.get("httpStatus", 200) != 200:
                 self.skins = False
                 async with session.get(
-                        f"https://glz-eu-1.eu.a.pvp.net/pregame/v1/matches/{match_uuid}/loadouts",
+                        f"https://glz-{region}-1.{shard}.a.pvp.net/pregame/v1/matches/{match_uuid}/loadouts",
                         headers=match_id_header
                 ) as resp_pre:
                     self.skins_pre = await resp_pre.json(content_type=None)
@@ -49,9 +48,9 @@ class SkinHandler:
 
         self.converted_skins[puuid] = skin_uuids
 
-    async def assign_skins(self, puuid, match_uuid, match_id_header, session):
+    async def assign_skins(self, puuid, match_uuid, match_id_header, region, shard, session):
         if not self.skins and not getattr(self, "skins_pre", None):
-            await self.get_skins(match_uuid, match_id_header, session)
+            await self.get_skins(match_uuid, match_id_header, region, shard, session)
 
         self.convert_skins(puuid)
 

@@ -10,7 +10,7 @@ class dodge:
 
         if handler.in_match:
             dodge_game = requests.post(
-                f"https://glz-eu-1.eu.a.pvp.net/pregame/v1/matches/{handler.in_match}/quit",
+                f"https://glz-{handler.region}-1.{handler.shard}.a.pvp.net/pregame/v1/matches/{handler.in_match}/quit",
                 headers=handler.match_id_header
             )
         else:
