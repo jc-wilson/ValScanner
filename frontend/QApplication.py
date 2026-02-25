@@ -27,11 +27,164 @@ from core.owned_agents import OwnedAgents
 
 
 def resource_path(relative_path):
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
+    if getattr(sys, 'frozen', False):
+        base_path = os.path.dirname(sys.executable)
+    else:
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_path, relative_path)
+
+
+class AgentPopup(QDialog):
+    def __init__(self, agents_list, agent_icons, callback, parent=None):
+        super().__init__(parent)
+        self.callback = callback
+        self.agent_icons = agent_icons
+
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+
+        container = QWidget()
+        container.setObjectName("popupCard")
+
+        main_layout = QVBoxLayout(container)
+        main_layout.setContentsMargins(30, 30, 30, 30)
+        main_layout.setSpacing(16)
+
+        header = QVBoxLayout()
+        header.setSpacing(6)
+        header.setAlignment(Qt.AlignCenter)
+
+        title = QLabel("Select Agent")
+        title.setTextFormat(Qt.PlainText)
+        title.setObjectName("title")
+        header.addWidget(title, alignment=Qt.AlignCenter)
+
+        subtitle = QLabel("Choose an agent to instalock")
+        subtitle.setObjectName("subtitle")
+        header.addWidget(subtitle, alignment=Qt.AlignCenter)
+
+        main_layout.addLayout(header)
+
+        self.tile_width = 120
+        self.tile_height = 120
+        columns = 6
+
+        grid = QGridLayout()
+        grid.setSpacing(16)
+        grid.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+
+        current_row = 0
+        for index, agent in enumerate(agents_list):
+            row = index // columns
+            column = index % columns
+            grid.addWidget(self.build_agent_tile(agent), row, column)
+            current_row = row
+
+        exit_row = current_row + 1
+        grid.addWidget(self.build_exit_tile(columns), exit_row, 0, 1, columns)
+
+        main_layout.addLayout(grid)
+
+        outer = QVBoxLayout(self)
+        outer.addWidget(container)
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(50)
+        shadow.setOffset(0, 12)
+        shadow.setColor(QColor(0, 0, 0, 180))
+        container.setGraphicsEffect(shadow)
+
+        self.setStyleSheet("""
+            #popupCard {
+                background-color: #1a1f2e;
+                border-radius: 22px;
+                border: 1px solid rgba(255, 255, 255, 0.05);
+            }
+            #title { color: #e3e8ff; font-size: 22px; font-weight: 600; }
+            #subtitle { color: #a0abcc; font-size: 14px; }
+            #agentLabel {
+                color: #8c95b4; font-size: 12px; letter-spacing: 1px;
+                text-transform: uppercase;
+            }
+            #agentTile {
+                background-color: #13192a;
+                border-radius: 18px;
+                border: 1px solid rgba(255, 255, 255, 0.05);
+            }
+            #agentTile:hover {
+                border: 1px solid rgba(77, 108, 255, 0.6);
+                background-color: #192139;
+            }
+            #exitTile {
+                background-color: #1f2436;
+                border-radius: 18px;
+                border: 1px solid rgba(255, 255, 255, 0.05);
+            }
+            #exitTile QPushButton {
+                background-color: rgba(255, 255, 255, 0.06);
+                border: none; color: #f4f6ff; font-size: 28px;
+                font-weight: 700; border-radius: 16px;
+            }
+            #exitTile QPushButton:hover {
+                background-color: rgba(255, 87, 107, 0.35);
+            }
+        """)
+
+    def build_agent_tile(self, agent_name):
+        tile = QPushButton()
+        tile.setObjectName("agentTile")
+        tile.setFixedSize(self.tile_width, self.tile_height)
+        tile.setCursor(Qt.PointingHandCursor)
+
+        layout = QVBoxLayout(tile)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+        layout.setAlignment(Qt.AlignCenter)
+
+        icon_label = QLabel()
+        icon_label.setAlignment(Qt.AlignCenter)
+        icon_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+
+        if agent_name in self.agent_icons:
+            icon_label.setPixmap(
+                self.agent_icons[agent_name].scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            icon_label.setText("?")
+            icon_label.setStyleSheet("color: #8c95b4; font-size: 24px;")
+
+        name_label = QLabel(agent_name)
+        name_label.setObjectName("agentLabel")
+        name_label.setAlignment(Qt.AlignCenter)
+        name_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+
+        layout.addWidget(icon_label)
+        layout.addWidget(name_label)
+
+        tile.clicked.connect(lambda _, a=agent_name: self.on_select(a))
+        return tile
+
+    def build_exit_tile(self, cols):
+        tile = QFrame()
+        tile.setObjectName("exitTile")
+
+        full_width = (self.tile_width * cols) + (16 * (cols - 1))
+        tile.setFixedSize(full_width, 60)
+
+        layout = QVBoxLayout(tile)
+        layout.setContentsMargins(12, 6, 12, 6)
+        layout.setAlignment(Qt.AlignCenter)
+
+        exit_button = QPushButton("×")
+        exit_button.setFixedSize(96, 40)
+        exit_button.setCursor(Qt.PointingHandCursor)
+        exit_button.clicked.connect(self.close)
+        layout.addWidget(exit_button, alignment=Qt.AlignCenter)
+
+        return tile
+
+    def on_select(self, agent_name):
+        self.callback(agent_name)
+        self.accept()
 
 
 class WeaponPopup(QDialog):
@@ -314,13 +467,14 @@ class ValorantStatsWindow(QMainWindow):
 
         self.agent_label = QLabel("Agent")
         self.agent_label.setObjectName("sectionLabel")
-        self.combo = QComboBox()
-        self.combo.setCursor(Qt.PointingHandCursor)
-        self.combo.currentTextChanged.connect(self.on_selection_changed)
-        self.combo.addItems(self.owned_agent_handler.combo)
-        self.combo.setCurrentIndex(0)
-        self.combo.setMinimumWidth(150)
-        self.agent = self.uuid_handler.agent_converter_reversed(self.combo.currentText())
+
+        initial_agent = self.owned_agent_handler.combo[0] if self.owned_agent_handler.combo else "Random"
+        self.agent_select_btn = QPushButton(initial_agent)
+        self.agent_select_btn.setObjectName("agentSelectButton")
+        self.agent_select_btn.setCursor(Qt.PointingHandCursor)
+        self.agent_select_btn.setMinimumWidth(100)
+        self.agent_select_btn.clicked.connect(self.open_agent_popup)
+        self.agent = self.uuid_handler.agent_converter_reversed(initial_agent)
 
         self.lock_agent_button = QPushButton("Lock Agent")
         self.lock_agent_button.setCursor(Qt.PointingHandCursor)
@@ -356,6 +510,12 @@ class ValorantStatsWindow(QMainWindow):
         from core.asset_loader import download_and_cache_agent_icons
         self.agent_icons = download_and_cache_agent_icons()
 
+        for item in self.owned_agent_handler.combo:
+            if item not in self.agent_icons:
+                icon_path = resource_path(f"assets/agents/{item}.png")
+                if os.path.exists(icon_path):
+                    self.agent_icons[item] = QPixmap(icon_path)
+
         from core.asset_loader import download_and_cache_rank_icons
         self.rank_icons = download_and_cache_rank_icons()
 
@@ -379,12 +539,10 @@ class ValorantStatsWindow(QMainWindow):
         agent_layout.setContentsMargins(11, 8, 11, 8)
         agent_layout.setSpacing(10)
         agent_layout.addWidget(self.agent_label)
-        agent_layout.addWidget(self.combo)
+        agent_layout.addWidget(self.agent_select_btn)
         agent_layout.addWidget(self.lock_agent_button)
         agent_layout.addWidget(self.auto_lock_label)
         agent_layout.addWidget(self.auto_lock_switch)
-
-        header_layout.addWidget(agent_block, alignment=Qt.AlignVCenter)
 
         header_layout.addWidget(agent_block, alignment=Qt.AlignVCenter)
 
@@ -422,6 +580,24 @@ class ValorantStatsWindow(QMainWindow):
 
         self.ws_task = asyncio.create_task(self.websocket_listener())
 
+        self.refreshed_pregame = None
+        self.refreshed_game = None
+        self.instalocked_match_id = None
+        self.last_update = None
+
+        self.seen_prematch_ids = set()
+        self.seen_match_ids = set()
+        self.last_seen = None
+
+    def open_agent_popup(self):
+        popup = AgentPopup(self.owned_agent_handler.combo, getattr(self, "agent_icons", {}), self.on_agent_selected,
+                           self)
+        popup.exec()
+
+    def on_agent_selected(self, agent_name):
+        self.agent_select_btn.setText(agent_name)
+        self.agent = self.uuid_handler.agent_converter_reversed(agent_name)
+
     async def websocket_listener(self):
         while True:
             try:
@@ -457,15 +633,48 @@ class ValorantStatsWindow(QMainWindow):
                             uri = event_data.get("uri", "")
 
                             if "/pregame/v1/matches" in uri:
-                                self.run_valo_stats()
+                                #print(f"Received WebSocket message: {msg}")
+                                prematch_id = uri[-36:]
+
+                                if prematch_id in self.seen_prematch_ids:
+                                    continue
+                                self.seen_prematch_ids.add(prematch_id)
+
+                                #print(prematch_id)
+                                self.run_valo_stats(prematch_id=prematch_id)
+
+                                self.last_seen = None
+
                                 if self.auto_lock_switch.isChecked():
                                     await asyncio.sleep(6.5)
                                     self.instalock_agent()
 
+                            elif "/core-game/v1/matches" in uri:
+                                #print(f"Received WebSocket message: {msg}")
+                                match_id = uri[-36:]
 
-                            if "/pregame/v1/matches" in uri or "/core-game/v1/matches" in uri:
-                                print(f"Match event detected on URI: {uri}. Refreshing stats...")
-                                self.run_valo_stats()
+                                if match_id != prematch_id:
+                                    continue
+
+                                if match_id in self.seen_match_ids:
+                                    continue
+                                self.seen_match_ids.add(match_id)
+
+                                print(match_id)
+                                self.run_valo_stats(match_id=match_id)
+
+                                self.last_seen = None
+
+                            #elif "/parties/v1/parties" in uri:
+                                #party_id = uri[-36:]
+
+                                #if self.last_seen != "party":
+                                    #print("refreshed party")
+                                    #self.run_valo_stats(party_id=party_id)
+                                    #self.safe_load_players(self.valo_rank.frontend_data)
+                                    #self.last_seen = "party"
+                                #else:
+                                    #continue
 
             except Exception as e:
                 print(f"WebSocket error: {e}")
@@ -1013,6 +1222,20 @@ class ValorantStatsWindow(QMainWindow):
             " background-color: rgba(30, 43, 65, 0.95);"
             " border: 1px solid rgba(128, 151, 196, 0.7);"
             "}"
+            "QPushButton#agentSelectButton {"
+            " background-color: rgba(23, 34, 52, 0.85);"
+            " border-radius: 12px;"
+            " padding: 8px 12px;"
+            " border: 1px solid rgba(86, 104, 138, 0.6);"
+            " font-weight: 600;"
+            " letter-spacing: 0.5px;"
+            " color: #f4f6ff;"
+            " text-align: left;"
+            "}"
+            "QPushButton#agentSelectButton:hover {"
+            " border: 1px solid rgba(128, 151, 196, 0.7);"
+            " background-color: rgba(30, 45, 65, 0.95);"
+            "}"
             "QComboBox {"
             " background-color: rgba(23, 34, 52, 0.85);"
             " border-radius: 12px;"
@@ -1060,33 +1283,35 @@ class ValorantStatsWindow(QMainWindow):
 
         self.setStyleSheet(base_style)
 
-    def on_selection_changed(self, text):
-        self.agent = self.uuid_handler.agent_converter_reversed(text)
-
     def instalock_agent(self):
-        self.lock_agent_button.setEnabled(False)
+        if self.lock_agent_button.isEnabled():
+            self.lock_agent_button.setEnabled(False)
+            asyncio.create_task(self.instalock_agent_async())
+
+    async def instalock_agent_async(self):
         try:
-            if self.combo.currentText() == "Random":
+            current_text = self.agent_select_btn.text()
+            if current_text == "Random":
                 rand_agent = random.randint(0, (len(self.owned_agent_handler.all_agents) - 1))
                 agents = self.owned_agent_handler.all_agents
                 self.agent = self.uuid_handler.agent_converter_reversed(agents[rand_agent])
-            elif self.combo.currentText() == "Random Duelist":
+            elif current_text == "Duelist":
                 rand_agent = random.randint(0, (len(self.owned_agent_handler.owned_duelists) - 1))
                 agents = self.owned_agent_handler.owned_duelists
                 self.agent = self.uuid_handler.agent_converter_reversed(agents[rand_agent])
-            elif self.combo.currentText() == "Random Initiator":
+            elif current_text == "Initiator":
                 rand_agent = random.randint(0, (len(self.owned_agent_handler.owned_initiators) - 1))
                 agents = self.owned_agent_handler.owned_initiators
                 self.agent = self.uuid_handler.agent_converter_reversed(agents[rand_agent])
-            elif self.combo.currentText() == "Random Controller":
+            elif current_text == "Controller":
                 rand_agent = random.randint(0, (len(self.owned_agent_handler.owned_controllers) - 1))
                 agents = self.owned_agent_handler.owned_controllers
                 self.agent = self.uuid_handler.agent_converter_reversed(agents[rand_agent])
-            elif self.combo.currentText() == "Random Sentinel":
+            elif current_text == "Sentinel":
                 rand_agent = random.randint(0, (len(self.owned_agent_handler.owned_sentinels) - 1))
                 agents = self.owned_agent_handler.owned_sentinels
                 self.agent = self.uuid_handler.agent_converter_reversed(agents[rand_agent])
-            instalock_agent(self.agent)
+            await instalock_agent(self.agent, self.valo_rank.handler)
         finally:
             self.lock_agent_button.setEnabled(True)
 
@@ -1100,12 +1325,19 @@ class ValorantStatsWindow(QMainWindow):
 
     async def _dodge_async(self):
         try:
-            await self.dodge_game.dodge_func()
+            await self.dodge_game.dodge_func(self.valo_rank.handler)
         finally:
             self.dodge_button.setEnabled(True)
 
-    def run_valo_stats(self):
-        asyncio.create_task(self.refresh_data())
+    def run_valo_stats(self, prematch_id=None, match_id=None, party_id=None):
+        if prematch_id:
+            asyncio.create_task(self.refresh_data(prematch_id=prematch_id))
+        elif match_id:
+            asyncio.create_task(self.refresh_data(match_id=match_id))
+        elif party_id:
+            asyncio.create_task(self.refresh_data(party_id=party_id))
+        else:
+            asyncio.create_task(self.refresh_data())
 
     def run_load_more_matches_button(self):
         if self.load_more_matches_button.isEnabled():
@@ -1121,14 +1353,21 @@ class ValorantStatsWindow(QMainWindow):
             self.refresh_button.setEnabled(True)
             self.load_more_matches_button.setEnabled(True)
 
-    async def refresh_data(self):
+    async def refresh_data(self, prematch_id=None, match_id=None, party_id=None):
         if not self.refresh_button.isEnabled():
             return
 
         self.refresh_button.setEnabled(False)
         try:
             print("Fetching latest Valorant stats...")
-            await self.valo_rank.valo_stats()
+            if prematch_id:
+                await self.valo_rank.valo_stats(prematch_id=prematch_id)
+            elif match_id:
+                await self.valo_rank.valo_stats(match_id=match_id)
+            elif party_id:
+                await self.valo_rank.lobby_load(party_id=party_id)
+            else:
+                await self.valo_rank.valo_stats()
             print("✅ Data fetched. Refreshing table...")
             self.safe_load_players(self.valo_rank.frontend_data)
             self.update_metadata()
@@ -1147,7 +1386,9 @@ class ValorantStatsWindow(QMainWindow):
 
         player_iterable = players.values() if isinstance(players, dict) else players
         for i, player in enumerate(player_iterable):
-            if self.valo_rank.gs[0] == "Deathmatch":
+            is_deathmatch = len(self.valo_rank.gs) > 0 and self.valo_rank.gs[0] == "Deathmatch"
+
+            if is_deathmatch:
                 if str(i / 2)[2] == "0":
                     self.left_players.append(player)
                 else:

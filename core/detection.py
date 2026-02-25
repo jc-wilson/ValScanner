@@ -6,7 +6,7 @@ from core.region_shard import region_shard_func
 
 # Match-state check
 class MatchDetectionHandler:
-    def __init__(self):
+    def __init__(self, prematch_id = None, match_id = None):
         self.current_match_id = None
         self.pre_game_match_id = None
         self.player_info = None
@@ -16,6 +16,9 @@ class MatchDetectionHandler:
         self.region_shard = {}
         self.region = None
         self.shard = None
+        self.in_match = None
+        self.match_id = match_id
+        self.prematch_id = prematch_id
 
     def detect_match_handler(self):
         handler = LockfileHandler()
@@ -34,43 +37,45 @@ class MatchDetectionHandler:
             "Authorization": f"Bearer {handler.access_token}"
         }
 
-        self.pre_game_match_id_response = requests.get(
-            f"https://glz-{self.region}-1.{self.shard}.a.pvp.net/pregame/v1/players/{handler.puuid}",
-            headers=self.match_id_header
-        )
 
-        self.current_match_id_response = requests.get(
-            f"https://glz-{self.region}-1.{self.shard}.a.pvp.net/core-game/v1/players/{handler.puuid}",
-            headers=self.match_id_header
-        )
-
-        if self.current_match_id_response.status_code == 200:
-            self.current_match_id = self.current_match_id_response.json()
-            self.in_match = self.current_match_id["MatchID"]
-        elif self.pre_game_match_id_response.status_code == 200:
-            self.pre_game_match_id = self.pre_game_match_id_response.json()
-            self.in_match = self.pre_game_match_id["MatchID"]
-        else:
-            print("not in match")
-            self.party_id = requests.get(
-                f"https://glz-{self.region}-1.{self.shard}.a.pvp.net/parties/v1/players/{handler.puuid}",
+        if self.match_id is None and self.prematch_id is None:
+            self.pre_game_match_id_response = requests.get(
+                f"https://glz-{self.region}-1.{self.shard}.a.pvp.net/pregame/v1/players/{handler.puuid}",
                 headers=self.match_id_header
             )
+
+            self.current_match_id_response = requests.get(
+                f"https://glz-{self.region}-1.{self.shard}.a.pvp.net/core-game/v1/players/{handler.puuid}",
+                headers=self.match_id_header
+            )
+
+            if self.current_match_id_response.status_code == 200:
+                self.current_match_id = self.current_match_id_response.json()
+                self.match_id = self.current_match_id["MatchID"]
+            elif self.pre_game_match_id_response.status_code == 200:
+                self.pre_game_match_id = self.pre_game_match_id_response.json()
+                self.prematch_id = self.pre_game_match_id["MatchID"]
+            else:
+                print("not in match")
+                self.party_id = requests.get(
+                    f"https://glz-{self.region}-1.{self.shard}.a.pvp.net/parties/v1/players/{handler.puuid}",
+                    headers=self.match_id_header
+                )
 
 # Player info retrieval
     def player_info_retrieval(self):
         self.detect_match_handler()
-        if self.current_match_id:
-            self.current_game_match_response = requests.get(
-                f"https://glz-{self.region}-1.{self.shard}.a.pvp.net/core-game/v1/matches/{self.in_match}",
-                headers=self.match_id_header
-            )
-            self.player_info = self.current_game_match_response.json()
-        elif self.pre_game_match_id:
+        if self.prematch_id:
             self.pre_game_match_response = requests.get(
-                f"https://glz-{self.region}-1.{self.shard}.a.pvp.net/pregame/v1/matches/{self.in_match}",
+                f"https://glz-{self.region}-1.{self.shard}.a.pvp.net/pregame/v1/matches/{self.prematch_id}",
                 headers=self.match_id_header
             )
             self.player_info_pre = self.pre_game_match_response.json()
-        else:
-            print("error")
+            self.in_match = self.prematch_id
+        elif self.match_id:
+            self.current_game_match_response = requests.get(
+                f"https://glz-{self.region}-1.{self.shard}.a.pvp.net/core-game/v1/matches/{self.match_id}",
+                headers=self.match_id_header
+            )
+            self.player_info = self.current_game_match_response.json()
+            self.in_match = self.match_id

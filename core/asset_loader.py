@@ -6,16 +6,25 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from PySide6.QtGui import QPixmap
 
-def resource_path(relative_path):
-    """Get absolute path to resource, works for dev and for PyInstaller .exe"""
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
+import os
+import sys
+
+
+def get_external_path(relative_path):
+    """Always points to the folder NEXT to the .exe, or the Project Root in dev."""
+    if getattr(sys, 'frozen', False):
+        # If compiled, use the directory where the .exe is sitting
+        base_path = os.path.dirname(sys.executable)
+    else:
+        # If running locally (script is inside core/ or frontend/), go up one level to Project Root
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        base_path = os.path.abspath(os.path.join(current_dir, ".."))
+
     return os.path.join(base_path, relative_path)
 
-def download_and_cache_agent_icons(cache_dir="assets/agents"):
-    """Download agent icons once and save them locally (if not already cached)."""
+def download_and_cache_agent_icons(cache_dir=None):
+    if cache_dir is None:
+        cache_dir = get_external_path("assets/agents")
     os.makedirs(cache_dir, exist_ok=True)
 
     print("🖼️ Fetching agent list from Valorant API...")
@@ -52,7 +61,9 @@ def download_and_cache_agent_icons(cache_dir="assets/agents"):
     print(f"✅ Loaded {len(icons)} agent icons (cached in {cache_dir})")
     return icons
 
-def download_and_cache_rank_icons(cache_dir="assets/ranks"):
+def download_and_cache_rank_icons(cache_dir=None):
+    if cache_dir is None:
+        cache_dir = get_external_path("assets/ranks")
     os.makedirs(cache_dir, exist_ok=True)
 
     print("🖼️ Fetching rank icons from Valorant API...")
@@ -87,15 +98,11 @@ def download_and_cache_rank_icons(cache_dir="assets/ranks"):
     print(f"✅ Loaded {len(icons)} rank icons (cached in {cache_dir})")
     return icons
 
-async def download_and_cache_skins(cache_dir="assets/skins", threads=40):
-    """
-    Downloads ALL Valorant weapon skins + chromas at high speed using multithreading.
-    Saves each icon using its UUID as filename.
-    Returns a dict: {uuid: QPixmap}
-    """
+async def download_and_cache_skins(cache_dir=None, threads=40):
+    if cache_dir is None:
+        cache_dir = get_external_path("assets/skins")
 
     def download_file(url, path):
-        """Download a single PNG file to path."""
         try:
             data = requests.get(url, timeout=5).content
             with open(path, "wb") as f:
@@ -104,7 +111,6 @@ async def download_and_cache_skins(cache_dir="assets/skins", threads=40):
         except Exception:
             return False
 
-    # Prepare directory
     os.makedirs(cache_dir, exist_ok=True)
 
     print("🖼️ Fetching skins + chromas from Valorant API...")

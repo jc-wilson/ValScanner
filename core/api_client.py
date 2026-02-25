@@ -77,81 +77,55 @@ class ValoRank:
             on_update(self.frontend_data)
         await asyncio.sleep(0.05)
 
-    async def lobby_load(self):
-        try:
-            self.handler.in_match
-        except:
-            self.frontend_data = {}
-            if self.handler.party_id.status_code == 200:
-                self.handler.party_id = self.handler.party_id.json()
-                print(self.handler.party_id["CurrentPartyID"])
-                party_info = requests.get(
-                    f"https://glz-{self.handler.region}-1.{self.handler.shard}.a.pvp.net/parties/v1/parties/{self.handler.party_id['CurrentPartyID']}",
-                    headers=self.handler.match_id_header
-                ).json()
-                pmi = []  # Party Members Info
-                print(party_info)
-                for player in party_info["Members"]:
-                    pmi.append({
-                        "puuid": player.get("Subject"),
-                        "rank_up": player.get("CompetitiveTier"),  # Rank unpatched
-                        "level": player.get("PlayerIdentity")("AccountLevel"),
-                        "name": None,
-                        "tag": None
-                    })
-                puuids = []
-                for player in pmi:
-                    puuids.append(player.get("puuid"))
-                nt = requests.put(
-                    f"https://pd.{self.handler.shard}.a.pvp.net/name-service/v2/players",
-                    json=[puuids],
-                    headers={**self.handler.match_id_header, "Content-Type": "application/json"}
-                ).json()
+    async def lobby_load(self, party_id = None):
+        self.frontend_data = {}
+        party_info = requests.get(
+            f"https://glz-{self.handler.region}-1.{self.handler.shard}.a.pvp.net/parties/v1/parties/{party_id}",
+            headers=self.handler.match_id_header
+        ).json()
+        pmi = []  # Party Members Info
+        print(party_info)
+        for player in party_info["Members"]:
+            pmi.append({
+                "puuid": player.get("Subject"),
+                "rank_up": self.ttr[player.get("CompetitiveTier")],  # Rank unpatched
+                "level": player["PlayerIdentity"]["AccountLevel"],
+                "name": None,
+                "tag": None
+            })
+        puuids = []
+        for player in pmi:
+            puuids.append(player.get("puuid"))
+        nt = requests.put(
+            f"https://pd.{self.handler.shard}.a.pvp.net/name-service/v2/players",
+            json=puuids,
+            headers={**self.handler.match_id_header, "Content-Type": "application/json"}
+        ).json()
 
-                for index, player in pmi:
-                    self.frontend_data[pmi[index]["puuid"]] = {
-                        "name": f"{nt[index]['GameName']}#{nt[index]['TagLine']}",
-                        "agent": "N/A",
-                        "level": player.get("level"),
-                        "matches": "N/A",
-                        "wl": "N/A",
-                        "acs": "N/A",
-                        "kd": "N/A",
-                        "hs": "N/A",
-                        "rank": player.get("rank_up"),
-                        "rr": "N/A",
-                        "peak_rank": "N/A",
-                        "peak_act": "N/A",
-                        "team": "Red"
-                    }
-            else:
-                puuid = self.handler.user_puuid
-                nt = requests.put(
-                    f"https://pd.{self.handler.shard}.a.pvp.net/name-service/v2/players",
-                    json=[puuid],
-                    headers={**self.handler.match_id_header, "Content-Type": "application/json"}
-                ).json()
+        for index, player in enumerate(pmi):
+            self.frontend_data[player["puuid"]] = {
+                "name": f"{nt[index]['GameName']}#{nt[index]['TagLine']}",
+                "agent": "N/A",
+                "level": player.get("level"),
+                "matches": "N/A",
+                "wl": "N/A",
+                "acs": "N/A",
+                "kd": "N/A",
+                "hs": "N/A",
+                "rank": player.get("rank_up"),
+                "rr": "N/A",
+                "peak_rank": "Unranked",
+                "peak_act": "N/A",
+                "team": "Red"
+            }
 
-                self.frontend_data[puuid] = {
-                    "name": f"{nt[0]['GameName']}#{nt[0]['TagLine']}",
-                    "agent": "N/A",
-                    "level": "N/A",
-                    "matches": "N/A",
-                    "wl": "N/A",
-                    "acs": "N/A",
-                    "kd": "N/A",
-                    "hs": "N/A",
-                    "rank": "N/A",
-                    "rr": "N/A",
-                    "peak_rank": "N/A",
-                    "peak_act": "N/A",
-                    "team": "Red"
-                }
+        print(self.frontend_data)
 
     # Gamemode and server detection function
     def gs_func(self):
         self.gs = []
         if self.handler.player_info_pre:
+            print(self.handler.player_info_pre)
             self.gs.append(self.handler.player_info_pre["Mode"])
             self.gs.append(self.handler.player_info_pre["GamePodID"])
         elif self.handler.player_info:
@@ -177,14 +151,18 @@ class ValoRank:
                     if self.handler.player_info_pre["IsRanked"] == 0:
                         self.gs[0] = "Unrated"
 
-    async def valo_stats(self):
-        self.handler = MatchDetectionHandler()
+    async def valo_stats(self, prematch_id = None, match_id = None):
+        if prematch_id:
+            self.handler = MatchDetectionHandler(prematch_id = prematch_id)
+        elif match_id:
+            self.handler = MatchDetectionHandler(match_id=match_id)
+        else:
+            self.handler = MatchDetectionHandler()
         await asyncio.to_thread(self.handler.player_info_retrieval)
 
         try:
             current_match_id = self.handler.in_match
         except AttributeError:
-            await self.lobby_load()
             return
 
         if self.last_match_id != current_match_id:
@@ -239,8 +217,6 @@ class ValoRank:
         self.modified_header = self.handler.match_id_header
         self.modified_header["X-Riot-ClientVersion"] = self.version_data["data"]["riotClientVersion"]
 
-        print(self.cmp)
-
         async def stat_collector(puuid, session):
             if puuid in self.used_puuids:
                 return
@@ -250,9 +226,6 @@ class ValoRank:
                 async with session.get(f"https://pd.{self.handler.shard}.a.pvp.net/mmr/v1/players/{puuid}",
                                        headers=self.modified_header) as resp:
                     valorant_mmr = await resp.json(content_type=None)
-
-
-                print("valorant_mmr:", valorant_mmr)
 
                 if valorant_mmr["LatestCompetitiveUpdate"]:
                     peak_rank = 0
@@ -440,8 +413,6 @@ class ValoRank:
                     for match in rating_change["Matches"]:
                         self.rating_changes[puuid].append(match["RankedRatingEarned"])
 
-                    print(self.rating_changes[puuid])
-
                 riot_match_ids = []
                 for match in riot_matches["History"]:
                     riot_match_ids.append(match["MatchID"])
@@ -472,7 +443,6 @@ class ValoRank:
         for match in self.match_stats[puuid]:
             for player in match["players"]:
                 if player["subject"] == puuid:
-                    print(f"player: {player}")
                     stats_list.append({
                         "name": player.get("gameName"),
                         "tag": player.get("tagLine"),
@@ -566,7 +536,7 @@ class ValoRank:
         await self.assign_skins()
 
         print(
-            f"{stats_list[0]['name']}#{stats_list[0]['tag']}'s ({self.uuid_handler.agent_converter(self.ca[puuid])}) level is {stats_list[0]['level']} | W/L % in last {match_count_kd} matches: {wl} | ACS in the last {match_count_kd} matches: {str(acs)[:5]} | KD in last {match_count_kd} matches: {str(kd)[0:4]} | HS in last {match_count_kd} matches: hs is: {str(hs)[:4]}% | current rank is: {self.mmr[puuid]['current_data']['currenttierpatched']} | current rr is: {self.mmr[puuid]['current_data']['ranking_in_tier']} | rr changes in last 5 matches: {self.rating_changes[puuid][0]}, {self.rating_changes[puuid][1]}, {self.rating_changes[puuid][2]}, {self.rating_changes[puuid][3]}, {self.rating_changes[puuid][4]} | highest rank was: {self.mmr[puuid]['highest_rank']['patched_tier']} | peak act was: {self.mmr[puuid]['highest_rank']['season']}")
+            f"{puuid} {stats_list[0]['name']}#{stats_list[0]['tag']}'s ({self.uuid_handler.agent_converter(self.ca[puuid])}) level is {stats_list[0]['level']} | W/L % in last {match_count_kd} matches: {wl} | ACS in the last {match_count_kd} matches: {str(acs)[:5]} | KD in last {match_count_kd} matches: {str(kd)[0:4]} | HS in last {match_count_kd} matches: hs is: {str(hs)[:4]}% | current rank is: {self.mmr[puuid]['current_data']['currenttierpatched']} | current rr is: {self.mmr[puuid]['current_data']['ranking_in_tier']} | rr changes in last 5 matches: {self.rating_changes[puuid][0]}, {self.rating_changes[puuid][1]}, {self.rating_changes[puuid][2]}, {self.rating_changes[puuid][3]}, {self.rating_changes[puuid][4]} | highest rank was: {self.mmr[puuid]['highest_rank']['patched_tier']} | peak act was: {self.mmr[puuid]['highest_rank']['season']}")
 
     async def load_more_matches(self):
         async with aiohttp.ClientSession(headers=self.handler.match_id_header) as session:

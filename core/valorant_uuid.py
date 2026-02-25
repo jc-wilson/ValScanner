@@ -1,8 +1,26 @@
+import os
+import sys
 import requests
 import json
 
+
+def get_external_path(relative_path):
+    if getattr(sys, 'frozen', False):
+        base_path = os.path.dirname(sys.executable)
+    else:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        base_path = os.path.abspath(os.path.join(current_dir, ".."))
+
+    return os.path.join(base_path, relative_path)
+
+
 class UUIDHandler:
     def __init__(self):
+        self.agent_uuids_path = get_external_path("core/agent_uuids.json")
+        self.skin_uuids_path = get_external_path("core/skin_uuids.json")
+
+        os.makedirs(os.path.dirname(self.agent_uuids_path), exist_ok=True)
+
         self.agent_uuid_request = None
         self.rom_to_int = {
             "I": "1",
@@ -15,16 +33,16 @@ class UUIDHandler:
 
     def agent_uuid_function(self):
         try:
-            with open("agent_uuids.json") as a:
+            with open(self.agent_uuids_path) as a:
                 self.agent_uuids = json.load(a)
         except FileNotFoundError:
             self.agent_uuid_request = requests.get("https://valorant-api.com/v1/agents").json()
             print("requested agent uuid information from valorant-api.com")
 
-            with open("agent_uuids.json", "w", encoding="utf-8") as f:
+            with open(self.agent_uuids_path, "w", encoding="utf-8") as f:
                 json.dump(self.agent_uuid_request, f, indent=2)
 
-            with open("agent_uuids.json") as a:
+            with open(self.agent_uuids_path) as a:
                 self.agent_uuids = json.load(a)
 
     def agent_converter(self, uuid):
@@ -43,16 +61,16 @@ class UUIDHandler:
 
     def skin_uuid_function(self):
         try:
-            with open("skin_uuids.json") as a:
+            with open(self.skin_uuids_path) as a:
                 self.skin_uuids = json.load(a)
         except FileNotFoundError:
             self.skin_uuid_request = requests.get("https://valorant-api.com/v1/weapons/skins").json()
             print("requested skin uuid information from valorant-api.com")
 
-            with open("skin_uuids.json", "w", encoding="utf-8") as f:
+            with open(self.skin_uuids_path, "w", encoding="utf-8") as f:
                 json.dump(self.skin_uuid_request, f, indent=2)
 
-            with open("skin_uuids.json") as a:
+            with open(self.skin_uuids_path) as a:
                 self.skin_uuids = json.load(a)
 
     def skin_converter(self, skin_uuid):
@@ -70,7 +88,6 @@ class UUIDHandler:
                     result = skin["displayName"]
                     return result
         return result
-
 
     def season_uuid_function(self, season_uuid):
         response = requests.get(f"https://valorant-api.com/v1/seasons/{season_uuid}").json()
@@ -97,9 +114,3 @@ class UUIDHandler:
         if result == ("525a5"):
             result = "v25a5"
         return result
-
-
-
-
-
-

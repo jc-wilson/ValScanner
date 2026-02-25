@@ -39,8 +39,8 @@ class OwnedAgents:
 
         self.combo = self.all_agents.copy()
         self.combo.insert(0, "Random")
-        self.combo.extend(["Random Duelist",
-            "Random Initiator", "Random Controller", "Random Sentinel"])
+        self.combo.extend(["Duelist",
+            "Initiator", "Controller", "Sentinel"])
 
         for agent in self.duelists:
             if agent in self.all_agents:
@@ -57,14 +57,6 @@ class OwnedAgents:
         for agent in self.sentinels:
             if agent in self.all_agents:
                 self.owned_sentinels.append(agent)
-
-        print(self.all_agents)
-        print(self.combo)
-
-        print(self.owned_duelists)
-        print(self.owned_initiators)
-        print(self.owned_controllers)
-        print(self.owned_sentinels)
 
 
 if __name__ == "__main__":
