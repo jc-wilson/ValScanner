@@ -18,6 +18,7 @@ class UUIDHandler:
     def __init__(self):
         self.agent_uuids_path = get_external_path("core/agent_uuids.json")
         self.skin_uuids_path = get_external_path("core/skin_uuids.json")
+        self.season_uuids_path = get_external_path("core/season_uuids.json")
 
         os.makedirs(os.path.dirname(self.agent_uuids_path), exist_ok=True)
 
@@ -89,20 +90,38 @@ class UUIDHandler:
                     return result
         return result
 
-    def season_uuid_function(self, season_uuid):
-        response = requests.get(f"https://valorant-api.com/v1/seasons/{season_uuid}").json()
-        result = None
-        print(response)
-        if response["status"] != 200:
-            result = "Unranked"
-        elif response["data"]["title"] == None:
-            result = response["data"]["assetPath"]
-            result = result[35:-10]
+    def season_uuid_function(self):
+        try:
+            with open(self.season_uuids_path, "r", encoding="utf-8") as a:
+                self.season_uuids = json.load(a)
+        except FileNotFoundError:
+            print("Requested season uuid information from valorant-api.com")
+            response = requests.get("https://valorant-api.com/v1/seasons").json()
+
+            with open(self.season_uuids_path, "w", encoding="utf-8") as f:
+                json.dump(response, f, indent=2)
+
+            self.season_uuids = response
+
+    def season_converter(self, season_uuid):
+        season_data = None
+        for season in self.season_uuids.get("data", []):
+            if season["uuid"] == season_uuid:
+                season_data = season
+                break
+
+        if not season_data:
+            return "Unranked"
+
+        if season_data.get("title") is None:
+            result = season_data.get("assetPath", "")
+            if len(result) > 35:
+                result = result[35:-10]
             result = result.replace("_", "")
             result = result.replace("Episode", "e")
             result = result.replace("Act", "a")
         else:
-            result = response["data"]["title"]
+            result = season_data["title"]
             result = result.replace("EPISODE", "e")
             result = result.replace("ACT", "a")
             result = result.replace("//", "")
@@ -110,7 +129,9 @@ class UUIDHandler:
             for num in self.rom_to_int:
                 if result.find(f" {num} ") > -1:
                     result = result.replace(num, self.rom_to_int[num])
+
         result = result.replace(" ", "")
-        if result == ("525a5"):
+        if result == "525a5":
             result = "v25a5"
+
         return result

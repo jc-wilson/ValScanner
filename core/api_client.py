@@ -33,6 +33,7 @@ class ValoRank:
         self.done = 0
         self.uuid_handler = UUIDHandler()
         self.uuid_handler.agent_uuid_function()
+        self.uuid_handler.season_uuid_function()
         self.skin_handler = SkinHandler()
         self.version_data = requests.get("https://valorant-api.com/v1/version").json()
         self.gamemode_list = {
@@ -241,7 +242,7 @@ class ValoRank:
                         except TypeError:
                             continue
 
-                    peak_act_final = self.uuid_handler.season_uuid_function(peak_act)
+                    peak_act_final = self.uuid_handler.season_converter(peak_act)
                     prefix = peak_act_final[0:2]
 
 
@@ -351,7 +352,6 @@ class ValoRank:
                             "puuid": puuid
                         }
                         self.used_puuids.append(puuid)
-                        await self.assign_skins()
                         return
 
                     match_id_name = riot_name["History"][0]["MatchID"]
@@ -399,7 +399,6 @@ class ValoRank:
                         "puuid": puuid
                     }
                     self.used_puuids.append(puuid)
-                    await self.assign_skins()
                     return
                 else:
                     if self.zero_check[puuid] >= 6:
@@ -438,6 +437,8 @@ class ValoRank:
 
         for index, puuid in enumerate(self.cmp):
             self.frontend_data[puuid]["agent"] = self.uuid_handler.agent_converter(self.ca[puuid])
+
+        await self.assign_skins()
 
     async def calc_stats(self, puuid):
         stats_list = []
@@ -537,7 +538,6 @@ class ValoRank:
             "rating_change": self.rating_changes[puuid],
             "puuid": puuid
         }
-        await self.assign_skins()
 
         print(
             f"{puuid} {stats_list[0]['name']}#{stats_list[0]['tag']}'s ({self.uuid_handler.agent_converter(self.ca[puuid])}) level is {stats_list[0]['level']} | W/L % in last {match_count_kd} matches: {wl} | ACS in the last {match_count_kd} matches: {str(acs)[:5]} | KD in last {match_count_kd} matches: {str(kd)[0:4]} | HS in last {match_count_kd} matches: hs is: {str(hs)[:4]}% | current rank is: {self.mmr[puuid]['current_data']['currenttierpatched']} | current rr is: {self.mmr[puuid]['current_data']['ranking_in_tier']} | rr changes in last 5 matches: {self.rating_changes[puuid][0]}, {self.rating_changes[puuid][1]}, {self.rating_changes[puuid][2]}, {self.rating_changes[puuid][3]}, {self.rating_changes[puuid][4]} | highest rank was: {self.mmr[puuid]['highest_rank']['patched_tier']} | peak act was: {self.mmr[puuid]['highest_rank']['season']}")
@@ -577,8 +577,8 @@ class ValoRank:
     async def assign_skins(self, on_update=None):
         if len(self.used_puuids) == len(self.cmp):
             async with aiohttp.ClientSession(headers=self.handler.match_id_header) as session:
-                for puuid in self.used_puuids:
-                    self.frontend_data[puuid]["skins"] = await self.skin_handler.assign_skins(
+                tasks = [
+                    self.skin_handler.assign_skins(
                         puuid,
                         self.handler.in_match,
                         self.handler.match_id_header,
@@ -586,6 +586,13 @@ class ValoRank:
                         self.handler.shard,
                         session
                     )
+                    for puuid in self.used_puuids
+                ]
+
+                skin_results = await asyncio.gather(*tasks)
+
+                for puuid, skins in zip(self.used_puuids, skin_results):
+                    self.frontend_data[puuid]["skins"] = skins
 
     async def fetch(self, session, url, retries=3):
         for attempt in range(retries):

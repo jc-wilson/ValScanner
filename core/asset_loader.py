@@ -5,10 +5,7 @@ import requests
 import asyncio
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from PySide6.QtGui import QPixmap
-
-import os
-import sys
-
+from PySide6.QtCore import Qt
 
 def get_external_path(relative_path):
     """Always points to the folder NEXT to the .exe, or the Project Root in dev."""
@@ -21,6 +18,7 @@ def get_external_path(relative_path):
         base_path = os.path.abspath(os.path.join(current_dir, ".."))
 
     return os.path.join(base_path, relative_path)
+
 
 def download_and_cache_agent_icons(cache_dir=None):
     if cache_dir is None:
@@ -43,20 +41,22 @@ def download_and_cache_agent_icons(cache_dir=None):
         if not icon_url:
             continue
 
-        # 🔧 sanitize filename (replace /, \, :, ?, etc.)
         safe_name = re.sub(r'[\\/*?:"<>|]', "_", name)
         file_path = os.path.join(cache_dir, f"{safe_name}.png")
 
-        # Download only if not already cached
         if not os.path.exists(file_path):
             print(f"⬇️ Downloading {name} icon...")
             img_data = requests.get(icon_url).content
             with open(file_path, "wb") as f:
                 f.write(img_data)
 
-        # Load QPixmap from local file
         pixmap = QPixmap(file_path)
-        icons[name] = pixmap
+
+        icons[name] = pixmap.scaled(
+            134, 134,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation
+        )
 
     print(f"✅ Loaded {len(icons)} agent icons (cached in {cache_dir})")
     return icons
@@ -80,7 +80,6 @@ def download_and_cache_rank_icons(cache_dir=None):
             print("failed to retrieve icon url")
             continue
 
-        # 🔧 sanitise filename (replace /, \, :, ?, etc.)
         safe_name = re.sub(r'[\\/*?:"<>|]', "_", name)
         file_path = os.path.join(cache_dir, f"{safe_name}.png")
 
