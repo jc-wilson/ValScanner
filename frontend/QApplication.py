@@ -833,6 +833,7 @@ class ValorantStatsWindow(QMainWindow):
         name_row.setSpacing(12)
 
         player_name = str(player.get("name", "Unknown"))
+
         name_label = QLabel()
         name_label.setObjectName("playerName")
         name_label.setTextFormat(Qt.RichText)
@@ -841,8 +842,16 @@ class ValorantStatsWindow(QMainWindow):
         name_label.setText(
             f"<a href='{self.build_tracker_url(player_name)}'>{escape(player_name)}</a>"
         )
-        name_label.setMinimumWidth(100)
         name_row.addWidget(name_label)
+
+        vtl_label = QLabel()
+        vtl_label.setTextFormat(Qt.RichText)
+        vtl_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        vtl_label.setOpenExternalLinks(True)
+        vtl_url = f"https://vtl.lol/id/{player.get("puuid")}"
+        vtl_label.setText(f"<a href='{vtl_url}' style='text-decoration: none; font-size: 16px;'>🔗</a>")
+        vtl_label.setToolTip("View on VTL.lol")
+        name_row.addWidget(vtl_label)
 
         skin_button = self.create_skin_button(player)
         name_row.addWidget(skin_button)
@@ -934,13 +943,8 @@ class ValorantStatsWindow(QMainWindow):
                 bg_color = "#7f7f7f"
                 text_color = "#ffffff"
 
-            circle_label.setStyleSheet(f"""
-                background-color: {bg_color};
-                color: {text_color};
-                border-radius: 16px;
-                font-weight: 700;
-                font-size: 11px;
-            """)
+            circle_label.setStyleSheet(
+                f"background-color: {bg_color}; color: {text_color}; border-radius: 16px; font-weight: 700; font-size: 11px;")
             meta_bar.addWidget(circle_label)
 
         info_column.addLayout(meta_bar)

@@ -116,7 +116,8 @@ class ValoRank:
                 "rr": "N/A",
                 "peak_rank": "Unranked",
                 "peak_act": "N/A",
-                "team": "Red"
+                "team": "Red",
+                "puuid": player["puuid"]
             }
 
         print(self.frontend_data)
@@ -346,7 +347,8 @@ class ValoRank:
                             "peak_rank": self.mmr[puuid]["highest_rank"]["patched_tier"],
                             "peak_act": self.mmr[puuid]["highest_rank"]["season"].upper(),
                             "team": bor,
-                            "rating_change": [0, 0, 0, 0, 0]
+                            "rating_change": [0, 0, 0, 0, 0],
+                            "puuid": puuid
                         }
                         self.used_puuids.append(puuid)
                         await self.assign_skins()
@@ -393,7 +395,8 @@ class ValoRank:
                         "peak_rank": self.mmr[puuid]["highest_rank"]["patched_tier"],
                         "peak_act": self.mmr[puuid]["highest_rank"]["season"].upper(),
                         "team": bor,
-                        "rating_change": [0, 0, 0, 0, 0]
+                        "rating_change": [0, 0, 0, 0, 0],
+                        "puuid": puuid
                     }
                     self.used_puuids.append(puuid)
                     await self.assign_skins()
@@ -531,7 +534,8 @@ class ValoRank:
             "peak_rank": self.mmr[puuid]["highest_rank"]["patched_tier"],
             "peak_act": self.mmr[puuid]["highest_rank"]["season"].upper(),
             "team": bor,
-            "rating_change": self.rating_changes[puuid]
+            "rating_change": self.rating_changes[puuid],
+            "puuid": puuid
         }
         await self.assign_skins()
 
