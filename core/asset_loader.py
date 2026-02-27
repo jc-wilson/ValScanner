@@ -97,6 +97,7 @@ def download_and_cache_rank_icons(cache_dir=None):
     print(f"✅ Loaded {len(icons)} rank icons (cached in {cache_dir})")
     return icons
 
+
 async def download_and_cache_skins(cache_dir=None, threads=40):
     if cache_dir is None:
         cache_dir = get_external_path("assets/skins")
@@ -117,8 +118,8 @@ async def download_and_cache_skins(cache_dir=None, threads=40):
     response.raise_for_status()
     skins = response.json()["data"]
 
-    download_jobs = []   # list of (url, path)
-    file_map = {}        # uuid → local filepath
+    download_jobs = []  # list of (url, path)
+    file_map = {}  # uuid → local filepath
 
     # Build full download job list
     for skin in skins:
@@ -158,14 +159,15 @@ async def download_and_cache_skins(cache_dir=None, threads=40):
 
     print("\n✅ Download complete. Loading pixmaps...")
 
-    async def load_pixmap(path):
-        return await asyncio.to_thread(QPixmap, path)
-
-    # Load images into QPixmap
+    # Load images into QPixmap directly on the main thread
     pixmaps = {}
-    for uuid, file_path in file_map.items():
+    for count, (uuid, file_path) in enumerate(file_map.items()):
         if os.path.exists(file_path):
-            pixmaps[uuid] = await load_pixmap(file_path)
+            pixmaps[uuid] = QPixmap(file_path)
+
+            # Yield control to the event loop every 50 images so the UI doesn't freeze
+            if count % 50 == 0:
+                await asyncio.sleep(0)
 
     print(f"🎉 Loaded {len(pixmaps)} total icons.")
     return pixmaps

@@ -1,5 +1,4 @@
-import json
-import requests
+import aiohttp
 from core.detection import MatchDetectionHandler
 from core.valorant_uuid import UUIDHandler
 
@@ -19,28 +18,28 @@ class OwnedAgents:
         self.owned_controllers = []
         self.owned_sentinels = []
 
-    def owned_agents_func(self):
+    async def owned_agents_func(self):
         uuid_handler = UUIDHandler()
         uuid_handler.agent_uuid_function()
 
         handler = MatchDetectionHandler()
-        handler.detect_match_handler()
+        await handler.detect_match_handler()
 
-        self.owned_agents = requests.get(f"https://pd.{handler.shard}.a.pvp.net/store/v1/entitlements/{handler.user_puuid}/01bb38e1-da47-4e6a-9b3d-945fe4655707",
-                                        headers=handler.match_id_header).json()
-
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"https://pd.{handler.shard}.a.pvp.net/store/v1/entitlements/{handler.user_puuid}/01bb38e1-da47-4e6a-9b3d-945fe4655707",
+                headers=handler.match_id_header
+            ) as response:
+                self.owned_agents = await response.json(content_type=None)
 
         for agent in self.owned_agents["Entitlements"]:
             self.all_agents.append(uuid_handler.agent_converter(agent["ItemID"]))
 
         self.all_agents.sort()
 
-        print(self.all_agents)
-
         self.combo = self.all_agents.copy()
         self.combo.insert(0, "Random")
-        self.combo.extend(["Duelist",
-            "Initiator", "Controller", "Sentinel"])
+        self.combo.extend(["Duelist", "Initiator", "Controller", "Sentinel"])
 
         for agent in self.duelists:
             if agent in self.all_agents:
@@ -57,8 +56,3 @@ class OwnedAgents:
         for agent in self.sentinels:
             if agent in self.all_agents:
                 self.owned_sentinels.append(agent)
-
-
-if __name__ == "__main__":
-    agents = OwnedAgents()
-    agents.owned_agents_func()

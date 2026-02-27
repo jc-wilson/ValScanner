@@ -10,6 +10,7 @@ class SkinHandler:
         self.converted_skins = {}
         self.skins = None
         self.skins_pre = None
+        self._lock = asyncio.Lock()
 
     async def get_skins(self, match_uuid, match_id_header, region, shard, session):
         async with session.get(
@@ -49,8 +50,9 @@ class SkinHandler:
         self.converted_skins[puuid] = skin_uuids
 
     async def assign_skins(self, puuid, match_uuid, match_id_header, region, shard, session):
-        if not self.skins and not getattr(self, "skins_pre", None):
-            await self.get_skins(match_uuid, match_id_header, region, shard, session)
+        async with self._lock:
+            if not self.skins and not getattr(self, "skins_pre", None):
+                await self.get_skins(match_uuid, match_id_header, region, shard, session)
 
         self.convert_skins(puuid)
 

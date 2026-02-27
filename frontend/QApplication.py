@@ -447,7 +447,6 @@ class ValorantStatsWindow(QMainWindow):
         self.uuid_handler.skin_uuid_function()
         self.uuid_handler.season_uuid_function()
         self.owned_agent_handler = OwnedAgents()
-        self.owned_agent_handler.owned_agents_func()
 
         font_path = resource_path("assets/fonts/unicons-line.ttf")
         print("🔍 Loading font from:", font_path)
@@ -469,7 +468,7 @@ class ValorantStatsWindow(QMainWindow):
         self.agent_label = QLabel("Agent")
         self.agent_label.setObjectName("sectionLabel")
 
-        initial_agent = self.owned_agent_handler.combo[0] if self.owned_agent_handler.combo else "Random"
+        initial_agent = "Random"
         self.agent_select_btn = QPushButton(initial_agent)
         self.agent_select_btn.setObjectName("agentSelectButton")
         self.agent_select_btn.setCursor(Qt.PointingHandCursor)
@@ -510,12 +509,6 @@ class ValorantStatsWindow(QMainWindow):
 
         from core.asset_loader import download_and_cache_agent_icons
         self.agent_icons = download_and_cache_agent_icons()
-
-        for item in self.owned_agent_handler.combo:
-            if item not in self.agent_icons:
-                icon_path = resource_path(f"assets/agents/{item}.png")
-                if os.path.exists(icon_path):
-                    self.agent_icons[item] = QPixmap(icon_path)
 
         from core.asset_loader import download_and_cache_rank_icons
         self.rank_icons = download_and_cache_rank_icons()
@@ -590,9 +583,24 @@ class ValorantStatsWindow(QMainWindow):
         self.seen_match_ids = set()
         self.last_seen = None
 
+        self._latency_start_time = None
+
+    async def init_agents(self):
+        await self.owned_agent_handler.owned_agents_func()
+        if self.owned_agent_handler.combo:
+            initial_agent = self.owned_agent_handler.combo[0]
+            self.agent_select_btn.setText(initial_agent)
+            self.agent = self.uuid_handler.agent_converter_reversed(initial_agent)
+
+            for item in self.owned_agent_handler.combo:
+                if item not in self.agent_icons:
+                    icon_path = resource_path(f"assets/agents/{item}.png")
+                    if os.path.exists(icon_path):
+                        self.agent_icons[item] = QPixmap(icon_path)
+
     def open_agent_popup(self):
-        popup = AgentPopup(self.owned_agent_handler.combo, getattr(self, "agent_icons", {}), self.on_agent_selected,
-                           self)
+        combo_list = self.owned_agent_handler.combo if getattr(self.owned_agent_handler, "combo", None) else ["Random"]
+        popup = AgentPopup(combo_list, getattr(self, "agent_icons", {}), self.on_agent_selected, self)
         popup.exec()
 
     def on_agent_selected(self, agent_name):
@@ -603,7 +611,7 @@ class ValorantStatsWindow(QMainWindow):
         while True:
             try:
                 handler = LockfileHandler()
-                handler.lockfile_data_function()
+                await handler.lockfile_data_function()
 
                 if not handler.port or not handler.password:
                     await asyncio.sleep(5)
@@ -634,24 +642,22 @@ class ValorantStatsWindow(QMainWindow):
                             uri = event_data.get("uri", "")
 
                             if "/pregame/v1/matches" in uri:
-                                #print(f"Received WebSocket message: {msg}")
                                 prematch_id = uri[-36:]
 
                                 if prematch_id in self.seen_prematch_ids:
                                     continue
                                 self.seen_prematch_ids.add(prematch_id)
 
-                                #print(prematch_id)
                                 self.run_valo_stats(prematch_id=prematch_id)
 
                                 self.last_seen = None
 
                                 if self.auto_lock_switch.isChecked():
-                                    await asyncio.sleep(6.5)
+                                    await asyncio.sleep(6.75)
                                     self.instalock_agent()
 
                             elif "/core-game/v1/matches" in uri:
-                                #print(f"Received WebSocket message: {msg}")
+
                                 match_id = uri[-36:]
 
                                 if match_id != prematch_id:
@@ -659,23 +665,14 @@ class ValorantStatsWindow(QMainWindow):
 
                                 if match_id in self.seen_match_ids:
                                     continue
+
                                 self.seen_match_ids.add(match_id)
 
                                 print(match_id)
+
                                 self.run_valo_stats(match_id=match_id)
 
                                 self.last_seen = None
-
-                            #elif "/parties/v1/parties" in uri:
-                                #party_id = uri[-36:]
-
-                                #if self.last_seen != "party":
-                                    #print("refreshed party")
-                                    #self.run_valo_stats(party_id=party_id)
-                                    #self.safe_load_players(self.valo_rank.frontend_data)
-                                    #self.last_seen = "party"
-                                #else:
-                                    #continue
 
             except Exception as e:
                 print(f"WebSocket error: {e}")
@@ -845,7 +842,7 @@ class ValorantStatsWindow(QMainWindow):
         vtl_label.setTextFormat(Qt.RichText)
         vtl_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         vtl_label.setOpenExternalLinks(True)
-        vtl_url = f"https://vtl.lol/id/{player.get("puuid")}"
+        vtl_url = f"https://vtl.lol/id/{player.get('puuid')}"
         vtl_label.setText(f"<a href='{vtl_url}' style='text-decoration: none; font-size: 16px;'>🔗</a>")
         vtl_label.setToolTip("View on VTL.lol")
         name_row.addWidget(vtl_label)
@@ -1435,6 +1432,7 @@ class ValorantStatsWindow(QMainWindow):
 async def main():
     window = ValorantStatsWindow([])
     window.show()
+    await window.init_agents()
     asyncio.create_task(window.refresh_data())
     return window
 

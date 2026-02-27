@@ -78,30 +78,35 @@ class ValoRank:
             on_update(self.frontend_data)
         await asyncio.sleep(0.05)
 
-    async def lobby_load(self, party_id = None):
+    async def lobby_load(self, party_id=None):
         self.frontend_data = {}
-        party_info = requests.get(
-            f"https://glz-{self.handler.region}-1.{self.handler.shard}.a.pvp.net/parties/v1/parties/{party_id}",
-            headers=self.handler.match_id_header
-        ).json()
-        pmi = []  # Party Members Info
-        print(party_info)
-        for player in party_info["Members"]:
-            pmi.append({
-                "puuid": player.get("Subject"),
-                "rank_up": self.ttr[player.get("CompetitiveTier")],  # Rank unpatched
-                "level": player["PlayerIdentity"]["AccountLevel"],
-                "name": None,
-                "tag": None
-            })
-        puuids = []
-        for player in pmi:
-            puuids.append(player.get("puuid"))
-        nt = requests.put(
-            f"https://pd.{self.handler.shard}.a.pvp.net/name-service/v2/players",
-            json=puuids,
-            headers={**self.handler.match_id_header, "Content-Type": "application/json"}
-        ).json()
+        self.handler = MatchDetectionHandler()
+        await self.handler.detect_match_handler()
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                    f"https://glz-{self.handler.region}-1.{self.handler.shard}.a.pvp.net/parties/v1/parties/{party_id}",
+                    headers=self.handler.match_id_header
+            ) as party_response:
+                party_info = await party_response.json(content_type=None)
+
+            pmi = []
+            for player in party_info.get("Members", []):
+                pmi.append({
+                    "puuid": player.get("Subject"),
+                    "rank_up": self.ttr.get(player.get("CompetitiveTier", 0), "Unranked"),
+                    "level": player.get("PlayerIdentity", {}).get("AccountLevel", 0),
+                    "name": None,
+                    "tag": None
+                })
+            puuids = [player.get("puuid") for player in pmi]
+
+            async with session.put(
+                    f"https://pd.{self.handler.shard}.a.pvp.net/name-service/v2/players",
+                    json=puuids,
+                    headers={**self.handler.match_id_header, "Content-Type": "application/json"}
+            ) as nt_response:
+                nt = await nt_response.json(content_type=None)
 
         for index, player in enumerate(pmi):
             self.frontend_data[player["puuid"]] = {
@@ -120,8 +125,6 @@ class ValoRank:
                 "team": "Red",
                 "puuid": player["puuid"]
             }
-
-        print(self.frontend_data)
 
     # Gamemode and server detection function
     def gs_func(self):
@@ -153,14 +156,15 @@ class ValoRank:
                     if self.handler.player_info_pre["IsRanked"] == 0:
                         self.gs[0] = "Unrated"
 
-    async def valo_stats(self, prematch_id = None, match_id = None):
+    async def valo_stats(self, prematch_id=None, match_id=None):
         if prematch_id:
-            self.handler = MatchDetectionHandler(prematch_id = prematch_id)
+            self.handler = MatchDetectionHandler(prematch_id=prematch_id)
         elif match_id:
             self.handler = MatchDetectionHandler(match_id=match_id)
         else:
             self.handler = MatchDetectionHandler()
-        await asyncio.to_thread(self.handler.player_info_retrieval)
+
+        await self.handler.player_info_retrieval()
 
         try:
             current_match_id = self.handler.in_match
