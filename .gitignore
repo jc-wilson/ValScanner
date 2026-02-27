@@ -1,0 +1,13 @@
+build/
+build_WWTB.bat
+changelog.txt
+to do list.txt
+WWTB.spec
+.idea/
+.venv/
+core/agent_uuids.json
+core/season_uuids.json
+core/skin_uuids.json
+dist/
+assets/
+core/__pycache__/
