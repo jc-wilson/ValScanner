@@ -445,10 +445,11 @@ class ValorantStatsWindow(QMainWindow):
         self.uuid_handler = UUIDHandler()
         self.uuid_handler.agent_uuid_function()
         self.uuid_handler.skin_uuid_function()
+        self.uuid_handler.season_uuid_function()
         self.owned_agent_handler = OwnedAgents()
         self.owned_agent_handler.owned_agents_func()
 
-        font_path = resource_path("assets/fonts/proximanova_regular.ttf")
+        font_path = resource_path("assets/fonts/unicons-line.ttf")
         print("🔍 Loading font from:", font_path)
 
         font_id = QFontDatabase.addApplicationFont(font_path)
@@ -804,16 +805,12 @@ class ValorantStatsWindow(QMainWindow):
         agent_icon_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         agent_name = str(player.get("agent", "Unknown"))
-        if hasattr(self, "small_agent_icons") and agent_name in self.small_agent_icons:
-            agent_icon_label.setPixmap(self.small_agent_icons[agent_name])
+        agent_icon = self.agent_icons.get(agent_name)
+
+        if agent_icon:
+            agent_icon_label.setPixmap(agent_icon)
         else:
-            agent_icon = self.agent_icons.get(agent_name)
-            if agent_icon:
-                agent_icon_label.setPixmap(
-                    agent_icon.scaled(134, 134, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                )
-            else:
-                agent_icon_label.setText(agent_name)
+            agent_icon_label.setText(agent_name)
 
         level_value = player.get("level", "N/A")
         level_label = QLabel(f"{level_value}")
@@ -840,7 +837,7 @@ class ValorantStatsWindow(QMainWindow):
         name_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         name_label.setOpenExternalLinks(True)
         name_label.setText(
-            f"<a href='{self.build_tracker_url(player_name)}'>{escape(player_name)}</a>"
+            f"<a href='{self.build_tracker_url(player_name)}' style='text-decoration: none;'>{escape(player_name)}</a>"
         )
         name_row.addWidget(name_label)
 
