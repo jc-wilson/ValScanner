@@ -31,11 +31,11 @@ class LockfileHandler:
         self.client_version = []
         self.port = None
         self.password = None
-        self.last_fetch_time = 0
+        self.exp_time = 0
         self._initialized = True
 
     async def lockfile_data_function(self):
-        if time.time() - self.last_fetch_time < 3602 and self.access_token:
+        if time.time() < self.exp_time and self.access_token:
             return
 
         lockfile_loc = rf"{os.getenv('LOCALAPPDATA')}\Riot Games\Riot Client\Config\lockfile"
@@ -71,6 +71,10 @@ class LockfileHandler:
             self.puuid = entitlements["subject"]
             self.client_version = session_data["host_app"]["version"]
 
-            self.last_fetch_time = time.time()
+            payload_b64 = self.access_token.split('.')[1]
+            payload_b64 += '=' * (-len(payload_b64) % 4)
+            payload = json.loads(base64.urlsafe_b64decode(payload_b64).decode('utf-8'))
+
+            self.exp_time = payload['exp']
         else:
             print("error")
