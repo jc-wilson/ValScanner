@@ -3,9 +3,11 @@ import sys
 import re
 import requests
 import asyncio
+import aiohttp
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
+from core.http_session import SharedSession
 
 def get_external_path(relative_path):
     """Always points to the folder NEXT to the .exe, or the Project Root in dev."""
@@ -20,15 +22,19 @@ def get_external_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
-def download_and_cache_agent_icons(cache_dir=None):
+async def download_and_cache_agent_icons(cache_dir=None):
     if cache_dir is None:
         cache_dir = get_external_path("assets/agents")
     os.makedirs(cache_dir, exist_ok=True)
 
-    print("🖼️ Fetching agent list from Valorant API...")
-    response = requests.get("https://valorant-api.com/v1/agents")
-    response.raise_for_status()
-    agents = response.json()["data"]
+    print("Fetching agent list from Valorant API...")
+    session = SharedSession.get()
+    async with session.get("https://valorant-api.com/v1/agents") as resp:
+        if resp.status == 200:
+            agents = await resp.json(content_type=None)
+            agents = agents["data"]
+        else:
+            print("Failed to fetch agent icons from Valorant API")
 
     icons = {}
 
@@ -58,18 +64,22 @@ def download_and_cache_agent_icons(cache_dir=None):
             Qt.SmoothTransformation
         )
 
-    print(f"✅ Loaded {len(icons)} agent icons (cached in {cache_dir})")
+    print(f"Loaded {len(icons)} agent icons (cached in {cache_dir})")
     return icons
 
-def download_and_cache_rank_icons(cache_dir=None):
+async def download_and_cache_rank_icons(cache_dir=None):
     if cache_dir is None:
         cache_dir = get_external_path("assets/ranks")
     os.makedirs(cache_dir, exist_ok=True)
 
-    print("🖼️ Fetching rank icons from Valorant API...")
-    response = requests.get("https://valorant-api.com/v1/competitivetiers")
-    response.raise_for_status()
-    ranks = response.json()["data"][4]["tiers"]
+    print("Fetching rank icons from Valorant API...")
+    session = SharedSession.get()
+    async with session.get("https://valorant-api.com/v1/competitivetiers") as resp:
+        if resp.status == 200:
+            ranks = await resp.json(content_type=None)
+            ranks = ranks["data"][4]["tiers"]
+        else:
+            print("Failed to fetch rank icons from Valorant API")
 
     icons = {}
 
@@ -94,7 +104,7 @@ def download_and_cache_rank_icons(cache_dir=None):
         pixmap = QPixmap(file_path)
         icons[name] = pixmap
 
-    print(f"✅ Loaded {len(icons)} rank icons (cached in {cache_dir})")
+    print(f"Loaded {len(icons)} rank icons (cached in {cache_dir})")
     return icons
 
 
@@ -113,7 +123,7 @@ async def download_and_cache_skins(cache_dir=None, threads=40):
 
     os.makedirs(cache_dir, exist_ok=True)
 
-    print("🖼️ Fetching skins + chromas from Valorant API...")
+    print("Fetching skins + chromas from Valorant API...")
     response = requests.get("https://valorant-api.com/v1/weapons/skins")
     response.raise_for_status()
     skins = response.json()["data"]
@@ -144,8 +154,8 @@ async def download_and_cache_skins(cache_dir=None, threads=40):
                 if not os.path.exists(chroma_path):
                     download_jobs.append((icon, chroma_path))
 
-    print(f"📦 {len(download_jobs)} icons to download (uncached).")
-    print(f"🚀 Starting downloads using {threads} threads...")
+    print(f"{len(download_jobs)} icons to download (uncached).")
+    print(f"Starting downloads using {threads} threads...")
 
     # Multithreaded downloads
     with ThreadPoolExecutor(max_workers=threads) as executor:
@@ -169,5 +179,5 @@ async def download_and_cache_skins(cache_dir=None, threads=40):
             if count % 50 == 0:
                 await asyncio.sleep(0)
 
-    print(f"🎉 Loaded {len(pixmaps)} total icons.")
+    print(f"Loaded {len(pixmaps)} total icons.")
     return pixmaps

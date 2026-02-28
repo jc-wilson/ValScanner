@@ -7,6 +7,7 @@ import re
 import aiohttp
 import time
 from pathlib import Path
+from core.http_session import SharedSession
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -49,19 +50,21 @@ class LockfileHandler:
             self.password = lockfile_data[lockfile_data_colon_loc[2] + 1:lockfile_data_colon_loc[3]]
 
             auth = aiohttp.BasicAuth('riot', self.password)
+            session = SharedSession.get()
 
-            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
-                async with session.get(
-                        f"https://127.0.0.1:{self.port}/entitlements/v1/token",
-                        auth=auth
-                ) as tokens_response:
-                    entitlements = await tokens_response.json()
+            async with session.get(
+                    f"https://127.0.0.1:{self.port}/entitlements/v1/token",
+                    auth=auth,
+                    ssl=False
+            ) as tokens_response:
+                entitlements = await tokens_response.json()
 
-                async with session.get(
-                        f"https://127.0.0.1:{self.port}/product-session/v1/external-sessions",
-                        auth=auth
-                ) as session_response:
-                    session_data = await session_response.json()
+            async with session.get(
+                    f"https://127.0.0.1:{self.port}/product-session/v1/external-sessions",
+                    auth=auth,
+                    ssl=False
+            ) as session_response:
+                session_data = await session_response.json()
 
             self.access_token = entitlements["accessToken"]
             self.entitlement_token = entitlements["token"]

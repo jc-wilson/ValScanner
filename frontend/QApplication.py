@@ -1,5 +1,6 @@
 from html import escape
 from urllib.parse import quote
+import time
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow,
@@ -24,6 +25,7 @@ from core.instalock_agent import instalock_agent
 from core.valorant_uuid import UUIDHandler
 from core.local_api import LockfileHandler
 from core.owned_agents import OwnedAgents
+from core.http_session import SharedSession
 
 
 def resource_path(relative_path):
@@ -507,11 +509,8 @@ class ValorantStatsWindow(QMainWindow):
         self.gamemode_chip, self.gamemode_value = self.build_meta_chip("Gamemode")
         self.server_chip, self.server_value = self.build_meta_chip("Server")
 
-        from core.asset_loader import download_and_cache_agent_icons
-        self.agent_icons = download_and_cache_agent_icons()
-
-        from core.asset_loader import download_and_cache_rank_icons
-        self.rank_icons = download_and_cache_rank_icons()
+        self.agent_icons = None
+        self.rank_icons = None
 
         from core.asset_loader import download_and_cache_skins
         task = asyncio.create_task(download_and_cache_skins())
@@ -587,6 +586,13 @@ class ValorantStatsWindow(QMainWindow):
 
     async def init_agents(self):
         await self.owned_agent_handler.owned_agents_func()
+
+        from core.asset_loader import download_and_cache_agent_icons
+        self.agent_icons = await download_and_cache_agent_icons()
+
+        from core.asset_loader import download_and_cache_rank_icons
+        self.rank_icons = await download_and_cache_rank_icons()
+
         if self.owned_agent_handler.combo:
             initial_agent = self.owned_agent_handler.combo[0]
             self.agent_select_btn.setText(initial_agent)
@@ -1445,6 +1451,9 @@ if __name__ == "__main__":
     loop = qasync.QEventLoop(app)
     asyncio.set_event_loop(loop)
 
-    window = loop.run_until_complete(main())
-    with loop:
-        loop.run_forever()
+    try:
+        window = loop.run_until_complete(main())
+        with loop:
+            loop.run_forever()
+    finally:
+        loop.run_until_complete(SharedSession.close())

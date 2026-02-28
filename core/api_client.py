@@ -3,6 +3,7 @@ from core.local_api import LockfileHandler
 from core.valorant_uuid import UUIDHandler
 from core.skins import SkinHandler
 from concurrent.futures import ThreadPoolExecutor
+from core.http_session import SharedSession
 import requests
 import sys
 import os
@@ -83,30 +84,30 @@ class ValoRank:
         self.handler = MatchDetectionHandler()
         await self.handler.detect_match_handler()
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                    f"https://glz-{self.handler.region}-1.{self.handler.shard}.a.pvp.net/parties/v1/parties/{party_id}",
-                    headers=self.handler.match_id_header
-            ) as party_response:
-                party_info = await party_response.json(content_type=None)
+        session = SharedSession.get()
+        async with session.get(
+                f"https://glz-{self.handler.region}-1.{self.handler.shard}.a.pvp.net/parties/v1/parties/{party_id}",
+                headers=self.handler.match_id_header
+        ) as party_response:
+            party_info = await party_response.json(content_type=None)
 
-            pmi = []
-            for player in party_info.get("Members", []):
-                pmi.append({
-                    "puuid": player.get("Subject"),
-                    "rank_up": self.ttr.get(player.get("CompetitiveTier", 0), "Unranked"),
-                    "level": player.get("PlayerIdentity", {}).get("AccountLevel", 0),
-                    "name": None,
-                    "tag": None
-                })
-            puuids = [player.get("puuid") for player in pmi]
+        pmi = []
+        for player in party_info.get("Members", []):
+            pmi.append({
+                "puuid": player.get("Subject"),
+                "rank_up": self.ttr.get(player.get("CompetitiveTier", 0), "Unranked"),
+                "level": player.get("PlayerIdentity", {}).get("AccountLevel", 0),
+                "name": None,
+                "tag": None
+            })
+        puuids = [player.get("puuid") for player in pmi]
 
-            async with session.put(
-                    f"https://pd.{self.handler.shard}.a.pvp.net/name-service/v2/players",
-                    json=puuids,
-                    headers={**self.handler.match_id_header, "Content-Type": "application/json"}
-            ) as nt_response:
-                nt = await nt_response.json(content_type=None)
+        async with session.put(
+                f"https://pd.{self.handler.shard}.a.pvp.net/name-service/v2/players",
+                json=puuids,
+                headers={**self.handler.match_id_header, "Content-Type": "application/json"}
+        ) as nt_response:
+            nt = await nt_response.json(content_type=None)
 
         for index, player in enumerate(pmi):
             self.frontend_data[player["puuid"]] = {
@@ -360,6 +361,7 @@ class ValoRank:
 
                     match_id_name = riot_name["History"][0]["MatchID"]
 
+                    print(f"session: {session}")
                     async with session.get(
                             f"https://pd.{self.handler.shard}.a.pvp.net/match-details/v1/matches/{match_id_name}",
                             headers=self.handler.match_id_header
@@ -428,16 +430,16 @@ class ValoRank:
                     match_urls.append(f"https://pd.{self.handler.shard}.a.pvp.net/match-details/v1/matches/{matchID}")
 
                 async def gather_matches():
-                    tasks = [self.fetch(session, match_url) for match_url in match_urls]
+                    tasks = [self.fetch(session, match_url, headers=self.modified_header) for match_url in match_urls]
                     self.match_stats[puuid] = await asyncio.gather(*tasks)
 
                 await gather_matches()
                 self.used_puuids.append(puuid)
                 await self.calc_stats(puuid)
 
-        async with aiohttp.ClientSession(headers=self.modified_header) as session:
-            tasks = [asyncio.create_task(stat_collector(puuid, session)) for puuid in self.cmp]
-            await asyncio.gather(*tasks)
+        session = SharedSession.get()
+        tasks = [asyncio.create_task(stat_collector(puuid, session)) for puuid in self.cmp]
+        await asyncio.gather(*tasks)
 
         for index, puuid in enumerate(self.cmp):
             self.frontend_data[puuid]["agent"] = self.uuid_handler.agent_converter(self.ca[puuid])
@@ -547,74 +549,75 @@ class ValoRank:
             f"{puuid} {stats_list[0]['name']}#{stats_list[0]['tag']}'s ({self.uuid_handler.agent_converter(self.ca[puuid])}) level is {stats_list[0]['level']} | W/L % in last {match_count_kd} matches: {wl} | ACS in the last {match_count_kd} matches: {str(acs)[:5]} | KD in last {match_count_kd} matches: {str(kd)[0:4]} | HS in last {match_count_kd} matches: hs is: {str(hs)[:4]}% | current rank is: {self.mmr[puuid]['current_data']['currenttierpatched']} | current rr is: {self.mmr[puuid]['current_data']['ranking_in_tier']} | rr changes in last 5 matches: {self.rating_changes[puuid][0]}, {self.rating_changes[puuid][1]}, {self.rating_changes[puuid][2]}, {self.rating_changes[puuid][3]}, {self.rating_changes[puuid][4]} | highest rank was: {self.mmr[puuid]['highest_rank']['patched_tier']} | peak act was: {self.mmr[puuid]['highest_rank']['season']}")
 
     async def load_more_matches(self):
-        async with aiohttp.ClientSession(headers=self.handler.match_id_header) as session:
-            for puuid in self.cmp:
-                if self.zero_check[puuid] <= self.start:
+        session = SharedSession.get()
+        for puuid in self.cmp:
+            if self.zero_check[puuid] <= self.start:
+                continue
+
+
+            url = f"https://pd.{self.handler.shard}.a.pvp.net/match-history/v1/history/{puuid}?startIndex={self.start}&endIndex={self.end}&queue=competitive"
+            async with session.get(url) as response:
+                if response.status != 200:
                     continue
+                self.riot_matches_new = await response.json()
 
+            if self.riot_matches_new["Total"] == 0:
+                continue
 
-                url = f"https://pd.{self.handler.shard}.a.pvp.net/match-history/v1/history/{puuid}?startIndex={self.start}&endIndex={self.end}&queue=competitive"
-                async with session.get(url) as response:
-                    if response.status != 200:
-                        continue
-                    self.riot_matches_new = await response.json()
+            riot_match_ids_new = [match["MatchID"] for match in self.riot_matches_new["History"]]
+            match_urls_new = [f"https://pd.{self.handler.shard}.a.pvp.net/match-details/v1/matches/{mid}" for mid in
+                              riot_match_ids_new]
 
-                if self.riot_matches_new["Total"] == 0:
-                    continue
+            tasks = [self.fetch(session, match_url, headers=self.handler.match_id_header) for match_url in
+                     match_urls_new]
+            new_matches = await asyncio.gather(*tasks)
 
-                riot_match_ids_new = [match["MatchID"] for match in self.riot_matches_new["History"]]
-                match_urls_new = [f"https://pd.{self.handler.shard}.a.pvp.net/match-details/v1/matches/{mid}" for mid in
-                                  riot_match_ids_new]
+            self.match_stats[puuid].extend(new_matches)
 
-                tasks = [self.fetch(session, match_url) for match_url in match_urls_new]
-                new_matches = await asyncio.gather(*tasks)
+            await self.calc_stats(puuid)
 
-                self.match_stats[puuid].extend(new_matches)
-
-                await self.calc_stats(puuid)
-
-                print("load more matches finished")
+            print("load more matches finished")
 
         self.start += 5
         self.end += 5
 
     async def assign_skins(self, on_update=None):
         if len(self.used_puuids) == len(self.cmp):
-            async with aiohttp.ClientSession(headers=self.handler.match_id_header) as session:
-                tasks = [
-                    self.skin_handler.assign_skins(
-                        puuid,
-                        self.handler.in_match,
-                        self.handler.match_id_header,
-                        self.handler.region,
-                        self.handler.shard,
-                        session
-                    )
-                    for puuid in self.used_puuids
-                ]
+            session = SharedSession.get()
+            tasks = [
+                self.skin_handler.assign_skins(
+                    puuid,
+                    self.handler.in_match,
+                    self.handler.match_id_header,
+                    self.handler.region,
+                    self.handler.shard,
+                    session
+                )
+                for puuid in self.used_puuids
+            ]
 
-                skin_results = await asyncio.gather(*tasks)
+            skin_results = await asyncio.gather(*tasks)
 
-                for puuid, skins in zip(self.used_puuids, skin_results):
-                    self.frontend_data[puuid]["skins"] = skins
+            for puuid, skins in zip(self.used_puuids, skin_results):
+                self.frontend_data[puuid]["skins"] = skins
 
-    async def fetch(self, session, url, retries=3):
+    async def fetch(self, session, url, headers=None, retries=3):
         for attempt in range(retries):
-            async with session.get(url) as response:
+            async with session.get(url, headers=headers) as response:
                 if response.status == 200:
                     try:
                         return await response.json(content_type=None)
                     except aiohttp.ContentTypeError:
                         text = await response.text()
-                        print(f"⚠️ Unexpected response type at {url}:\n{text[:200]}...")
+                        print(f"Unexpected response type at {url}:\n{text[:200]}...")
                         return None
                 elif response.status == 429:
                     retry_after = int(response.headers.get("Retry-After", "2"))
-                    print(f"🚫 Rate limited (429). Retrying in {retry_after}s... ({attempt + 1}/{retries})")
+                    print(f"Rate limited (429). Retrying in {retry_after}s... ({attempt + 1}/{retries})")
                     await asyncio.sleep(retry_after)
                 else:
-                    print(f"❌ Error {response.status} fetching {url}")
+                    print(f"Error {response.status} fetching {url}")
                     return None
 
-        print(f"❌ Failed to fetch {url} after {retries} retries.")
+        print(f"Failed to fetch {url} after {retries} retries.")
         return None
