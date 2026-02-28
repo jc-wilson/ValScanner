@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect, QSizePolicy, QProgressBar, QCheckBox
 )
 from PySide6.QtCore import Qt, QTimer, QSize, QPropertyAnimation, Property, QEasingCurve
-from PySide6.QtGui import QPixmap, QIcon, QFontDatabase, QFont, QColor, QPainter
+from PySide6.QtGui import QPixmap, QIcon, QFontDatabase, QFont, QColor, QPainter, QCloseEvent
 import sys
 import os
 import random
@@ -583,6 +583,23 @@ class ValorantStatsWindow(QMainWindow):
         self.last_seen = None
 
         self._latency_start_time = None
+
+    def closeEvent(self, event: QCloseEvent):
+        if not getattr(self, "_is_shutting_down", False):
+            self._is_shutting_down = True
+            event.ignore()
+            asyncio.create_task(self.shutdown_app())
+        else:
+            event.accept()
+
+    async def shutdown_app(self):
+        from core.http_session import SharedSession
+        await SharedSession.close()
+
+        if hasattr(self, 'ws_task') and self.ws_task:
+            self.ws_task.cancel()
+
+        self.close()
 
     async def init_agents(self):
         await self.owned_agent_handler.owned_agents_func()
@@ -1451,9 +1468,6 @@ if __name__ == "__main__":
     loop = qasync.QEventLoop(app)
     asyncio.set_event_loop(loop)
 
-    try:
-        window = loop.run_until_complete(main())
-        with loop:
-            loop.run_forever()
-    finally:
-        loop.run_until_complete(SharedSession.close())
+    window = loop.run_until_complete(main())
+    with loop:
+        loop.run_forever()
