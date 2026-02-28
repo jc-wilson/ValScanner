@@ -35,7 +35,7 @@ class LockfileHandler:
         self._initialized = True
 
     async def lockfile_data_function(self):
-        if time.time() - self.last_fetch_time < 2700 and self.access_token:
+        if time.time() - self.last_fetch_time < 3602 and self.access_token:
             return
 
         lockfile_loc = rf"{os.getenv('LOCALAPPDATA')}\Riot Games\Riot Client\Config\lockfile"
