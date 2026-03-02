@@ -6,7 +6,8 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow,
     QVBoxLayout, QGridLayout, QHBoxLayout, QWidget, QLabel, QPushButton,
     QComboBox, QFrame, QSplitter, QScrollArea, QDialog,
-    QGraphicsDropShadowEffect, QSizePolicy, QProgressBar, QCheckBox
+    QGraphicsDropShadowEffect, QSizePolicy, QProgressBar, QCheckBox,
+    QGraphicsOpacityEffect
 )
 from PySide6.QtCore import Qt, QTimer, QSize, QPropertyAnimation, Property, QEasingCurve
 from PySide6.QtGui import QPixmap, QIcon, QFontDatabase, QFont, QColor, QPainter, QCloseEvent
@@ -37,10 +38,11 @@ def resource_path(relative_path):
 
 
 class AgentPopup(QDialog):
-    def __init__(self, agents_list, agent_icons, callback, parent=None):
+    def __init__(self, agents_list, owned_agents_list, agent_icons, callback, parent=None):
         super().__init__(parent)
         self.callback = callback
         self.agent_icons = agent_icons
+        self.owned_agents_list = owned_agents_list
 
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -69,18 +71,32 @@ class AgentPopup(QDialog):
 
         self.tile_width = 120
         self.tile_height = 120
-        columns = 6
+        columns = 7
 
         grid = QGridLayout()
         grid.setSpacing(16)
         grid.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
-        current_row = 0
-        for index, agent in enumerate(agents_list):
+        if len(agents_list) > 5:
+            main_agents = agents_list[:-5]
+            bottom_agents = agents_list[-5:]
+        else:
+            main_agents = agents_list
+            bottom_agents = []
+
+        current_row = -1
+        for index, agent in enumerate(main_agents):
             row = index // columns
             column = index % columns
             grid.addWidget(self.build_agent_tile(agent), row, column)
             current_row = row
+
+        if bottom_agents:
+            bottom_row = current_row + 1
+            start_col = (columns - len(bottom_agents)) // 2
+            for i, agent in enumerate(bottom_agents):
+                grid.addWidget(self.build_agent_tile(agent), bottom_row, start_col + i)
+            current_row = bottom_row
 
         exit_row = current_row + 1
         grid.addWidget(self.build_exit_tile(columns), exit_row, 0, 1, columns)
@@ -117,6 +133,11 @@ class AgentPopup(QDialog):
                 border: 1px solid rgba(77, 108, 255, 0.6);
                 background-color: #192139;
             }
+            #agentTileDisabled {
+                background-color: #0d111c;
+                border-radius: 18px;
+                border: 1px solid rgba(255, 255, 255, 0.02);
+            }
             #exitTile {
                 background-color: #1f2436;
                 border-radius: 18px;
@@ -134,9 +155,17 @@ class AgentPopup(QDialog):
 
     def build_agent_tile(self, agent_name):
         tile = QPushButton()
-        tile.setObjectName("agentTile")
+
+        is_owned = agent_name in self.owned_agents_list
+
+        if is_owned:
+            tile.setObjectName("agentTile")
+            tile.setCursor(Qt.PointingHandCursor)
+        else:
+            tile.setObjectName("agentTileDisabled")
+            tile.setEnabled(False)
+
         tile.setFixedSize(self.tile_width, self.tile_height)
-        tile.setCursor(Qt.PointingHandCursor)
 
         layout = QVBoxLayout(tile)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -161,6 +190,11 @@ class AgentPopup(QDialog):
 
         layout.addWidget(icon_label)
         layout.addWidget(name_label)
+
+        if not is_owned:
+            opacity_effect = QGraphicsOpacityEffect()
+            opacity_effect.setOpacity(0.3)
+            tile.setGraphicsEffect(opacity_effect)
 
         tile.clicked.connect(lambda _, a=agent_name: self.on_select(a))
         return tile
@@ -215,11 +249,11 @@ class WeaponPopup(QDialog):
         container.setObjectName("popupCard")
 
         main_layout = QVBoxLayout(container)
-        main_layout.setContentsMargins(30, 30, 30, 30)
-        main_layout.setSpacing(16)
+        main_layout.setContentsMargins(38, 38, 38, 38)
+        main_layout.setSpacing(20)
 
         header = QVBoxLayout()
-        header.setSpacing(6)
+        header.setSpacing(8)
         header.setAlignment(Qt.AlignCenter)
 
         title = QLabel(f"{player_display}'s Loadout")
@@ -233,12 +267,12 @@ class WeaponPopup(QDialog):
 
         main_layout.addLayout(header)
 
-        self.tile_width = 170
-        self.tile_height = 120
-        columns = 4
+        self.tile_width = 240
+        self.tile_height = 150
+        columns = 5
 
         grid = QGridLayout()
-        grid.setSpacing(16)
+        grid.setSpacing(20)
         grid.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
         current_row = 0
@@ -249,7 +283,7 @@ class WeaponPopup(QDialog):
             current_row = row
 
         exit_row = current_row + 1
-        grid.addWidget(self.build_exit_tile(), exit_row, 0, 1, 4)
+        grid.addWidget(self.build_exit_tile(), exit_row, 0, 1, 5)
 
         main_layout.addLayout(grid)
 
@@ -271,6 +305,10 @@ class WeaponPopup(QDialog):
             #title { color: #e3e8ff; font-size: 22px; font-weight: 600; }
             #subtitle { color: #a0abcc; font-size: 14px; }
             #weaponLabel {
+                color: #8c95b4; font-size: 12px; letter-spacing: 1px;
+                text-transform: uppercase;
+            }
+            #skinLabel {
                 color: #8c95b4; font-size: 12px; letter-spacing: 1px;
                 text-transform: uppercase;
             }
@@ -311,7 +349,7 @@ class WeaponPopup(QDialog):
             }
         """)
 
-        self.resize(960, 600)
+        self.resize(1200, 750)
 
     def build_skin_tile(self, weapon, skin_id):
         tile = QFrame()
@@ -319,19 +357,14 @@ class WeaponPopup(QDialog):
         tile.setFixedSize(self.tile_width, self.tile_height)
 
         tile_layout = QVBoxLayout(tile)
-        tile_layout.setContentsMargins(12, 12, 12, 12)
-        tile_layout.setSpacing(8)
+        tile_layout.setContentsMargins(15, 15, 15, 15)
+        tile_layout.setSpacing(10)
         tile_layout.setAlignment(Qt.AlignCenter)
-
-        weapon_label = QLabel(weapon)
-        weapon_label.setObjectName("weaponLabel")
-        weapon_label.setAlignment(Qt.AlignCenter)
-        tile_layout.addWidget(weapon_label)
 
         preview = QLabel()
         preview.setObjectName("skinPreview")
         preview.setAlignment(Qt.AlignCenter)
-        preview.setMinimumSize(120, 70)
+        preview.setMinimumSize(150, 88)
         preview.setProperty("empty", "false")
 
         pixmap = None
@@ -347,12 +380,25 @@ class WeaponPopup(QDialog):
                     if isinstance(skin_name, list):
                         skin_name = str(skin_name[0]) if skin_name else "Unknown Skin"
                     tile.setToolTip(str(skin_name))
+
+                    index = str(skin_name).find("Level")
+                    if index >= 0:
+                        skin_name = str(skin_name)[0:(index - 1)]
+                    else:
+                        index2 = str(skin_name).find("Variant")
+                        if index2 >= 0:
+                            skin_name = str(skin_name)[0:(index2 - 2)]
+
+                    skin_label = QLabel(str(skin_name))
+                    skin_label.setObjectName("skinLabel")
+                    skin_label.setAlignment(QtCore.Qt.AlignCenter | Qt.AlignBottom)
+                    tile_layout.addWidget(skin_label)
                 except Exception:
                     pass
 
         if pixmap:
             preview.setPixmap(
-                pixmap.scaled(120, 70, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                pixmap.scaled(150, 88, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
         else:
             preview.setText("No Skin")
@@ -368,12 +414,12 @@ class WeaponPopup(QDialog):
         tile = QFrame()
         tile.setObjectName("exitTile")
 
-        full_width = (self.tile_width * 4) + (16 * 3)
+        full_width = (self.tile_width * 5) + (20 * 4)
         tile.setFixedSize(full_width, self.tile_height)
 
         layout = QVBoxLayout(tile)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(10)
         layout.setAlignment(Qt.AlignCenter)
 
         label = QLabel("Close")
@@ -498,6 +544,10 @@ class ValorantStatsWindow(QMainWindow):
         self.dodge_button.clicked.connect(self.run_dodge_button)
         self.dodge_button.setObjectName("dodgeButton")
 
+        self.edit_loadouts_button = QPushButton("Edit Loadouts")
+        self.edit_loadouts_button.setCursor(Qt.PointingHandCursor)
+        self.edit_loadouts_button.setObjectName("editloadoutsButton")
+
         self.refresh_button = QPushButton()
         self.refresh_button.setIcon(QIcon(resource_path("assets/refresh.png")))
         self.refresh_button.setCursor(Qt.PointingHandCursor)
@@ -611,7 +661,7 @@ class ValorantStatsWindow(QMainWindow):
         self.rank_icons = await download_and_cache_rank_icons()
 
         if self.owned_agent_handler.combo:
-            initial_agent = self.owned_agent_handler.combo[0]
+            initial_agent = self.owned_agent_handler.combo[-5]
             self.agent_select_btn.setText(initial_agent)
             self.agent = self.uuid_handler.agent_converter_reversed(initial_agent)
 
@@ -622,8 +672,9 @@ class ValorantStatsWindow(QMainWindow):
                         self.agent_icons[item] = QPixmap(icon_path)
 
     def open_agent_popup(self):
-        combo_list = self.owned_agent_handler.combo if getattr(self.owned_agent_handler, "combo", None) else ["Random"]
-        popup = AgentPopup(combo_list, getattr(self, "agent_icons", {}), self.on_agent_selected, self)
+        combo_list = self.owned_agent_handler.agents if getattr(self.owned_agent_handler, "combo", None) else ["Random"]
+        owned_list = self.owned_agent_handler.combo
+        popup = AgentPopup(combo_list, owned_list, getattr(self, "agent_icons", {}), self.on_agent_selected, self)
         popup.exec()
 
     def on_agent_selected(self, agent_name):

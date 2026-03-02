@@ -5,6 +5,13 @@ from core.http_session import SharedSession
 
 class OwnedAgents:
     def __init__(self):
+        self.agents = [
+            "Astra", "Breach", "Brimstone", "Chamber", "Clove", "Cypher",
+            "Deadlock", "Fade", "Gekko", "Harbor", "Iso", "Jett", "KAY/O",
+            "Killjoy", "Neon", "Omen", "Phoenix", "Raze", "Reyna", "Sage",
+            "Skye", "Sova", "Tejo", "Veto", "Viper", "Vyse", "Waylay", "Yoru",
+            "Random", "Duelist", "Initiator", "Controller", "Sentinel"
+        ]
         self.owned_agents = None
         self.all_agents = ["Brimstone", "Jett", "Phoenix", "Sage", "Sova"]
         self.combo = None
@@ -39,8 +46,7 @@ class OwnedAgents:
         self.all_agents.sort()
 
         self.combo = self.all_agents.copy()
-        self.combo.insert(0, "Random")
-        self.combo.extend(["Duelist", "Initiator", "Controller", "Sentinel"])
+        self.combo.extend(["Random", "Duelist", "Initiator", "Controller", "Sentinel"])
 
         for agent in self.duelists:
             if agent in self.all_agents:
