@@ -577,6 +577,8 @@ class ValoRank:
 
             await self.calc_stats(puuid)
 
+            await self.assign_skins()
+
             print("load more matches finished")
 
         self.start += 5
