@@ -683,7 +683,10 @@ class ValorantStatsWindow(QMainWindow):
 
                                 match_id = uri[-36:]
 
-                                if match_id != prematch_id:
+                                try:
+                                    if match_id != prematch_id:
+                                        continue
+                                except Exception:
                                     continue
 
                                 if match_id in self.seen_match_ids:

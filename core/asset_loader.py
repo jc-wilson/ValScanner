@@ -124,9 +124,13 @@ async def download_and_cache_skins(cache_dir=None, threads=40):
     os.makedirs(cache_dir, exist_ok=True)
 
     print("Fetching skins + chromas from Valorant API...")
-    response = requests.get("https://valorant-api.com/v1/weapons/skins")
-    response.raise_for_status()
-    skins = response.json()["data"]
+    session = SharedSession.get()
+    async with session.get("https://valorant-api.com/v1/weapons/skins") as resp:
+        if resp.status == 200:
+            skins = await resp.json()
+            skins = skins["data"]
+        else:
+            print("Couldn't retrieve skin icons from valorant-api")
 
     download_jobs = []  # list of (url, path)
     file_map = {}  # uuid → local filepath
@@ -155,7 +159,8 @@ async def download_and_cache_skins(cache_dir=None, threads=40):
                     download_jobs.append((icon, chroma_path))
 
     print(f"{len(download_jobs)} icons to download (uncached).")
-    print(f"Starting downloads using {threads} threads...")
+    if len(download_jobs) > 0:
+        print(f"Starting downloads using {threads} threads...")
 
     # Multithreaded downloads
     with ThreadPoolExecutor(max_workers=threads) as executor:

@@ -556,13 +556,14 @@ class ValoRank:
 
 
             url = f"https://pd.{self.handler.shard}.a.pvp.net/match-history/v1/history/{puuid}?startIndex={self.start}&endIndex={self.end}&queue=competitive"
-            async with session.get(url) as response:
+            async with session.get(
+                url,
+                headers=self.modified_header
+            ) as response:
                 if response.status != 200:
+                    print(response.status)
                     continue
                 self.riot_matches_new = await response.json()
-
-            if self.riot_matches_new["Total"] == 0:
-                continue
 
             riot_match_ids_new = [match["MatchID"] for match in self.riot_matches_new["History"]]
             match_urls_new = [f"https://pd.{self.handler.shard}.a.pvp.net/match-details/v1/matches/{mid}" for mid in
