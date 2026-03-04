@@ -18,7 +18,7 @@ class MatchDetectionHandler:
         self.match_id = match_id
         self.prematch_id = prematch_id
 
-    async def detect_match_handler(self):
+    async def puuid_shard_header_getter(self):
         handler = LockfileHandler()
         await handler.lockfile_data_function()
 
@@ -35,10 +35,12 @@ class MatchDetectionHandler:
             "Authorization": f"Bearer {handler.access_token}"
         }
 
+    async def detect_match_handler(self):
+        await self.puuid_shard_header_getter()
         if self.match_id is None and self.prematch_id is None:
             session = SharedSession.get()
             async with session.get(
-                f"https://glz-{self.region}-1.{self.shard}.a.pvp.net/core-game/v1/players/{handler.puuid}",
+                f"https://glz-{self.region}-1.{self.shard}.a.pvp.net/core-game/v1/players/{self.user_puuid}",
                 headers=self.match_id_header
             ) as current_match_id_response:
                 if current_match_id_response.status == 200:
@@ -46,7 +48,7 @@ class MatchDetectionHandler:
                     self.match_id = self.current_match_id["MatchID"]
                 else:
                     async with session.get(
-                        f"https://glz-{self.region}-1.{self.shard}.a.pvp.net/pregame/v1/players/{handler.puuid}",
+                        f"https://glz-{self.region}-1.{self.shard}.a.pvp.net/pregame/v1/players/{self.user_puuid}",
                         headers=self.match_id_header
                     ) as pre_game_match_id_response:
                         if pre_game_match_id_response.status == 200:
@@ -54,7 +56,7 @@ class MatchDetectionHandler:
                             self.prematch_id = self.pre_game_match_id["MatchID"]
                         else:
                             async with session.get(
-                                f"https://glz-{self.region}-1.{self.shard}.a.pvp.net/parties/v1/players/{handler.puuid}",
+                                f"https://glz-{self.region}-1.{self.shard}.a.pvp.net/parties/v1/players/{self.user_puuid}",
                                 headers=self.match_id_header
                             ) as party_response:
                                 if party_response.status == 200:

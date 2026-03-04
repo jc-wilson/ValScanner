@@ -2,6 +2,7 @@ import os
 import sys
 import requests
 import json
+from core.http_session import SharedSession
 
 
 def get_external_path(relative_path):
@@ -19,6 +20,7 @@ class UUIDHandler:
         self.agent_uuids_path = get_external_path("core/agent_uuids.json")
         self.skin_uuids_path = get_external_path("core/skin_uuids.json")
         self.season_uuids_path = get_external_path("core/season_uuids.json")
+        self.buddy_uuids_path = get_external_path("core/buddy_uuids.json")
 
         os.makedirs(os.path.dirname(self.agent_uuids_path), exist_ok=True)
 
@@ -89,6 +91,68 @@ class UUIDHandler:
                     result = skin["displayName"]
                     return result
         return result
+
+    async def buddy_uuid_function(self):
+        try:
+            with open(self.buddy_uuids_path, "r", encoding="utf-8") as a:
+                self.buddy_uuids = json.load(a)
+        except FileNotFoundError:
+            print("Requested buddy uuid information from valorant-api.com")
+            session = SharedSession.get()
+            async with session.get("https://valorant-api.com/v1/buddies") as resp:
+                if resp.status == 200:
+                    response = await resp.json()
+
+            with open(self.buddy_uuids_path, "w", encoding="utf-8") as f:
+                json.dump(response, f, indent=2)
+
+            with open(self.buddy_uuids_path) as a:
+                self.buddy_uuids = json.load(a)
+
+    def buddy_converter(self, buddy_uuid):
+        result = None
+        for buddy in self.buddy_uuids["data"]:
+            if buddy["levels"][0]["uuid"] == buddy_uuid:
+                result = buddy["displayName"]
+                return result
+        return result
+
+    def uuid_to_weapon(self, uuid):
+        name = self.skin_converter(uuid)
+        weapons = [
+            "Classic", "Bandit", "Shorty", "Frenzy", "Ghost", "Sheriff",
+            "Stinger", "Spectre",
+            "Bucky", "Judge",
+            "Bulldog", "Guardian", "Phantom", "Vandal",
+            "Marshal", "Outlaw", "Operator",
+            "Ares", "Odin",
+            "Knife",
+        ]
+
+        for weapon in weapons:
+            if weapon in name:
+                return weapon
+        return "Knife"
+
+    def level_uuid_to_skin_uuid(self, uuid):
+        for skin in self.skin_uuids["data"]:
+            for level in skin["levels"]:
+                if level["uuid"] == uuid:
+                    return skin["chromas"][0]["uuid"]
+        return uuid
+
+    def variant_finder(self, uuid, uuid_list):
+        variants = []
+        for skin in self.skin_uuids["data"]:
+            if skin["chromas"][0]["uuid"] == uuid:
+                print(f"Skin found: {uuid}")
+                print(f"UUID list: {uuid_list}")
+                for chroma in skin["chromas"]:
+                    if chroma["uuid"] in uuid_list:
+                        variants.append(chroma["uuid"])
+        if len(variants) >= 1:
+            variants.insert(0, uuid)
+        return variants
 
     def season_uuid_function(self):
         try:

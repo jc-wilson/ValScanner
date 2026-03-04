@@ -31,7 +31,7 @@ class OwnedAgents:
         uuid_handler.agent_uuid_function()
 
         handler = MatchDetectionHandler()
-        await handler.detect_match_handler()
+        await handler.puuid_shard_header_getter()
 
         session = SharedSession.get()
         async with session.get(

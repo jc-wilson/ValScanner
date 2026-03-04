@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QGridLayout, QHBoxLayout, QWidget, QLabel, QPushButton,
     QComboBox, QFrame, QSplitter, QScrollArea, QDialog,
     QGraphicsDropShadowEffect, QSizePolicy, QProgressBar, QCheckBox,
-    QGraphicsOpacityEffect
+    QGraphicsOpacityEffect, QLineEdit
 )
 from PySide6.QtCore import Qt, QTimer, QSize, QPropertyAnimation, Property, QEasingCurve
 from PySide6.QtGui import QPixmap, QIcon, QFontDatabase, QFont, QColor, QPainter, QCloseEvent
@@ -26,6 +26,7 @@ from core.instalock_agent import instalock_agent
 from core.valorant_uuid import UUIDHandler
 from core.local_api import LockfileHandler
 from core.owned_agents import OwnedAgents
+from core.owned_skins import OwnedSkins
 from core.http_session import SharedSession
 
 
@@ -36,6 +37,650 @@ def resource_path(relative_path):
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_path, relative_path)
 
+
+class VariantSelectorPopup(QDialog):
+    def __init__(self, weapon, variants_list, skin_icons, uuid_handler, callback, parent=None):
+        super().__init__(parent)
+        self.weapon = weapon
+        self.variants_list = variants_list
+        self.skin_icons = skin_icons
+        self.uuid_handler = uuid_handler
+        self.callback = callback
+
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setFixedSize(1200, 800)
+
+        container = QWidget(self)
+        container.setObjectName("popupCard")
+        container.setFixedSize(1200, 800)
+
+        main_layout = QVBoxLayout(container)
+        main_layout.setContentsMargins(38, 38, 38, 38)
+        main_layout.setSpacing(20)
+
+        title = QLabel("Select Variant")
+        title.setObjectName("title")
+        main_layout.addWidget(title, alignment=Qt.AlignCenter)
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.NoFrame)
+        self.scroll_area.setStyleSheet("background: transparent; border: none;")
+
+        self.scroll_content = QWidget()
+        self.scroll_content.setStyleSheet("background: transparent;")
+        grid = QGridLayout(self.scroll_content)
+        grid.setSpacing(20)
+        grid.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+
+        self.tile_width = 240
+        self.tile_height = 150
+
+        for index, variant_id in enumerate(self.variants_list):
+            row = index // 4
+            column = index % 4
+            grid.addWidget(self.build_variant_tile(variant_id), row, column)
+
+        self.scroll_area.setWidget(self.scroll_content)
+        main_layout.addWidget(self.scroll_area, 1)
+
+        close_btn = QPushButton("Close")
+        close_btn.setFixedSize(120, 50)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.clicked.connect(self.close)
+        main_layout.addWidget(close_btn, alignment=Qt.AlignRight)
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(50)
+        shadow.setOffset(0, 12)
+        shadow.setColor(QColor(0, 0, 0, 180))
+        container.setGraphicsEffect(shadow)
+
+        self.setStyleSheet("""
+            #popupCard { background-color: #1a1f2e; border-radius: 22px; border: 1px solid rgba(255, 255, 255, 0.05); }
+            #title { color: #e3e8ff; font-size: 26px; font-weight: 600; margin-bottom: 20px;}
+            #skinLabel { color: #8c95b4; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+            #skinTile { background-color: #13192a; border-radius: 18px; border: 1px solid rgba(255, 255, 255, 0.05); }
+            #skinTile:hover { border: 1px solid rgba(77, 108, 255, 0.6); background-color: #192139; }
+            #skinPreview { background-color: rgba(7, 10, 19, 0.6); border-radius: 12px; border: 1px dashed rgba(255, 255, 255, 0.08); }
+            #skinPreview[empty="true"] { color: #8c95b4; font-size: 11px; letter-spacing: 1px; }
+            QPushButton { background-color: rgba(255, 255, 255, 0.06); border: none; color: #f4f6ff; font-size: 18px; font-weight: 700; border-radius: 16px; }
+            QPushButton:hover { background-color: rgba(255, 87, 107, 0.35); }
+            QToolTip { background-color: #0b0f19; color: #f4f6ff; border: 1px solid rgba(77, 108, 255, 0.3); border-radius: 4px; padding: 4px 8px; font-size: 12px; }
+            QScrollBar:vertical { background: transparent; width: 14px; margin: 0px 0px 0px 0px; }
+            QScrollBar::handle:vertical { background: rgba(66, 86, 124, 0.8); min-height: 32px; border-radius: 7px; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { background: none; height: 0px; }
+        """)
+
+    def build_variant_tile(self, variant_id):
+        tile = QPushButton()
+        tile.setObjectName("skinTile")
+        tile.setFixedSize(self.tile_width, self.tile_height)
+        tile.setCursor(Qt.PointingHandCursor)
+
+        tile.clicked.connect(lambda _, vid=variant_id: self.on_variant_clicked(vid))
+
+        tile_layout = QVBoxLayout(tile)
+        tile_layout.setContentsMargins(15, 15, 15, 15)
+        tile_layout.setSpacing(10)
+        tile_layout.setAlignment(Qt.AlignCenter)
+
+        preview = QLabel()
+        preview.setObjectName("skinPreview")
+        preview.setAlignment(Qt.AlignCenter)
+        preview.setMinimumSize(150, 88)
+        preview.setProperty("empty", "false")
+        preview.setAttribute(Qt.WA_TransparentForMouseEvents)
+
+        pixmap = None
+        clean_id = str(variant_id).strip()
+        resolved_name = "Unknown Variant"
+
+        if clean_id:
+            if hasattr(self, "skin_icons"):
+                pixmap = self.skin_icons.get(clean_id.lower()) or self.skin_icons.get(clean_id.upper())
+
+            if self.uuid_handler:
+                try:
+                    raw_name = self.uuid_handler.skin_converter(clean_id)
+                    resolved_name = str(raw_name[0]) if isinstance(raw_name, list) else str(raw_name)
+                except Exception:
+                    pass
+
+            tile.setToolTip(str(resolved_name))
+
+            skin_label = QLabel(str(resolved_name))
+            skin_label.setObjectName("skinLabel")
+            skin_label.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
+            skin_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+            tile_layout.addWidget(skin_label)
+
+        if pixmap:
+            scaled_skin = pixmap.scaled(150, 88, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            preview.setPixmap(scaled_skin)
+        else:
+            preview.setText("No Image")
+            preview.setProperty("empty", "true")
+
+        preview.style().unpolish(preview)
+        preview.style().polish(preview)
+
+        tile_layout.addWidget(preview)
+        return tile
+
+    def on_variant_clicked(self, variant_id):
+        self.callback(self.weapon, variant_id)
+        self.accept()
+
+
+class SkinSelectorPopup(QDialog):
+    def __init__(self, weapon, owned_skins_list, owned_variants_list, skin_icons, uuid_handler, callback, parent=None):
+        super().__init__(parent)
+        self.weapon = weapon
+        self.skin_icons = skin_icons
+        self.uuid_handler = uuid_handler
+        self.callback = callback
+
+        self.owned_variants = [variant for sublist in owned_variants_list.values() for variant in sublist]
+        self.owned_skins_list = owned_skins_list.copy()
+
+        for index, skin in enumerate(self.owned_skins_list):
+            self.owned_skins_list[index] = uuid_handler.level_uuid_to_skin_uuid(skin)
+
+        self.owned_skins_list = list(dict.fromkeys(self.owned_skins_list))
+        self.used_skins = []
+
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setFixedSize(1200, 800)
+
+        container = QWidget(self)
+        container.setObjectName("popupCard")
+        container.setFixedSize(1200, 800)
+
+        main_layout = QVBoxLayout(container)
+        main_layout.setContentsMargins(38, 38, 38, 38)
+        main_layout.setSpacing(20)
+
+        title = QLabel(f"Owned {self.weapon} Skins")
+        title.setObjectName("title")
+        main_layout.addWidget(title, alignment=Qt.AlignCenter)
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.NoFrame)
+        self.scroll_area.setStyleSheet("background: transparent; border: none;")
+
+        self.scroll_content = QWidget()
+        self.scroll_content.setStyleSheet("background: transparent;")
+        grid = QGridLayout(self.scroll_content)
+        grid.setSpacing(20)
+        grid.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+
+        self.tile_width = 240
+        self.tile_height = 150
+
+        seen_skin_names = set()
+        grid_index = 0
+
+        for skin_id in self.owned_skins_list:
+            clean_id = str(skin_id).strip()
+
+            base_name = "Unknown Skin"
+            if self.uuid_handler:
+                try:
+                    raw_name = self.uuid_handler.skin_converter(clean_id)
+                    if isinstance(raw_name, list):
+                        raw_name = str(raw_name[0]) if raw_name else "Unknown Skin"
+
+                    name_str = str(raw_name)
+                    idx_level = name_str.find("Level")
+                    if idx_level >= 0:
+                        base_name = name_str[0:(idx_level - 1)].strip()
+                    else:
+                        idx_variant = name_str.find("Variant")
+                        if idx_variant >= 0:
+                            base_name = name_str[0:(idx_variant - 2)].strip()
+                        else:
+                            base_name = name_str.strip()
+                except Exception:
+                    pass
+
+            if base_name in seen_skin_names:
+                continue
+
+            seen_skin_names.add(base_name)
+
+            row = grid_index // 4
+            column = grid_index % 4
+
+            grid.addWidget(self.build_skin_tile(clean_id, base_name), row, column)
+            self.used_skins.append(clean_id)
+            grid_index += 1
+
+        self.scroll_area.setWidget(self.scroll_content)
+        main_layout.addWidget(self.scroll_area, 1)
+
+        close_btn = QPushButton("Close")
+        close_btn.setFixedSize(120, 50)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.clicked.connect(self.close)
+        main_layout.addWidget(close_btn, alignment=Qt.AlignRight)
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(50)
+        shadow.setOffset(0, 12)
+        shadow.setColor(QColor(0, 0, 0, 180))
+        container.setGraphicsEffect(shadow)
+
+        self.setStyleSheet("""
+            #popupCard { background-color: #1a1f2e; border-radius: 22px; border: 1px solid rgba(255, 255, 255, 0.05); }
+            #title { color: #e3e8ff; font-size: 26px; font-weight: 600; margin-bottom: 20px;}
+            #skinLabel { color: #8c95b4; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+            #skinTile { background-color: #13192a; border-radius: 18px; border: 1px solid rgba(255, 255, 255, 0.05); }
+            #skinTile:hover { border: 1px solid rgba(77, 108, 255, 0.6); background-color: #192139; }
+            #skinPreview { background-color: rgba(7, 10, 19, 0.6); border-radius: 12px; border: 1px dashed rgba(255, 255, 255, 0.08); }
+            #skinPreview[empty="true"] { color: #8c95b4; font-size: 11px; letter-spacing: 1px; }
+            QPushButton { background-color: rgba(255, 255, 255, 0.06); border: none; color: #f4f6ff; font-size: 18px; font-weight: 700; border-radius: 16px; }
+            QPushButton:hover { background-color: rgba(255, 87, 107, 0.35); }
+            QToolTip { background-color: #0b0f19; color: #f4f6ff; border: 1px solid rgba(77, 108, 255, 0.3); border-radius: 4px; padding: 4px 8px; font-size: 12px; }
+            QScrollBar:vertical { background: transparent; width: 14px; margin: 0px 0px 0px 0px; }
+            QScrollBar::handle:vertical { background: rgba(66, 86, 124, 0.8); min-height: 32px; border-radius: 7px; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { background: none; height: 0px; }
+        """)
+
+    def build_skin_tile(self, clean_id, resolved_name):
+        tile = QPushButton()
+        tile.setObjectName("skinTile")
+        tile.setFixedSize(self.tile_width, self.tile_height)
+        tile.setCursor(Qt.PointingHandCursor)
+
+        tile.clicked.connect(lambda _, sid=clean_id: self.on_skin_clicked(sid))
+
+        tile_layout = QVBoxLayout(tile)
+        tile_layout.setContentsMargins(15, 15, 15, 15)
+        tile_layout.setSpacing(10)
+        tile_layout.setAlignment(Qt.AlignCenter)
+
+        preview = QLabel()
+        preview.setObjectName("skinPreview")
+        preview.setAlignment(Qt.AlignCenter)
+        preview.setMinimumSize(150, 88)
+        preview.setProperty("empty", "false")
+        preview.setAttribute(Qt.WA_TransparentForMouseEvents)
+
+        pixmap = None
+
+        if clean_id:
+            if hasattr(self, "skin_icons"):
+                pixmap = self.skin_icons.get(str(clean_id).lower()) or self.skin_icons.get(str(clean_id).upper())
+
+            tile.setToolTip(str(resolved_name))
+
+            skin_label = QLabel(str(resolved_name))
+            skin_label.setObjectName("skinLabel")
+            skin_label.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
+            skin_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+            tile_layout.addWidget(skin_label)
+
+        if pixmap:
+            scaled_skin = pixmap.scaled(150, 88, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            preview.setPixmap(scaled_skin)
+        else:
+            preview.setText("No Skin Image")
+            preview.setProperty("empty", "true")
+
+        preview.style().unpolish(preview)
+        preview.style().polish(preview)
+
+        tile_layout.addWidget(preview)
+        return tile
+
+    def on_skin_clicked(self, clean_id):
+        variants = self.uuid_handler.variant_finder(clean_id, self.owned_variants)
+        print(variants)
+
+        if variants:
+            popup = VariantSelectorPopup(self.weapon, variants, self.skin_icons, self.uuid_handler,
+                                         self.on_variant_selected, self)
+            popup.exec()
+        else:
+            self.callback(self.weapon, clean_id)
+            self.accept()
+
+    def on_variant_selected(self, weapon, variant_id):
+        self.callback(weapon, variant_id)
+        self.accept()
+
+
+class LoadoutsPopup(QDialog):
+    WEAPON_ORDER = [
+        "Classic", "Bandit", "Shorty", "Frenzy", "Ghost", "Sheriff",
+        "Stinger", "Spectre",
+        "Bucky", "Judge",
+        "Bulldog", "Guardian", "Phantom", "Vandal",
+        "Marshal", "Outlaw", "Operator",
+        "Ares", "Odin",
+        "Knife",
+    ]
+
+    def __init__(self, skins, all_skins, skin_icons, buddy_icons, uuid_handler, parent=None):
+        super().__init__(parent)
+        self.skins = skins.get("Skins", {})
+        self.buddies = skins.get("Buddies", {})
+        self.owned_skins = all_skins
+        self.skin_icons = skin_icons or {}
+        self.buddy_icons = buddy_icons or {}
+        self.uuid_handler = uuid_handler
+
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setFixedSize(1920, 1080)
+
+        container = QWidget(self)
+        container.setObjectName("popupCard")
+        container.setFixedSize(1920, 1080)
+
+        main_layout = QHBoxLayout(container)
+        main_layout.setContentsMargins(38, 38, 38, 38)
+        main_layout.setSpacing(20)
+
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setAlignment(Qt.AlignTop)
+
+        title = QLabel("Your Loadout")
+        title.setObjectName("title")
+        left_layout.addWidget(title, alignment=Qt.AlignCenter)
+
+        # Make the grid an instance variable so we can refresh it later
+        self.grid = QGridLayout()
+        self.grid.setSpacing(20)
+        self.grid.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+
+        self.tile_width = 240
+        self.tile_height = 150
+
+        self.populate_grid()
+        left_layout.addLayout(self.grid)
+
+        right_panel = QWidget()
+        right_panel.setFixedWidth(400)
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setAlignment(Qt.AlignTop)
+
+        presets_card = QFrame()
+        presets_card.setObjectName("presetsCard")
+        presets_layout = QVBoxLayout(presets_card)
+        presets_layout.setContentsMargins(15, 15, 15, 15)
+        presets_layout.setSpacing(10)
+
+        presets_header = QHBoxLayout()
+        presets_title = QLabel("Presets")
+        presets_title.setObjectName("title")
+
+        add_preset_btn = QPushButton("+")
+        add_preset_btn.setFixedSize(36, 36)
+        add_preset_btn.setCursor(Qt.PointingHandCursor)
+        add_preset_btn.setObjectName("accentButton")
+        add_preset_btn.clicked.connect(self.show_add_preset_input)
+
+        presets_header.addWidget(presets_title)
+        presets_header.addStretch()
+        presets_header.addWidget(add_preset_btn)
+        presets_layout.addLayout(presets_header)
+
+        self.add_preset_widget = QWidget()
+        add_preset_layout = QHBoxLayout(self.add_preset_widget)
+        add_preset_layout.setContentsMargins(0, 0, 0, 0)
+        add_preset_layout.setSpacing(8)
+
+        self.preset_name_input = QLineEdit()
+        self.preset_name_input.setPlaceholderText("Preset Name...")
+        self.preset_name_input.setObjectName("presetInput")
+
+        submit_btn = QPushButton("✓")
+        submit_btn.setFixedSize(36, 36)
+        submit_btn.setCursor(Qt.PointingHandCursor)
+        submit_btn.setObjectName("submitBtn")
+        submit_btn.clicked.connect(self.submit_new_preset)
+
+        cancel_btn = QPushButton("✗")
+        cancel_btn.setFixedSize(36, 36)
+        cancel_btn.setCursor(Qt.PointingHandCursor)
+        cancel_btn.setObjectName("cancelBtn")
+        cancel_btn.clicked.connect(self.hide_add_preset_input)
+
+        add_preset_layout.addWidget(self.preset_name_input)
+        add_preset_layout.addWidget(submit_btn)
+        add_preset_layout.addWidget(cancel_btn)
+        self.add_preset_widget.hide()
+
+        presets_layout.addWidget(self.add_preset_widget)
+
+        self.presets_scroll = QScrollArea()
+        self.presets_scroll.setWidgetResizable(True)
+        self.presets_scroll.setFrameShape(QFrame.NoFrame)
+        self.presets_list_widget = QWidget()
+        self.presets_list_layout = QVBoxLayout(self.presets_list_widget)
+        self.presets_list_layout.setAlignment(Qt.AlignTop)
+        self.presets_list_layout.setContentsMargins(0, 0, 0, 0)
+        self.presets_list_layout.setSpacing(8)
+        self.presets_scroll.setWidget(self.presets_list_widget)
+
+        presets_layout.addWidget(self.presets_scroll)
+
+        right_layout.addWidget(presets_card, 1)
+
+        close_btn = QPushButton("Close")
+        close_btn.setFixedSize(120, 50)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.clicked.connect(self.close)
+        right_layout.addWidget(close_btn, alignment=Qt.AlignRight | Qt.AlignBottom)
+
+        main_layout.addWidget(left_panel, 3)
+        main_layout.addWidget(right_panel, 1)
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(50)
+        shadow.setOffset(0, 12)
+        shadow.setColor(QColor(0, 0, 0, 180))
+        container.setGraphicsEffect(shadow)
+
+        self.setStyleSheet("""
+            #popupCard { background-color: #1a1f2e; border-radius: 22px; border: 1px solid rgba(255, 255, 255, 0.05); }
+            #presetsCard { background-color: #13192a; border-radius: 18px; border: 1px solid rgba(255, 255, 255, 0.05); }
+            #title { color: #e3e8ff; font-size: 26px; font-weight: 600; margin-bottom: 20px;}
+            #skinLabel { color: #8c95b4; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+            QPushButton#skinTile { background-color: #13192a; border-radius: 18px; border: 1px solid rgba(255, 255, 255, 0.05); }
+            QPushButton#skinTile:hover { border: 1px solid rgba(77, 108, 255, 0.6); background-color: #192139; }
+            #skinPreview { background-color: rgba(7, 10, 19, 0.6); border-radius: 12px; border: 1px dashed rgba(255, 255, 255, 0.08); }
+            #skinPreview[empty="true"] { color: #8c95b4; font-size: 11px; letter-spacing: 1px; }
+            QPushButton { background-color: rgba(255, 255, 255, 0.06); border: none; color: #f4f6ff; font-size: 18px; font-weight: 700; border-radius: 16px; }
+            QPushButton:hover { background-color: rgba(255, 87, 107, 0.35); }
+            QPushButton#accentButton { background-color: #355cff; border-radius: 18px; font-size: 20px;}
+            QPushButton#accentButton:hover { background-color: #4668ff; }
+            #presetInput { background-color: rgba(7, 10, 19, 0.6); border: 1px solid rgba(86, 104, 138, 0.6); color: #f4f6ff; font-size: 14px; padding: 0 10px; border-radius: 12px; height: 36px; }
+            QPushButton#submitBtn { background-color: #32e2b2; color: #000; border-radius: 18px; font-size: 16px; font-weight: bold; }
+            QPushButton#submitBtn:hover { background-color: #40f2c0; }
+            QPushButton#cancelBtn { background-color: #ff4654; color: #fff; border-radius: 18px; font-size: 16px; font-weight: bold; }
+            QPushButton#cancelBtn:hover { background-color: #ff5e6a; }
+            QToolTip { background-color: #0b0f19; color: #f4f6ff; border: 1px solid rgba(77, 108, 255, 0.3); border-radius: 4px; padding: 4px 8px; font-size: 12px; }
+            #presetRow { background-color: rgba(26, 41, 64, 0.5); border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.05); }
+            #presetRow:hover { border: 1px solid rgba(77, 108, 255, 0.4); }
+            #presetName { color: #e3e8ff; font-weight: 600; font-size: 16px; }
+            QPushButton#presetActionBtn { background-color: rgba(255, 255, 255, 0.08); font-size: 13px; border-radius: 12px; padding: 6px 12px; font-weight: 600; }
+            QPushButton#presetActionBtn:hover { background-color: rgba(255, 255, 255, 0.15); }
+            QPushButton#presetApplyBtn { background-color: #355cff; font-size: 13px; border-radius: 12px; padding: 6px 12px; font-weight: 600; }
+            QPushButton#presetApplyBtn:hover { background-color: #4668ff; }
+            QPushButton#presetDelBtn { background-color: #ff2c2c; font-size: 13px; border-radius: 12px; padding: 6px 12px; font-weight: 600; }
+            QPushButton#presetDelBtn:hover { background-color: #ff4545; }
+        """)
+
+    def populate_grid(self):
+        for i in reversed(range(self.grid.count())):
+            widget = self.grid.itemAt(i).widget()
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+
+        for index, weapon in enumerate(self.WEAPON_ORDER):
+            row = index // 5
+            column = index % 5
+            self.grid.addWidget(self.build_skin_tile(weapon, self.skins.get(weapon)), row, column)
+
+    def update_equipped_skin(self, weapon, new_skin_id):
+        self.skins[weapon] = new_skin_id
+        self.populate_grid()
+
+    def build_skin_tile(self, weapon, skin_id):
+        tile = QPushButton()
+        tile.setObjectName("skinTile")
+        tile.setFixedSize(self.tile_width, self.tile_height)
+        tile.setCursor(Qt.PointingHandCursor)
+        tile.clicked.connect(lambda _, w=weapon: self.show_owned_skins_popup(w))
+
+        tile_layout = QVBoxLayout(tile)
+        tile_layout.setContentsMargins(15, 15, 15, 15)
+        tile_layout.setSpacing(10)
+        tile_layout.setAlignment(Qt.AlignCenter)
+
+        preview = QLabel()
+        preview.setObjectName("skinPreview")
+        preview.setAlignment(Qt.AlignCenter)
+        preview.setMinimumSize(150, 88)
+        preview.setProperty("empty", "false")
+        preview.setAttribute(Qt.WA_TransparentForMouseEvents)
+
+        canvas = QPixmap(150, 88)
+        canvas.fill(Qt.transparent)
+        painter = QPainter(canvas)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+
+        pixmap = None
+
+        if skin_id:
+            if isinstance(skin_id, list):
+                skin_id = skin_id[0]
+
+            if hasattr(self, "skin_icons"):
+                pixmap = self.skin_icons.get(str(skin_id).lower())
+
+            if self.uuid_handler:
+                try:
+                    skin_name = self.uuid_handler.skin_converter(skin_id)
+                    if isinstance(skin_name, list):
+                        skin_name = str(skin_name[0]) if skin_name else "Unknown Skin"
+                    tile.setToolTip(str(skin_name))
+
+                    index = str(skin_name).find("Level")
+                    if index >= 0:
+                        skin_name = str(skin_name)[0:(index - 1)]
+                    else:
+                        index2 = str(skin_name).find("Variant")
+                        if index2 >= 0:
+                            skin_name = str(skin_name)[0:(index2 - 2)]
+
+                    skin_label = QLabel(str(skin_name))
+                    skin_label.setObjectName("skinLabel")
+                    skin_label.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
+                    skin_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+                    tile_layout.addWidget(skin_label)
+                except Exception:
+                    pass
+
+        if pixmap:
+            scaled_skin = pixmap.scaled(150, 88, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            x_skin = (150 - scaled_skin.width()) // 2
+            y_skin = (88 - scaled_skin.height()) // 2
+            painter.drawPixmap(x_skin, y_skin, scaled_skin)
+        else:
+            painter.setPen(QColor("#8c95b4"))
+            font = painter.font()
+            font.setPixelSize(11)
+            font.setLetterSpacing(QFont.AbsoluteSpacing, 1)
+            painter.setFont(font)
+            painter.drawText(canvas.rect(), Qt.AlignCenter, "No Skin")
+            preview.setProperty("empty", "true")
+
+        buddy_id = self.buddies.get(weapon)
+        if buddy_id and hasattr(self, "buddy_icons"):
+            if isinstance(buddy_id, list):
+                buddy_id = buddy_id[0]
+            elif isinstance(buddy_id, dict):
+                buddy_id = buddy_id.get("CharmID", buddy_id.get("CharmLevelID", ""))
+
+            buddy_pixmap = self.buddy_icons.get(str(buddy_id).lower())
+
+            if buddy_pixmap:
+                scaled_buddy = buddy_pixmap.scaled(36, 36, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                x_buddy = 5
+                y_buddy = 88 - scaled_buddy.height() - 5
+                painter.drawPixmap(x_buddy, y_buddy, scaled_buddy)
+
+        painter.end()
+        preview.setPixmap(canvas)
+
+        preview.style().unpolish(preview)
+        preview.style().polish(preview)
+
+        tile_layout.addWidget(preview)
+        return tile
+
+    def show_owned_skins_popup(self, weapon):
+        owned_skins_dict = self.owned_skins.get("Skins", {})
+        weapon_skins = owned_skins_dict.get(weapon, [])
+        owned_variants_list = self.owned_skins.get("Variants", [])
+
+        popup = SkinSelectorPopup(weapon, weapon_skins, owned_variants_list, self.skin_icons, self.uuid_handler,
+                                  self.update_equipped_skin, self)
+        popup.exec()
+
+    def show_add_preset_input(self):
+        self.add_preset_widget.show()
+        self.preset_name_input.setFocus()
+
+    def hide_add_preset_input(self):
+        self.add_preset_widget.hide()
+        self.preset_name_input.clear()
+
+    def submit_new_preset(self):
+        name = self.preset_name_input.text().strip()
+        if name:
+            self.create_preset_row(name)
+        self.hide_add_preset_input()
+
+    def create_preset_row(self, name):
+        row = QFrame()
+        row.setObjectName("presetRow")
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(15, 12, 15, 12)
+        layout.setSpacing(10)
+
+        name_label = QLabel(name)
+        name_label.setObjectName("presetName")
+
+        edit_btn = QPushButton("Edit")
+        edit_btn.setObjectName("presetActionBtn")
+        edit_btn.setCursor(Qt.PointingHandCursor)
+
+        apply_btn = QPushButton("Apply")
+        apply_btn.setObjectName("presetApplyBtn")
+        apply_btn.setCursor(Qt.PointingHandCursor)
+
+        del_btn = QPushButton("Delete")
+        del_btn.setObjectName("presetDelBtn")
+        del_btn.setCursor(Qt.PointingHandCursor)
+
+        layout.addWidget(name_label)
+        layout.addStretch()
+        layout.addWidget(edit_btn)
+        layout.addWidget(apply_btn)
+        layout.addWidget(del_btn)
+
+        self.presets_list_layout.addWidget(row)
 
 class AgentPopup(QDialog):
     def __init__(self, agents_list, owned_agents_list, agent_icons, callback, parent=None):
@@ -534,6 +1179,11 @@ class ValorantStatsWindow(QMainWindow):
         self.auto_lock_switch = ToggleSwitch()
         self.auto_lock_switch.setChecked(False)
 
+        self.loadouts_button = QPushButton("Loadouts")
+        self.loadouts_button.setCursor(Qt.PointingHandCursor)
+        self.loadouts_button.clicked.connect(self.open_user_loadouts)
+        self.loadouts_button.setObjectName("secondaryButton")
+
         self.load_more_matches_button = QPushButton("Load More Matches (5)")
         self.load_more_matches_button.setCursor(Qt.PointingHandCursor)
         self.load_more_matches_button.clicked.connect(self.run_load_more_matches_button)
@@ -561,6 +1211,11 @@ class ValorantStatsWindow(QMainWindow):
 
         self.agent_icons = None
         self.rank_icons = None
+        self.buddy_icons = None
+
+        from core.asset_loader import download_and_cache_buddies
+        task2 = asyncio.create_task(download_and_cache_buddies())
+        task2.add_done_callback(self._on_buddies_loaded)
 
         from core.asset_loader import download_and_cache_skins
         task = asyncio.create_task(download_and_cache_skins())
@@ -591,6 +1246,7 @@ class ValorantStatsWindow(QMainWindow):
 
         header_layout.addStretch(1)
 
+        header_layout.addWidget(self.loadouts_button, alignment=Qt.AlignVCenter)
         header_layout.addWidget(self.dodge_button, alignment=Qt.AlignVCenter)
         header_layout.addWidget(self.load_more_matches_button, alignment=Qt.AlignVCenter)
 
@@ -677,6 +1333,25 @@ class ValorantStatsWindow(QMainWindow):
         popup = AgentPopup(combo_list, owned_list, getattr(self, "agent_icons", {}), self.on_agent_selected, self)
         popup.exec()
 
+    def open_user_loadouts(self):
+        if self.loadouts_button.isEnabled():
+            self.loadouts_button.setEnabled(False)
+            asyncio.create_task(self._open_user_loadouts_async())
+
+    async def _open_user_loadouts_async(self):
+        try:
+            handler = OwnedSkins()
+            fetch_task = await handler.sort_current_loadout()
+            fetch_task2 = await handler.sort_owned_items()
+
+            self.loadouts_popup = LoadoutsPopup(fetch_task, fetch_task2, getattr(self, "skin_icons", {}), getattr(self, "buddy_icons", {}), self.uuid_handler, self)
+            self.loadouts_popup.finished.connect(lambda: self.loadouts_button.setEnabled(True))
+            self.loadouts_popup.open()
+
+        except Exception as e:
+            self.loadouts_button.setEnabled(True)
+            print(e)
+
     def on_agent_selected(self, agent_name):
         self.agent_select_btn.setText(agent_name)
         self.agent = self.uuid_handler.agent_converter_reversed(agent_name)
@@ -758,6 +1433,9 @@ class ValorantStatsWindow(QMainWindow):
     def _on_skins_loaded(self, task):
         self.skin_icons = task.result()
         self.safe_load_players(self.valo_rank.frontend_data)
+
+    def _on_buddies_loaded(self, task):
+        self.buddy_icons = task.result()
 
     def open_skin_popup(self, player_name, skins):
         popup = WeaponPopup(player_name, skins, getattr(self, "skin_icons", {}), self.uuid_handler, self)

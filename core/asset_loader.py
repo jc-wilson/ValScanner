@@ -107,6 +107,76 @@ async def download_and_cache_rank_icons(cache_dir=None):
     print(f"Loaded {len(icons)} rank icons (cached in {cache_dir})")
     return icons
 
+async def download_and_cache_buddies(cache_dir=None, threads=40):
+    if cache_dir is None:
+        cache_dir = get_external_path("assets/buddies")
+
+    def download_file(url, path):
+        try:
+            data = requests.get(url, timeout=5).content
+            with open(path, "wb") as f:
+                f.write(data)
+            return True
+        except Exception:
+            return False
+
+    os.makedirs(cache_dir, exist_ok=True)
+
+    print("Fetching buddies from Valorant API...")
+    session = SharedSession.get()
+
+    async with session.get("https://valorant-api.com/v1/buddies") as resp:
+        if resp.status == 200:
+            buddies = await resp.json()
+            buddies = buddies["data"]
+        else:
+            print("Couldn't retrieve skin icons from valorant-api")
+
+    download_jobs = []  # list of (url, path)
+    file_map = {}  # uuid → local filepath
+
+    # Build full download job list
+    for buddy in buddies:
+
+        # Base skin icon
+        buddy_uuid = buddy["levels"][0]["uuid"]
+        base_icon = buddy.get("displayIcon")
+
+        if buddy_uuid and base_icon:
+            base_path = os.path.join(cache_dir, f"{buddy_uuid}.png")
+            file_map[buddy_uuid] = base_path
+            if not os.path.exists(base_path):
+                download_jobs.append((base_icon, base_path))
+
+    print(f"{len(download_jobs)} icons to download (uncached).")
+    if len(download_jobs) > 0:
+        print(f"Starting downloads using {threads} threads...")
+
+    # Multithreaded downloads
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        futures = [
+            executor.submit(download_file, url, path)
+            for url, path in download_jobs
+        ]
+
+        for i, fut in enumerate(as_completed(futures), 1):
+            print(f"✔ {i}/{len(futures)}", end="\r")
+
+    print("\n✅ Download complete. Loading pixmaps...")
+
+    # Load images into QPixmap directly on the main thread
+    pixmaps = {}
+    for count, (uuid, file_path) in enumerate(file_map.items()):
+        if os.path.exists(file_path):
+            pixmaps[uuid] = QPixmap(file_path)
+
+            # Yield control to the event loop every 50 images so the UI doesn't freeze
+            if count % 50 == 0:
+                await asyncio.sleep(0)
+
+    print(f"Loaded {len(pixmaps)} total icons.")
+    return pixmaps
+
 
 async def download_and_cache_skins(cache_dir=None, threads=40):
     if cache_dir is None:
