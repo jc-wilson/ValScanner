@@ -145,8 +145,6 @@ class UUIDHandler:
         variants = []
         for skin in self.skin_uuids["data"]:
             if skin["chromas"][0]["uuid"] == uuid:
-                print(f"Skin found: {uuid}")
-                print(f"UUID list: {uuid_list}")
                 for chroma in skin["chromas"]:
                     if chroma["uuid"] in uuid_list:
                         variants.append(chroma["uuid"])
