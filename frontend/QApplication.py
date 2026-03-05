@@ -27,6 +27,7 @@ from core.valorant_uuid import UUIDHandler
 from core.local_api import LockfileHandler
 from core.owned_agents import OwnedAgents
 from core.owned_skins import OwnedSkins
+from core.player_loadout import PlayerLoadout
 from core.http_session import SharedSession
 
 
@@ -339,7 +340,6 @@ class SkinSelectorPopup(QDialog):
 
     def on_skin_clicked(self, clean_id):
         variants = self.uuid_handler.variant_finder(clean_id, self.owned_variants)
-        print(variants)
 
         if variants:
             popup = VariantSelectorPopup(self.weapon, variants, self.skin_icons, self.uuid_handler,
@@ -374,6 +374,38 @@ class LoadoutsPopup(QDialog):
         self.buddy_icons = buddy_icons or {}
         self.uuid_handler = uuid_handler
 
+        self.weapon_list_indices = {
+            "Odin": 0,
+            "Ares": 1,
+            "Vandal": 2,
+            "Bulldog": 3,
+            "Phantom": 4,
+            "Judge": 5,
+            "Bucky": 6,
+            "Frenzy": 7,
+            "Classic": 8,
+            "Ghost": 9,
+            "Sheriff": 10,
+            "Shorty": 11,
+            "Operator": 12,
+            "Guardian": 13,
+            "Marshal": 14,
+            "Spectre": 15,
+            "Stinger": 16,
+            "Knife": 17,
+            "Outlaw": 18,
+            "Bandit": 19
+        }
+
+        self.selected_skins_list = [None] * 20
+
+        for weapon, idx in self.weapon_list_indices.items():
+            skin_val = self.skins.get(weapon)
+            if isinstance(skin_val, list) and len(skin_val) > 0:
+                self.selected_skins_list[idx] = skin_val[0]
+            else:
+                self.selected_skins_list[idx] = skin_val
+
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setFixedSize(1920, 1080)
@@ -394,7 +426,6 @@ class LoadoutsPopup(QDialog):
         title.setObjectName("title")
         left_layout.addWidget(title, alignment=Qt.AlignCenter)
 
-        # Make the grid an instance variable so we can refresh it later
         self.grid = QGridLayout()
         self.grid.setSpacing(20)
         self.grid.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
@@ -532,6 +563,16 @@ class LoadoutsPopup(QDialog):
 
     def update_equipped_skin(self, weapon, new_skin_id):
         self.skins[weapon] = new_skin_id
+
+        if hasattr(self, 'weapon_list_indices') and weapon in self.weapon_list_indices:
+            idx = self.weapon_list_indices[weapon]
+            if isinstance(new_skin_id, list) and len(new_skin_id) > 0:
+                self.selected_skins_list[idx] = new_skin_id[0]
+            else:
+                self.selected_skins_list[idx] = new_skin_id
+
+        print(f"Update finished! Current Loadout List: {self.selected_skins_list}")
+
         self.populate_grid()
 
     def build_skin_tile(self, weapon, skin_id):

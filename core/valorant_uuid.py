@@ -152,6 +152,14 @@ class UUIDHandler:
             variants.insert(0, uuid)
         return variants
 
+    def loadout_uuid_function(self, uuid):
+        print(uuid)
+        for skin in self.skin_uuids["data"]:
+            for chroma in skin["chromas"]:
+                if chroma["uuid"] == uuid:
+                    return [skin["uuid"], skin["levels"][-1]["uuid"], uuid]
+        return ["", "", ""]
+
     def season_uuid_function(self):
         try:
             with open(self.season_uuids_path, "r", encoding="utf-8") as a:
