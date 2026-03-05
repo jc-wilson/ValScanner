@@ -248,9 +248,3 @@ class OwnedSkins:
                 "Knife": get_skin(17)
             }
         }
-
-
-
-if __name__ == "__main__":
-    handler = OwnedSkins()
-    asyncio.run(handler.sort_current_loadout())

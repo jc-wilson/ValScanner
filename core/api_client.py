@@ -7,6 +7,7 @@ from core.http_session import SharedSession
 import requests
 import sys
 import os
+import re
 import math
 import time
 import asyncio
@@ -36,7 +37,7 @@ class ValoRank:
         self.uuid_handler.agent_uuid_function()
         self.uuid_handler.season_uuid_function()
         self.skin_handler = SkinHandler()
-        self.version_data = requests.get("https://valorant-api.com/v1/version").json()
+        self.version_data = self.get_version_from_log()
         self.gamemode_list = {
             "Swiftplay": "Swiftplay",
             "Deathmatch": "Deathmatch",
@@ -78,6 +79,20 @@ class ValoRank:
         if on_update:
             on_update(self.frontend_data)
         await asyncio.sleep(0.05)
+
+    def get_version_from_log(self):
+        log_path = os.path.expandvars(r"%LOCALAPPDATA%\VALORANT\Saved\Logs\ShooterGame.log")
+
+        if os.path.exists(log_path):
+            with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    match = re.search(r"(release-\d+\.\d+)-(\d+-\d+)", line)
+                    if match:
+                        print("found version data")
+                        return f"{match.group(1)}-shipping-{match.group(2)}"
+
+        print("didnt find version data")
+        return None
 
     async def lobby_load(self, party_id=None):
         self.frontend_data = {}
@@ -222,7 +237,7 @@ class ValoRank:
                         self.ca[player.get("Subject")] = player.get("CharacterID")
 
         self.modified_header = self.handler.match_id_header
-        self.modified_header["X-Riot-ClientVersion"] = self.version_data["data"]["riotClientVersion"]
+        self.modified_header["X-Riot-ClientVersion"] = self.version_data
 
         async def stat_collector(puuid, session):
             if puuid in self.used_puuids:

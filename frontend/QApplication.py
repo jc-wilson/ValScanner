@@ -374,6 +374,8 @@ class LoadoutsPopup(QDialog):
         self.buddy_icons = buddy_icons or {}
         self.uuid_handler = uuid_handler
 
+        self.current_preset = None
+
         self.weapon_list_indices = {
             "Odin": 0,
             "Ares": 1,
@@ -422,9 +424,9 @@ class LoadoutsPopup(QDialog):
         left_layout = QVBoxLayout(left_panel)
         left_layout.setAlignment(Qt.AlignTop)
 
-        title = QLabel("Your Loadout")
-        title.setObjectName("title")
-        left_layout.addWidget(title, alignment=Qt.AlignCenter)
+        self.title_label = QLabel("Your Loadout")
+        self.title_label.setObjectName("title")
+        left_layout.addWidget(self.title_label, alignment=Qt.AlignCenter)
 
         self.grid = QGridLayout()
         self.grid.setSpacing(20)
@@ -435,6 +437,38 @@ class LoadoutsPopup(QDialog):
 
         self.populate_grid()
         left_layout.addLayout(self.grid)
+
+        self.preset_actions_layout = QHBoxLayout()
+        self.preset_actions_layout.setContentsMargins(0, 20, 0, 0)
+        self.preset_actions_layout.addStretch()
+
+        self.cancel_preset_btn = QPushButton("Cancel")
+        self.cancel_preset_btn.setObjectName("presetCancelBtn")
+        self.cancel_preset_btn.setCursor(Qt.PointingHandCursor)
+        self.cancel_preset_btn.setFixedSize(120, 40)
+        self.cancel_preset_btn.clicked.connect(self.cancel_current_preset_changes)
+        self.cancel_preset_btn.hide()
+
+        self.save_preset_btn = QPushButton("Save")
+        self.save_preset_btn.setObjectName("presetSaveBtn")
+        self.save_preset_btn.setCursor(Qt.PointingHandCursor)
+        self.save_preset_btn.setFixedSize(120, 40)
+        self.save_preset_btn.clicked.connect(self.save_current_preset)
+        self.save_preset_btn.hide()
+
+        self.apply_preset_btn = QPushButton("Apply")
+        self.apply_preset_btn.setObjectName("presetApplyBtn")
+        self.apply_preset_btn.setCursor(Qt.PointingHandCursor)
+        self.apply_preset_btn.setFixedSize(120, 40)
+        self.apply_preset_btn.clicked.connect(self.apply_current_loadout_changes)
+        self.apply_preset_btn.hide()
+
+        self.preset_actions_layout.addWidget(self.cancel_preset_btn)
+        self.preset_actions_layout.addWidget(self.save_preset_btn)
+        self.preset_actions_layout.addWidget(self.apply_preset_btn)
+        self.preset_actions_layout.addStretch()
+
+        left_layout.addLayout(self.preset_actions_layout)
 
         right_panel = QWidget()
         right_panel.setFixedWidth(400)
@@ -451,8 +485,7 @@ class LoadoutsPopup(QDialog):
         presets_title = QLabel("Presets")
         presets_title.setObjectName("title")
 
-        add_preset_btn = QPushButton("+")
-        add_preset_btn.setFixedSize(36, 36)
+        add_preset_btn = QPushButton("New Preset")
         add_preset_btn.setCursor(Qt.PointingHandCursor)
         add_preset_btn.setObjectName("accentButton")
         add_preset_btn.clicked.connect(self.show_add_preset_input)
@@ -471,14 +504,12 @@ class LoadoutsPopup(QDialog):
         self.preset_name_input.setPlaceholderText("Preset Name...")
         self.preset_name_input.setObjectName("presetInput")
 
-        submit_btn = QPushButton("✓")
-        submit_btn.setFixedSize(36, 36)
+        submit_btn = QPushButton("Save")
         submit_btn.setCursor(Qt.PointingHandCursor)
         submit_btn.setObjectName("submitBtn")
         submit_btn.clicked.connect(self.submit_new_preset)
 
-        cancel_btn = QPushButton("✗")
-        cancel_btn.setFixedSize(36, 36)
+        cancel_btn = QPushButton("Cancel")
         cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.setObjectName("cancelBtn")
         cancel_btn.clicked.connect(self.hide_add_preset_input)
@@ -530,24 +561,177 @@ class LoadoutsPopup(QDialog):
             #skinPreview[empty="true"] { color: #8c95b4; font-size: 11px; letter-spacing: 1px; }
             QPushButton { background-color: rgba(255, 255, 255, 0.06); border: none; color: #f4f6ff; font-size: 18px; font-weight: 700; border-radius: 16px; }
             QPushButton:hover { background-color: rgba(255, 87, 107, 0.35); }
-            QPushButton#accentButton { background-color: #355cff; border-radius: 18px; font-size: 20px;}
+            QPushButton#accentButton { background-color: #355cff; border-radius: 8px; font-size: 14px; padding: 6px 12px; }
             QPushButton#accentButton:hover { background-color: #4668ff; }
-            #presetInput { background-color: rgba(7, 10, 19, 0.6); border: 1px solid rgba(86, 104, 138, 0.6); color: #f4f6ff; font-size: 14px; padding: 0 10px; border-radius: 12px; height: 36px; }
-            QPushButton#submitBtn { background-color: #32e2b2; color: #000; border-radius: 18px; font-size: 16px; font-weight: bold; }
+            #presetInput { background-color: rgba(7, 10, 19, 0.6); border: 1px solid rgba(86, 104, 138, 0.6); color: #f4f6ff; font-size: 14px; padding: 0 10px; border-radius: 8px; height: 36px; }
+            QPushButton#submitBtn { background-color: #32e2b2; color: #000; border-radius: 8px; font-size: 14px; font-weight: bold; padding: 6px 12px; }
             QPushButton#submitBtn:hover { background-color: #40f2c0; }
-            QPushButton#cancelBtn { background-color: #ff4654; color: #fff; border-radius: 18px; font-size: 16px; font-weight: bold; }
+            QPushButton#cancelBtn { background-color: #ff4654; color: #fff; border-radius: 8px; font-size: 14px; font-weight: bold; padding: 6px 12px; }
             QPushButton#cancelBtn:hover { background-color: #ff5e6a; }
+            QPushButton#presetSaveBtn { background-color: #32e2b2; color: #000; border-radius: 8px; font-size: 16px; font-weight: bold; }
+            QPushButton#presetSaveBtn:hover { background-color: #40f2c0; }
+            QPushButton#presetCancelBtn { background-color: #ff4654; color: #fff; border-radius: 8px; font-size: 16px; font-weight: bold; }
+            QPushButton#presetCancelBtn:hover { background-color: #ff5e6a; }
+            QPushButton#presetApplyBtn { background-color: #32e2b2; color: #000; font-size: 13px; border-radius: 8px; padding: 6px 12px; font-weight: 600; }
+            QPushButton#presetApplyBtn:hover { background-color: #40f2c0; }
             QToolTip { background-color: #0b0f19; color: #f4f6ff; border: 1px solid rgba(77, 108, 255, 0.3); border-radius: 4px; padding: 4px 8px; font-size: 12px; }
             #presetRow { background-color: rgba(26, 41, 64, 0.5); border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.05); }
-            #presetRow:hover { border: 1px solid rgba(77, 108, 255, 0.4); }
+            #presetRow:hover { border: 1px solid rgba(77, 108, 255, 0.4); background-color: rgba(36, 51, 74, 0.6); }
+            #presetRowSelected { background-color: rgba(13, 19, 30, 0.9); border-radius: 14px; border: 1px solid rgba(77, 108, 255, 0.4); }
             #presetName { color: #e3e8ff; font-weight: 600; font-size: 16px; }
-            QPushButton#presetActionBtn { background-color: rgba(255, 255, 255, 0.08); font-size: 13px; border-radius: 12px; padding: 6px 12px; font-weight: 600; }
-            QPushButton#presetActionBtn:hover { background-color: rgba(255, 255, 255, 0.15); }
-            QPushButton#presetApplyBtn { background-color: #355cff; font-size: 13px; border-radius: 12px; padding: 6px 12px; font-weight: 600; }
-            QPushButton#presetApplyBtn:hover { background-color: #4668ff; }
-            QPushButton#presetDelBtn { background-color: #ff2c2c; font-size: 13px; border-radius: 12px; padding: 6px 12px; font-weight: 600; }
+            QPushButton#presetDelBtn { background-color: #ff2c2c; font-size: 13px; border-radius: 8px; padding: 6px 12px; font-weight: 600; }
             QPushButton#presetDelBtn:hover { background-color: #ff4545; }
         """)
+
+        self.loadouts_dir = resource_path("loadouts")
+        os.makedirs(self.loadouts_dir, exist_ok=True)
+
+        current_loadout_path = os.path.join(self.loadouts_dir, "Current Loadout.json")
+        try:
+            with open(current_loadout_path, 'w') as f:
+                json.dump(self.selected_skins_list, f)
+        except Exception:
+            pass
+
+        self.load_existing_presets()
+        self.apply_preset("Current Loadout")
+
+    def load_existing_presets(self):
+        if not os.path.exists(self.loadouts_dir):
+            return
+
+        self.create_preset_row("Current Loadout")
+
+        for filename in os.listdir(self.loadouts_dir):
+            if filename.endswith(".json"):
+                preset_name = filename[:-5]
+                if preset_name != "Current Loadout":
+                    self.create_preset_row(preset_name)
+
+    def save_current_preset(self):
+        if not self.current_preset:
+            return
+        filepath = os.path.join(self.loadouts_dir, f"{self.current_preset}.json")
+        try:
+            with open(filepath, 'w') as f:
+                json.dump(self.selected_skins_list, f)
+        except Exception:
+            pass
+
+    def apply_current_loadout_changes(self):
+        filepath = os.path.join(self.loadouts_dir, "Current Loadout.json")
+        try:
+            with open(filepath, 'w') as f:
+                json.dump(self.selected_skins_list, f)
+        except Exception:
+            pass
+        self.push_preset_to_game("Current Loadout")
+
+    def cancel_current_preset_changes(self):
+        if not self.current_preset:
+            return
+        self.apply_preset(self.current_preset)
+
+    def push_preset_to_game(self, name):
+        import asyncio
+        asyncio.create_task(self._push_preset_to_game_async(name))
+
+    async def _push_preset_to_game_async(self, name):
+        filepath = os.path.join(self.loadouts_dir, f"{name}.json")
+        try:
+            import json
+            with open(filepath, 'r') as f:
+                preset_data = json.load(f)
+
+            try:
+                from core.player_loadout import modify_loadout
+                func = modify_loadout
+            except ImportError:
+                from core.player_loadout import PlayerLoadout
+                func = PlayerLoadout().modify_loadout
+
+            import inspect
+            result = func(preset_data, self.uuid_handler)
+            if inspect.isawaitable(result):
+                await result
+
+            if name != "Current Loadout":
+                import asyncio
+                await asyncio.sleep(1)
+
+                from core.owned_skins import OwnedSkins
+                handler = OwnedSkins()
+                current_skins_data = await handler.sort_current_loadout()
+                skins_dict = current_skins_data.get("Skins", {})
+
+                new_current_loadout = [None] * 20
+                for weapon, idx in self.weapon_list_indices.items():
+                    skin_val = skins_dict.get(weapon)
+                    if isinstance(skin_val, list) and len(skin_val) > 0:
+                        new_current_loadout[idx] = skin_val[0]
+                    else:
+                        new_current_loadout[idx] = skin_val
+
+                current_filepath = os.path.join(self.loadouts_dir, "Current Loadout.json")
+                with open(current_filepath, 'w') as f:
+                    json.dump(new_current_loadout, f)
+
+                if self.current_preset == "Current Loadout":
+                    self.apply_preset("Current Loadout")
+
+        except Exception as e:
+            pass
+
+    def highlight_selected_preset(self, selected_name):
+        for i in range(self.presets_list_layout.count()):
+            widget = self.presets_list_layout.itemAt(i).widget()
+            if widget:
+                name_label = widget.findChild(QLabel, "presetName")
+                if name_label:
+                    if name_label.text() == selected_name:
+                        widget.setObjectName("presetRowSelected")
+                    else:
+                        widget.setObjectName("presetRow")
+                    widget.style().unpolish(widget)
+                    widget.style().polish(widget)
+
+    def apply_preset(self, name):
+        filepath = os.path.join(self.loadouts_dir, f"{name}.json")
+        try:
+            with open(filepath, 'r') as f:
+                preset_data = json.load(f)
+            self.selected_skins_list = preset_data
+            for weapon, idx in self.weapon_list_indices.items():
+                if idx < len(preset_data):
+                    self.skins[weapon] = preset_data[idx]
+            self.populate_grid()
+
+            self.current_preset = name
+            self.cancel_preset_btn.show()
+
+            if name == "Current Loadout":
+                self.save_preset_btn.hide()
+                self.apply_preset_btn.show()
+                self.apply_preset_btn.setStyleSheet("font-size: 16px;")
+            else:
+                self.save_preset_btn.show()
+                self.apply_preset_btn.hide()
+                self.apply_preset_btn.setStyleSheet("")
+
+            self.title_label.setText(name)
+            self.highlight_selected_preset(name)
+        except Exception:
+            pass
+
+    def delete_preset(self, name, row_widget):
+        filepath = os.path.join(self.loadouts_dir, f"{name}.json")
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        row_widget.setParent(None)
+        row_widget.deleteLater()
+
+        if self.current_preset == name:
+            self.apply_preset("Current Loadout")
 
     def populate_grid(self):
         for i in reversed(range(self.grid.count())):
@@ -570,8 +754,6 @@ class LoadoutsPopup(QDialog):
                 self.selected_skins_list[idx] = new_skin_id[0]
             else:
                 self.selected_skins_list[idx] = new_skin_id
-
-        print(f"Update finished! Current Loadout List: {self.selected_skins_list}")
 
         self.populate_grid()
 
@@ -689,39 +871,63 @@ class LoadoutsPopup(QDialog):
 
     def submit_new_preset(self):
         name = self.preset_name_input.text().strip()
-        if name:
-            self.create_preset_row(name)
+        name = "".join(c for c in name if c.isalnum() or c in (' ', '-', '_'))
+        if name and name != "Current Loadout":
+            filepath = os.path.join(self.loadouts_dir, f"{name}.json")
+            with open(filepath, 'w') as f:
+                json.dump(self.selected_skins_list, f)
+
+            exists = False
+            for i in range(self.presets_list_layout.count()):
+                widget = self.presets_list_layout.itemAt(i).widget()
+                if widget and widget.findChild(QLabel, "presetName") and widget.findChild(QLabel,
+                                                                                          "presetName").text() == name:
+                    exists = True
+                    break
+
+            if not exists:
+                self.create_preset_row(name)
+            self.apply_preset(name)
         self.hide_add_preset_input()
 
     def create_preset_row(self, name):
         row = QFrame()
         row.setObjectName("presetRow")
+        row.setCursor(Qt.PointingHandCursor)
+
+        def on_click(event):
+            if event.button() == Qt.LeftButton:
+                self.apply_preset(name)
+
+        row.mousePressEvent = on_click
+
         layout = QHBoxLayout(row)
         layout.setContentsMargins(15, 12, 15, 12)
         layout.setSpacing(10)
 
         name_label = QLabel(name)
         name_label.setObjectName("presetName")
-
-        edit_btn = QPushButton("Edit")
-        edit_btn.setObjectName("presetActionBtn")
-        edit_btn.setCursor(Qt.PointingHandCursor)
-
-        apply_btn = QPushButton("Apply")
-        apply_btn.setObjectName("presetApplyBtn")
-        apply_btn.setCursor(Qt.PointingHandCursor)
-
-        del_btn = QPushButton("Delete")
-        del_btn.setObjectName("presetDelBtn")
-        del_btn.setCursor(Qt.PointingHandCursor)
+        name_label.setAttribute(Qt.WA_TransparentForMouseEvents)
 
         layout.addWidget(name_label)
         layout.addStretch()
-        layout.addWidget(edit_btn)
-        layout.addWidget(apply_btn)
-        layout.addWidget(del_btn)
+
+        if name != "Current Loadout":
+            apply_btn = QPushButton("Apply")
+            apply_btn.setObjectName("presetApplyBtn")
+            apply_btn.setCursor(Qt.PointingHandCursor)
+            apply_btn.clicked.connect(lambda _, n=name: self.push_preset_to_game(n))
+
+            del_btn = QPushButton("Delete")
+            del_btn.setObjectName("presetDelBtn")
+            del_btn.setCursor(Qt.PointingHandCursor)
+            del_btn.clicked.connect(lambda _, n=name, r=row: self.delete_preset(n, r))
+
+            layout.addWidget(apply_btn)
+            layout.addWidget(del_btn)
 
         self.presets_list_layout.addWidget(row)
+
 
 class AgentPopup(QDialog):
     def __init__(self, agents_list, owned_agents_list, agent_icons, callback, parent=None):
@@ -1385,7 +1591,8 @@ class ValorantStatsWindow(QMainWindow):
             fetch_task = await handler.sort_current_loadout()
             fetch_task2 = await handler.sort_owned_items()
 
-            self.loadouts_popup = LoadoutsPopup(fetch_task, fetch_task2, getattr(self, "skin_icons", {}), getattr(self, "buddy_icons", {}), self.uuid_handler, self)
+            self.loadouts_popup = LoadoutsPopup(fetch_task, fetch_task2, getattr(self, "skin_icons", {}),
+                                                getattr(self, "buddy_icons", {}), self.uuid_handler, self)
             self.loadouts_popup.finished.connect(lambda: self.loadouts_button.setEnabled(True))
             self.loadouts_popup.open()
 
