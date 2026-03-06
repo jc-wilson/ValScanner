@@ -38,6 +38,21 @@ class ValoRank:
         self.uuid_handler.season_uuid_function()
         self.skin_handler = SkinHandler()
         self.version_data = self.get_version_from_log()
+        self.current_act = "3ea2b318-423b-cf86-25da-7cbb0eefbe2d"
+        self.e1_to_e4 = [
+            "3f61c772-4560-cd3f-5d3f-a7ab5abda6b3",
+            "0530b9c4-4980-f2ee-df5d-09864cd00542",
+            "46ea6166-4573-1128-9cea-60a15640059b",
+            "97b6e739-44cc-ffa7-49ad-398ba502ceb0",
+            "ab57ef51-4e59-da91-cc8d-51a5a2b9b8ff",
+            "52e9749a-429b-7060-99fe-4595426a0cf7",
+            "2a27e5d2-4d30-c9e2-b15a-93b8909a442c",
+            "4cb622e1-4244-6da3-7276-8daaf1c01be2",
+            "a16955a5-4ad0-f761-5e9e-389df1c892fb",
+            "573f53ac-41a5-3a7d-d9ce-d6a6298e5704",
+            "d929bc38-4ab6-7da4-94f0-ee84f8ac141e",
+            "3e47230a-463c-a301-eb7d-67bb60357d4f"
+        ]
         self.gamemode_list = {
             "Swiftplay": "Swiftplay",
             "Deathmatch": "Deathmatch",
@@ -254,28 +269,34 @@ class ValoRank:
                     peak_act = None
                     for season in valorant_mmr["QueueSkills"]["competitive"]["SeasonalInfoBySeasonID"]:
                         try:
-                            for tier in valorant_mmr["QueueSkills"]["competitive"]["SeasonalInfoBySeasonID"][season][
-                                "WinsByTier"]:
-                                if int(tier) > peak_rank:
-                                    peak_rank = int(tier)
-                                    peak_act = season
+                            if season in self.e1_to_e4:
+                                for tier in valorant_mmr["QueueSkills"]["competitive"]["SeasonalInfoBySeasonID"][season][
+                                    "WinsByTier"]:
+                                    if int(tier) > 20:
+                                        tier = int(tier) + 3
+                                    if int(tier) > peak_rank:
+                                        peak_rank = int(tier)
+                                        peak_act = season
+                            else:
+                                for tier in valorant_mmr["QueueSkills"]["competitive"]["SeasonalInfoBySeasonID"][season][
+                                    "WinsByTier"]:
+                                    if int(tier) > peak_rank:
+                                        peak_rank = int(tier)
+                                        peak_act = season
                         except TypeError:
                             continue
 
                     peak_act_final = self.uuid_handler.season_converter(peak_act)
-                    prefix = peak_act_final[0:2]
 
-
-                    if prefix in ("e1", "e2", "e3", "e4") and peak_rank > 20:
+                    if valorant_mmr["LatestCompetitiveUpdate"]["SeasonID"] == self.current_act:
                         self.mmr[puuid] = {
                             "current_data": {
                                 "currenttierpatched": self.ttr[
                                     valorant_mmr["LatestCompetitiveUpdate"]["TierAfterUpdate"]],
-                                "ranking_in_tier": valorant_mmr["LatestCompetitiveUpdate"][
-                                    "RankedRatingAfterUpdate"]
+                                "ranking_in_tier": valorant_mmr["LatestCompetitiveUpdate"]["RankedRatingAfterUpdate"]
                             },
                             "highest_rank": {
-                                "patched_tier": self.ttr[peak_rank + 3],
+                                "patched_tier": self.ttr[peak_rank],
                                 "peak_act": peak_act_final,
                                 "season": peak_act_final
                             }
@@ -283,9 +304,8 @@ class ValoRank:
                     else:
                         self.mmr[puuid] = {
                             "current_data": {
-                                "currenttierpatched": self.ttr[
-                                    valorant_mmr["LatestCompetitiveUpdate"]["TierAfterUpdate"]],
-                                "ranking_in_tier": valorant_mmr["LatestCompetitiveUpdate"]["RankedRatingAfterUpdate"]
+                                "currenttierpatched": "Unranked",
+                                "ranking_in_tier": 50
                             },
                             "highest_rank": {
                                 "patched_tier": self.ttr[peak_rank],
@@ -310,6 +330,8 @@ class ValoRank:
                                                                                                               "v25")
                 self.mmr[puuid]["highest_rank"]["season"] = self.mmr[puuid]["highest_rank"]["season"].replace("e11",
                                                                                                               "v26")
+                self.mmr[puuid]["highest_rank"]["season"] = self.mmr[puuid]["highest_rank"]["season"].replace("e12",
+                                                                                                              "v27")
 
                 self.mmr[puuid]["highest_rank"]["patched_tier"] = self.mmr[puuid]["highest_rank"][
                     "patched_tier"].replace("Unset", "Unranked")

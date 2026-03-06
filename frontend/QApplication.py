@@ -1154,10 +1154,6 @@ class WeaponPopup(QDialog):
         title.setObjectName("title")
         header.addWidget(title, alignment=Qt.AlignCenter)
 
-        subtitle = QLabel("Selected weapon skins")
-        subtitle.setObjectName("subtitle")
-        header.addWidget(subtitle, alignment=Qt.AlignCenter)
-
         main_layout.addLayout(header)
 
         self.tile_width = 300
@@ -1438,7 +1434,7 @@ class ValorantStatsWindow(QMainWindow):
         self.loadouts_button.clicked.connect(self.open_user_loadouts)
         self.loadouts_button.setObjectName("secondaryButton")
 
-        self.load_more_matches_button = QPushButton("Load More Matches (5)")
+        self.load_more_matches_button = QPushButton("Load More Games (5)")
         self.load_more_matches_button.setCursor(Qt.PointingHandCursor)
         self.load_more_matches_button.clicked.connect(self.run_load_more_matches_button)
         self.load_more_matches_button.setObjectName("secondaryButton")
@@ -1542,6 +1538,8 @@ class ValorantStatsWindow(QMainWindow):
         self.seen_match_ids = set()
         self.last_seen = None
 
+        self.puuid = None
+
         self._latency_start_time = None
 
     def closeEvent(self, event: QCloseEvent):
@@ -1616,6 +1614,8 @@ class ValorantStatsWindow(QMainWindow):
             try:
                 handler = LockfileHandler()
                 await handler.lockfile_data_function()
+
+                self.puuid = handler.puuid
 
                 if not handler.port or not handler.password:
                     await asyncio.sleep(5)
@@ -1784,15 +1784,57 @@ class ValorantStatsWindow(QMainWindow):
         button.setCursor(Qt.PointingHandCursor)
         button.setObjectName("compactSkinButton")
 
-        button.setFixedHeight(32)
         button.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
-        button.setText("SKINS")
 
         if skins:
             player_name = str(player.get("name", "Unknown"))
             button.clicked.connect(
                 lambda _, name=player_name, data=skins: self.open_skin_popup(name, data)
             )
+
+            vandal_data = skins.get("Vandal")
+            phantom_data = skins.get("Phantom")
+
+            vandal_id = vandal_data[0] if isinstance(vandal_data, list) and len(vandal_data) > 0 else vandal_data
+            phantom_id = phantom_data[0] if isinstance(phantom_data, list) and len(phantom_data) > 0 else phantom_data
+
+            v_pixmap = self.skin_icons.get(str(vandal_id)) if vandal_id else None
+            if not v_pixmap and vandal_id:
+                v_pixmap = self.skin_icons.get(str(vandal_id).lower())
+
+            p_pixmap = self.skin_icons.get(str(phantom_id)) if phantom_id else None
+            if not p_pixmap and phantom_id:
+                p_pixmap = self.skin_icons.get(str(phantom_id).lower())
+
+            canvas = QPixmap(140, 28)
+            canvas.fill(Qt.transparent)
+            painter = QPainter(canvas)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setRenderHint(QPainter.SmoothPixmapTransform)
+
+            if v_pixmap:
+                scaled_v = v_pixmap.scaled(65, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                x_v = (65 - scaled_v.width()) // 2
+                y_v = (28 - scaled_v.height()) // 2
+                painter.drawPixmap(x_v, y_v, scaled_v)
+            else:
+                painter.setPen(QColor("#8c95b4"))
+                painter.drawText(0, 0, 65, 28, Qt.AlignCenter, "-")
+
+            if p_pixmap:
+                scaled_p = p_pixmap.scaled(65, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                x_p = 75 + (65 - scaled_p.width()) // 2
+                y_p = (28 - scaled_p.height()) // 2
+                painter.drawPixmap(x_p, y_p, scaled_p)
+            else:
+                painter.setPen(QColor("#8c95b4"))
+                painter.drawText(75, 0, 65, 28, Qt.AlignCenter, "-")
+
+            painter.end()
+
+            button.setIcon(QIcon(canvas))
+            button.setIconSize(QSize(140, 28))
+            button.setFixedWidth(160)
         else:
             button.setText("Loadout unavailable")
             button.setEnabled(False)
@@ -1801,7 +1843,10 @@ class ValorantStatsWindow(QMainWindow):
 
     def create_player_row(self, player):
         row = QFrame()
-        row.setObjectName("compactRow")
+        if player.get("puuid") == self.puuid:
+            row.setObjectName("compactRowUser")
+        else:
+            row.setObjectName("compactRow")
         row.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         row_layout = QHBoxLayout(row)
@@ -1866,9 +1911,7 @@ class ValorantStatsWindow(QMainWindow):
         vtl_label.setToolTip("View on VTL.lol")
         name_row.addWidget(vtl_label)
 
-        skin_button = self.create_skin_button(player)
-        name_row.addWidget(skin_button)
-        name_row.addStretch(1)
+        name_row.addStretch()
 
         info_column.addLayout(name_row)
 
@@ -1877,7 +1920,10 @@ class ValorantStatsWindow(QMainWindow):
 
         agent_badge = QLabel(agent_name)
         agent_badge.setObjectName("agentBadge")
-        meta_bar.addWidget(agent_badge)
+
+        skin_button = self.create_skin_button(player)
+        meta_bar.addWidget(skin_button)
+        meta_bar.addStretch(1)
 
         rank_icon_label = QLabel()
         rank_icon_label.setObjectName("compactRankIcon")
@@ -1959,7 +2005,7 @@ class ValorantStatsWindow(QMainWindow):
         stats_row.setSpacing(5)
 
         matches_value = str(player.get("matches", 0))
-        matches_widget, _ = self.create_stat_widget("Match", matches_value)
+        matches_widget, _ = self.create_stat_widget("Games", matches_value)
         stats_row.addWidget(matches_widget)
 
         wl_value = str(player.get("wl", "N/A"))
@@ -1989,21 +2035,23 @@ class ValorantStatsWindow(QMainWindow):
         row_layout.addLayout(info_column, 1)
 
         rank_area_layout = QHBoxLayout()
-        rank_area_layout.setSpacing(12)
+        rank_area_layout.setSpacing(30)
 
         left_rank_col = QVBoxLayout()
         left_rank_col.setContentsMargins(0, 0, 0, 0)
+        left_rank_col.setAlignment(Qt.AlignCenter)
+        left_rank_col.setSpacing(36)
 
         rating_changes_row = QHBoxLayout()
-        rating_changes_row.setAlignment(Qt.AlignRight | Qt.AlignTop)
-        rating_changes_row.setSpacing(2)
+        rating_changes_row.setAlignment(Qt.AlignCenter)
+        rating_changes_row.setSpacing(4)
 
-        rating_changes = player.get("rating_change", [])
+        rating_changes = player.get("rating_change", [])[:3]
         for change in rating_changes:
             text_val = str(change).replace("-", "")
 
             circle_label = QLabel(text_val)
-            circle_label.setFixedSize(28, 28)
+            circle_label.setFixedSize(34, 34)
             circle_label.setAlignment(Qt.AlignCenter)
 
             try:
@@ -2022,18 +2070,26 @@ class ValorantStatsWindow(QMainWindow):
                 text_color = "#ffffff"
 
             circle_label.setStyleSheet(
-                f"background-color: {bg_color}; color: {text_color}; border-radius: 14px; font-weight: 700; font-size: 10px;"
+                f"background-color: {bg_color}; color: {text_color}; border-radius: 16px; font-weight: 700; font-size: 11px;"
             )
             rating_changes_row.addWidget(circle_label)
 
         left_rank_col.addLayout(rating_changes_row)
-        left_rank_col.addStretch(1)
+
+        left_rank_col.addSpacing(12)
 
         peak_row = QHBoxLayout()
-        peak_row.setAlignment(Qt.AlignRight | Qt.AlignBottom)
-        peak_row.setSpacing(4)
+        peak_row.setAlignment(Qt.AlignCenter)
+        peak_row.setSpacing(8)
+
+        peak_act_value = str(player.get("peak_act", "N/A"))
+        peak_act_label = QLabel(peak_act_value if peak_act_value not in ("[]", "") else "N/A")
+        peak_act_label.setAlignment(Qt.AlignCenter)
+        peak_act_label.setStyleSheet("color: #8b96b6; font-size: 16px; font-weight: bold;")
+        peak_row.addWidget(peak_act_label)
 
         peak_icon_label = QLabel()
+        peak_icon_label.setAlignment(Qt.AlignCenter)
         peak_name = str(player.get("peak_rank", "Unknown"))
         peak_icon = self.rank_icons.get(peak_name)
 
@@ -2042,13 +2098,13 @@ class ValorantStatsWindow(QMainWindow):
                 peak_icon.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
             peak_row.addWidget(peak_icon_label)
-
-        peak_act_value = str(player.get("peak_act", "N/A"))
-        peak_act_label = QLabel(peak_act_value if peak_act_value not in ("[]", "") else "N/A")
-        peak_act_label.setStyleSheet("color: #8b96b6; font-size: 30px;")
-        peak_row.addWidget(peak_act_label)
+        elif peak_name not in ("[]", ""):
+            peak_icon_label.setText(peak_name)
+            peak_icon_label.setStyleSheet("color: #8c95b4; font-size: 16px; font-weight: bold;")
+            peak_row.addWidget(peak_icon_label)
 
         left_rank_col.addLayout(peak_row)
+
         rank_area_layout.addLayout(left_rank_col)
 
         right_rank_col = QVBoxLayout()
@@ -2065,7 +2121,7 @@ class ValorantStatsWindow(QMainWindow):
 
         if rank_icon:
             current_rank_icon_label.setPixmap(
-                rank_icon.scaled(130, 130, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                rank_icon.scaled(115, 115, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
         else:
             current_rank_icon_label.setText(rank_name if rank_name not in ("[]", "") else "N/A")
@@ -2199,6 +2255,15 @@ class ValorantStatsWindow(QMainWindow):
             "QFrame#compactRow:hover {"
             " border: 1px solid rgba(86, 104, 138, 0.6);"
             "}"
+            "QFrame#compactRowUser {"
+            " background-color: rgba(20, 28, 45, 0.92);"
+            " border-radius: 16px;"
+            " border: 1px solid rgba(53, 92, 255, 0.35);"
+            "}"
+            "QFrame#compactRowUser:hover {"
+            " border: 1px solid rgba(77, 108, 255, 0.65);"
+            " background-color: rgba(24, 34, 52, 0.92);"
+            "}"
             "QLabel#agentBadge {"
             " background-color: rgba(53, 92, 255, 0.18);"
             " color: #a7bbff;"
@@ -2253,7 +2318,7 @@ class ValorantStatsWindow(QMainWindow):
             "QFrame#compactStat {"
             " background-color: rgba(20, 28, 44, 0.82);"
             " border-radius: 12px;"
-            " padding: 6px 9px;"
+            " padding: 4px 6px;"
             "}"
             "QLabel#compactStatTitle {"
             " color: #7e8aa7;"
