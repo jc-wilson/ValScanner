@@ -1160,8 +1160,8 @@ class WeaponPopup(QDialog):
 
         main_layout.addLayout(header)
 
-        self.tile_width = 240
-        self.tile_height = 150
+        self.tile_width = 300
+        self.tile_height = 167
         columns = 5
 
         grid = QGridLayout()
@@ -1202,7 +1202,7 @@ class WeaponPopup(QDialog):
                 text-transform: uppercase;
             }
             #skinLabel {
-                color: #8c95b4; font-size: 12px; letter-spacing: 1px;
+                color: #d1d1d1; font-size: 12px; font-weight: 600; letter-spacing: 1px;
                 text-transform: uppercase;
             }
             #skinTile {
@@ -1227,12 +1227,7 @@ class WeaponPopup(QDialog):
                 border-radius: 18px;
                 border: 1px solid rgba(255, 255, 255, 0.05);
             }
-            #exitTile QPushButton {
-                background-color: rgba(255, 255, 255, 0.06);
-                border: none; color: #f4f6ff; font-size: 28px;
-                font-weight: 700; border-radius: 16px;
-            }
-            #exitTile QPushButton:hover {
+            #exitTile:hover {
                 background-color: rgba(255, 87, 107, 0.35);
             }
             QToolTip {
@@ -1257,7 +1252,7 @@ class WeaponPopup(QDialog):
         preview = QLabel()
         preview.setObjectName("skinPreview")
         preview.setAlignment(Qt.AlignCenter)
-        preview.setMinimumSize(150, 88)
+        preview.setMinimumSize(250, 120)
         preview.setProperty("empty", "false")
 
         skin_id = skin_data
@@ -1291,23 +1286,23 @@ class WeaponPopup(QDialog):
                 except Exception:
                     pass
 
-                canvas = QPixmap(150, 88)
+                canvas = QPixmap(250, 120)
                 canvas.fill(Qt.transparent)
                 painter = QPainter(canvas)
                 painter.setRenderHint(QPainter.Antialiasing)
                 painter.setRenderHint(QPainter.SmoothPixmapTransform)
 
                 if pixmap:
-                    scaled_skin = pixmap.scaled(150, 88, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                    x_skin = (150 - scaled_skin.width()) // 2
-                    y_skin = (88 - scaled_skin.height()) // 2
+                    scaled_skin = pixmap.scaled(250, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    x_skin = (250 - scaled_skin.width()) // 2
+                    y_skin = (120 - scaled_skin.height()) // 2
                     painter.drawPixmap(x_skin, y_skin, scaled_skin)
 
                     buddy_pixmap = self.buddy_icons.get(str(buddy_id).lower()) if buddy_id else None
                     if buddy_pixmap:
-                        scaled_buddy = buddy_pixmap.scaled(36, 36, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                        scaled_buddy = buddy_pixmap.scaled(44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                         x_buddy = 5
-                        y_buddy = 88 - scaled_buddy.height() - 5
+                        y_buddy = 120 - scaled_buddy.height() - 5
                         painter.drawPixmap(x_buddy, y_buddy, scaled_buddy)
 
                     preview.setPixmap(canvas)
@@ -1323,27 +1318,19 @@ class WeaponPopup(QDialog):
         return tile
 
     def build_exit_tile(self):
-        tile = QFrame()
+        tile = QPushButton("X")
         tile.setObjectName("exitTile")
 
         full_width = (self.tile_width * 5) + (20 * 4)
-        tile.setFixedSize(full_width, self.tile_height)
+        tile.setFixedSize(full_width, (int(self.tile_height / 2)))
 
         layout = QVBoxLayout(tile)
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(10)
         layout.setAlignment(Qt.AlignCenter)
 
-        label = QLabel("Close")
-        label.setObjectName("weaponLabel")
-        label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(label)
-
-        exit_button = QPushButton("×")
-        exit_button.setFixedSize(96, 48)
-        exit_button.setCursor(Qt.PointingHandCursor)
-        exit_button.clicked.connect(self.close)
-        layout.addWidget(exit_button, alignment=Qt.AlignCenter)
+        tile.setCursor(Qt.PointingHandCursor)
+        tile.clicked.connect(self.close)
 
         return tile
 
