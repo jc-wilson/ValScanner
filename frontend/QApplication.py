@@ -1764,8 +1764,8 @@ class ValorantStatsWindow(QMainWindow):
     def create_stat_widget(self, title, value):
         wrapper = QFrame()
         wrapper.setObjectName("compactStat")
-        wrapper.setMinimumWidth(90)
-        wrapper.setMaximumWidth(90)
+        wrapper.setMinimumWidth(75)
+        wrapper.setMaximumWidth(75)
         layout = QVBoxLayout(wrapper)
         layout.setContentsMargins(8, 5, 8, 5)
         layout.setSpacing(2)
@@ -1802,6 +1802,7 @@ class ValorantStatsWindow(QMainWindow):
     def create_player_row(self, player):
         row = QFrame()
         row.setObjectName("compactRow")
+        row.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         row_layout = QHBoxLayout(row)
         row_layout.setContentsMargins(12, 9, 12, 9)
@@ -1955,10 +1956,10 @@ class ValorantStatsWindow(QMainWindow):
         info_column.addLayout(meta_bar)
 
         stats_row = QHBoxLayout()
-        stats_row.setSpacing(10)
+        stats_row.setSpacing(5)
 
         matches_value = str(player.get("matches", 0))
-        matches_widget, _ = self.create_stat_widget("Matches", matches_value)
+        matches_widget, _ = self.create_stat_widget("Match", matches_value)
         stats_row.addWidget(matches_widget)
 
         wl_value = str(player.get("wl", "N/A"))
@@ -1987,36 +1988,15 @@ class ValorantStatsWindow(QMainWindow):
         info_column.addLayout(stats_row)
         row_layout.addLayout(info_column, 1)
 
-        rank_column = QVBoxLayout()
-        rank_column.setAlignment(Qt.AlignCenter)
-        rank_column.setSpacing(2)
+        rank_area_layout = QHBoxLayout()
+        rank_area_layout.setSpacing(12)
 
-        current_rank_icon_label = QLabel()
-        current_rank_icon_label.setAlignment(Qt.AlignCenter)
-
-        rank_name = str(player.get("rank", "Unknown"))
-        rank_icon = self.rank_icons.get(rank_name)
-
-        if rank_icon:
-            current_rank_icon_label.setPixmap(
-                rank_icon.scaled(76, 76, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            )
-        else:
-            current_rank_icon_label.setText(rank_name if rank_name not in ("[]", "") else "N/A")
-            current_rank_icon_label.setStyleSheet("color: #8c95b4; font-size: 14px; font-weight: bold;")
-
-        rank_column.addWidget(current_rank_icon_label)
-
-        rr_value = str(player.get("rr", "N/A"))
-        rr_text = "N/A" if rr_value == "N/A" else f"{rr_value} RR"
-        rr_label = QLabel(rr_text)
-        rr_label.setAlignment(Qt.AlignCenter)
-        rr_label.setStyleSheet("color: #f4f6ff; font-size: 14px; font-weight: bold;")
-        rank_column.addWidget(rr_label)
+        left_rank_col = QVBoxLayout()
+        left_rank_col.setContentsMargins(0, 0, 0, 0)
 
         rating_changes_row = QHBoxLayout()
-        rating_changes_row.setAlignment(Qt.AlignCenter)
-        rating_changes_row.setSpacing(1)
+        rating_changes_row.setAlignment(Qt.AlignRight | Qt.AlignTop)
+        rating_changes_row.setSpacing(2)
 
         rating_changes = player.get("rating_change", [])
         for change in rating_changes:
@@ -2046,10 +2026,11 @@ class ValorantStatsWindow(QMainWindow):
             )
             rating_changes_row.addWidget(circle_label)
 
-        rank_column.addLayout(rating_changes_row)
+        left_rank_col.addLayout(rating_changes_row)
+        left_rank_col.addStretch(1)
 
         peak_row = QHBoxLayout()
-        peak_row.setAlignment(Qt.AlignCenter)
+        peak_row.setAlignment(Qt.AlignRight | Qt.AlignBottom)
         peak_row.setSpacing(4)
 
         peak_icon_label = QLabel()
@@ -2058,19 +2039,61 @@ class ValorantStatsWindow(QMainWindow):
 
         if peak_icon:
             peak_icon_label.setPixmap(
-                peak_icon.scaled(18, 18, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                peak_icon.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
-
-        peak_text_label = QLabel(f"Peak: {peak_name}" if peak_name not in ("[]", "") else "Peak: N/A")
-        peak_text_label.setStyleSheet("color: #8b96b6; font-size: 11px;")
-
-        if peak_icon:
             peak_row.addWidget(peak_icon_label)
-        peak_row.addWidget(peak_text_label)
 
-        rank_column.addLayout(peak_row)
+        peak_act_value = str(player.get("peak_act", "N/A"))
+        peak_act_label = QLabel(peak_act_value if peak_act_value not in ("[]", "") else "N/A")
+        peak_act_label.setStyleSheet("color: #8b96b6; font-size: 30px;")
+        peak_row.addWidget(peak_act_label)
 
-        row_layout.addLayout(rank_column)
+        left_rank_col.addLayout(peak_row)
+        rank_area_layout.addLayout(left_rank_col)
+
+        right_rank_col = QVBoxLayout()
+        right_rank_col.setAlignment(Qt.AlignCenter)
+        right_rank_col.setContentsMargins(0, 0, 0, 0)
+        right_rank_col.setSpacing(6)
+
+        current_rank_icon_label = QLabel()
+        current_rank_icon_label.setAlignment(Qt.AlignCenter)
+        current_rank_icon_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        rank_name = str(player.get("rank", "Unknown"))
+        rank_icon = self.rank_icons.get(rank_name)
+
+        if rank_icon:
+            current_rank_icon_label.setPixmap(
+                rank_icon.scaled(130, 130, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+        else:
+            current_rank_icon_label.setText(rank_name if rank_name not in ("[]", "") else "N/A")
+            current_rank_icon_label.setStyleSheet("color: #8c95b4; font-size: 14px; font-weight: bold;")
+
+        right_rank_col.addWidget(current_rank_icon_label, 1)
+
+        rr_value_str = str(player.get("rr", "N/A"))
+        try:
+            rr_val = int(rr_value_str)
+        except ValueError:
+            rr_val = 0
+
+        rr_bar = QProgressBar()
+        rr_bar.setRange(0, 100)
+        rr_bar.setValue(rr_val)
+        rr_bar.setTextVisible(False)
+        rr_bar.setFixedHeight(7)
+        rr_bar.setFixedWidth(108)
+        rr_bar.setToolTip(f"{rr_value_str} RR")
+        rr_bar.setStyleSheet(
+            "QProgressBar { background-color: rgba(255, 255, 255, 0.05); border-radius: 3px; border: none; } QProgressBar::chunk { background-color: #355cff; border-radius: 3px; }")
+
+        right_rank_col.addWidget(rr_bar, 0, Qt.AlignHCenter | Qt.AlignBottom)
+
+        rank_area_layout.addLayout(right_rank_col)
+
+        row_layout.addLayout(rank_area_layout)
 
         return row
 
