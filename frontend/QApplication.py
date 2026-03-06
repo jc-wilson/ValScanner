@@ -1764,7 +1764,8 @@ class ValorantStatsWindow(QMainWindow):
     def create_stat_widget(self, title, value):
         wrapper = QFrame()
         wrapper.setObjectName("compactStat")
-        wrapper.setMinimumWidth(65)
+        wrapper.setMinimumWidth(90)
+        wrapper.setMaximumWidth(90)
         layout = QVBoxLayout(wrapper)
         layout.setContentsMargins(8, 5, 8, 5)
         layout.setSpacing(2)
@@ -1890,16 +1891,13 @@ class ValorantStatsWindow(QMainWindow):
             )
         else:
             rank_icon_label.setText(rank_name if rank_name not in ("[]", "") else "N/A")
-        meta_bar.addWidget(rank_icon_label)
 
         rank_text = QLabel(rank_name if rank_name not in ("[]", "") else "N/A")
         rank_text.setObjectName("metaValue")
-        meta_bar.addWidget(rank_text)
 
         rr_value = str(player.get("rr", "N/A"))
         rr_label = QLabel("RR N/A" if rr_value == "N/A" else f"{rr_value} RR")
         rr_label.setObjectName("metaAux")
-        meta_bar.addWidget(rr_label)
 
         peak_icon_label = QLabel()
         peak_icon_label.setObjectName("compactRankIcon")
@@ -1916,18 +1914,15 @@ class ValorantStatsWindow(QMainWindow):
             peak_icon_label.setText("N/A")
         else:
             peak_icon_label.setText(peak_name)
-        meta_bar.addWidget(peak_icon_label)
 
         peak_text = QLabel(peak_name if peak_name not in ("[]", "") else "N/A")
         peak_text.setObjectName("metaValue")
-        meta_bar.addWidget(peak_text)
 
         peak_act_value = str(player.get("peak_act", "N/A"))
         peak_act_label = QLabel(
             peak_act_value if peak_act_value not in ("[]", "") else "Act N/A"
         )
         peak_act_label.setObjectName("metaAux")
-        meta_bar.addWidget(peak_act_label)
 
         meta_bar.addStretch(1)
 
@@ -1956,7 +1951,6 @@ class ValorantStatsWindow(QMainWindow):
 
             circle_label.setStyleSheet(
                 f"background-color: {bg_color}; color: {text_color}; border-radius: 16px; font-weight: 700; font-size: 11px;")
-            meta_bar.addWidget(circle_label)
 
         info_column.addLayout(meta_bar)
 
@@ -1988,8 +1982,95 @@ class ValorantStatsWindow(QMainWindow):
         self.apply_stat_colour(hs_label, str(hs_raw), "hs")
         stats_row.addWidget(hs_widget)
 
+        stats_row.addStretch()
+
         info_column.addLayout(stats_row)
         row_layout.addLayout(info_column, 1)
+
+        rank_column = QVBoxLayout()
+        rank_column.setAlignment(Qt.AlignCenter)
+        rank_column.setSpacing(2)
+
+        current_rank_icon_label = QLabel()
+        current_rank_icon_label.setAlignment(Qt.AlignCenter)
+
+        rank_name = str(player.get("rank", "Unknown"))
+        rank_icon = self.rank_icons.get(rank_name)
+
+        if rank_icon:
+            current_rank_icon_label.setPixmap(
+                rank_icon.scaled(76, 76, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+        else:
+            current_rank_icon_label.setText(rank_name if rank_name not in ("[]", "") else "N/A")
+            current_rank_icon_label.setStyleSheet("color: #8c95b4; font-size: 14px; font-weight: bold;")
+
+        rank_column.addWidget(current_rank_icon_label)
+
+        rr_value = str(player.get("rr", "N/A"))
+        rr_text = "N/A" if rr_value == "N/A" else f"{rr_value} RR"
+        rr_label = QLabel(rr_text)
+        rr_label.setAlignment(Qt.AlignCenter)
+        rr_label.setStyleSheet("color: #f4f6ff; font-size: 14px; font-weight: bold;")
+        rank_column.addWidget(rr_label)
+
+        rating_changes_row = QHBoxLayout()
+        rating_changes_row.setAlignment(Qt.AlignCenter)
+        rating_changes_row.setSpacing(1)
+
+        rating_changes = player.get("rating_change", [])
+        for change in rating_changes:
+            text_val = str(change).replace("-", "")
+
+            circle_label = QLabel(text_val)
+            circle_label.setFixedSize(28, 28)
+            circle_label.setAlignment(Qt.AlignCenter)
+
+            try:
+                val = float(change)
+                if val > 0:
+                    bg_color = "#32e2b2"
+                    text_color = "#000000"
+                elif val < 0:
+                    bg_color = "#ff4654"
+                    text_color = "#ffffff"
+                else:
+                    bg_color = "#7f7f7f"
+                    text_color = "#ffffff"
+            except (ValueError, TypeError):
+                bg_color = "#7f7f7f"
+                text_color = "#ffffff"
+
+            circle_label.setStyleSheet(
+                f"background-color: {bg_color}; color: {text_color}; border-radius: 14px; font-weight: 700; font-size: 10px;"
+            )
+            rating_changes_row.addWidget(circle_label)
+
+        rank_column.addLayout(rating_changes_row)
+
+        peak_row = QHBoxLayout()
+        peak_row.setAlignment(Qt.AlignCenter)
+        peak_row.setSpacing(4)
+
+        peak_icon_label = QLabel()
+        peak_name = str(player.get("peak_rank", "Unknown"))
+        peak_icon = self.rank_icons.get(peak_name)
+
+        if peak_icon:
+            peak_icon_label.setPixmap(
+                peak_icon.scaled(18, 18, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+
+        peak_text_label = QLabel(f"Peak: {peak_name}" if peak_name not in ("[]", "") else "Peak: N/A")
+        peak_text_label.setStyleSheet("color: #8b96b6; font-size: 11px;")
+
+        if peak_icon:
+            peak_row.addWidget(peak_icon_label)
+        peak_row.addWidget(peak_text_label)
+
+        rank_column.addLayout(peak_row)
+
+        row_layout.addLayout(rank_column)
 
         return row
 
