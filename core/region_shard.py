@@ -6,16 +6,14 @@ from functools import lru_cache
 @lru_cache(maxsize=1)
 def region_shard_func():
     # Finds ShooterGameLog
-    sgl_loc = rf"{os.getenv("LOCALAPPDATA")}\VALORANT\Saved\Logs\ShooterGame.log"
+    sgl_loc = rf"{os.getenv('LOCALAPPDATA')}\VALORANT\Saved\Logs\ShooterGame.log"
     if os.path.exists(Path(rf'{sgl_loc}')):
         sgl_path = Path(rf'{sgl_loc}')
 
-        # Reads Lockfile
-        sgl_read = open(sgl_path, "r")
+        sgl_read = open(sgl_path, "r", encoding="utf-8", errors="ignore")
         sgl_data = sgl_read.read()
         sgl_read.close()
 
-        # Finds endpoint that contains region and shard
         endpoint = re.search("https://glz-(.+?)-1.(.+?).a.pvp.net", sgl_data)
         region = endpoint.group()[12:14]
         shard = endpoint.group()[17:19]
