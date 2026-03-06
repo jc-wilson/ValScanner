@@ -1126,11 +1126,12 @@ class WeaponPopup(QDialog):
         "Knife",
     ]
 
-    def __init__(self, player_name, skins, skin_icons, uuid_handler, parent=None):
+    def __init__(self, player_name, skins, skin_icons, buddy_icons, uuid_handler, parent=None):
         super().__init__(parent)
 
         self.skins = skins or {}
         self.skin_icons = skin_icons or {}
+        self.buddy_icons = buddy_icons or {}
         self.uuid_handler = uuid_handler
         player_display = player_name or "Unknown"
 
@@ -1243,7 +1244,7 @@ class WeaponPopup(QDialog):
 
         self.resize(1200, 750)
 
-    def build_skin_tile(self, weapon, skin_id):
+    def build_skin_tile(self, weapon, skin_data):
         tile = QFrame()
         tile.setObjectName("skinTile")
         tile.setFixedSize(self.tile_width, self.tile_height)
@@ -1259,13 +1260,15 @@ class WeaponPopup(QDialog):
         preview.setMinimumSize(150, 88)
         preview.setProperty("empty", "false")
 
-        pixmap = None
-        if skin_id:
-            if hasattr(self, "skin_icons"):
-                pixmap = self.skin_icons.get(str(skin_id))
-            else:
-                pixmap = None
+        skin_id = skin_data
+        buddy_id = None
+        if isinstance(skin_data, list):
+            skin_id = skin_data[0] if len(skin_data) > 0 else None
+            buddy_id = skin_data[1] if len(skin_data) > 1 else None
 
+        pixmap = self.skin_icons.get(str(skin_id)) if skin_id else None
+
+        if skin_id:
             if self.uuid_handler:
                 try:
                     skin_name = self.uuid_handler.skin_converter(skin_id)
@@ -1288,13 +1291,30 @@ class WeaponPopup(QDialog):
                 except Exception:
                     pass
 
-        if pixmap:
-            preview.setPixmap(
-                pixmap.scaled(150, 88, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            )
-        else:
-            preview.setText("No Skin")
-            preview.setProperty("empty", "true")
+                canvas = QPixmap(150, 88)
+                canvas.fill(Qt.transparent)
+                painter = QPainter(canvas)
+                painter.setRenderHint(QPainter.Antialiasing)
+                painter.setRenderHint(QPainter.SmoothPixmapTransform)
+
+                if pixmap:
+                    scaled_skin = pixmap.scaled(150, 88, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    x_skin = (150 - scaled_skin.width()) // 2
+                    y_skin = (88 - scaled_skin.height()) // 2
+                    painter.drawPixmap(x_skin, y_skin, scaled_skin)
+
+                    buddy_pixmap = self.buddy_icons.get(str(buddy_id).lower()) if buddy_id else None
+                    if buddy_pixmap:
+                        scaled_buddy = buddy_pixmap.scaled(36, 36, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                        x_buddy = 5
+                        y_buddy = 88 - scaled_buddy.height() - 5
+                        painter.drawPixmap(x_buddy, y_buddy, scaled_buddy)
+
+                    preview.setPixmap(canvas)
+                else:
+                    preview.setText("No Skin")
+                    preview.setProperty("empty", "true")
+                painter.end()
 
         preview.style().unpolish(preview)
         preview.style().polish(preview)
@@ -1686,7 +1706,14 @@ class ValorantStatsWindow(QMainWindow):
         self.buddy_icons = task.result()
 
     def open_skin_popup(self, player_name, skins):
-        popup = WeaponPopup(player_name, skins, getattr(self, "skin_icons", {}), self.uuid_handler, self)
+        popup = WeaponPopup(
+            player_name,
+            skins,
+            getattr(self, "skin_icons", {}),
+            getattr(self, "buddy_icons", {}),
+            self.uuid_handler,
+            self,
+        )
         popup.exec()
 
     def build_meta_chip(self, label_text):
