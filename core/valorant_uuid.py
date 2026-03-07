@@ -2,6 +2,8 @@ import os
 import sys
 import requests
 import json
+from datetime import datetime
+import time
 from core.http_session import SharedSession
 
 
@@ -207,3 +209,15 @@ class UUIDHandler:
             result = "v25a5"
 
         return result
+
+    def current_season(self):
+        date = time.time()
+        for season in self.season_uuids["data"]:
+            if season["type"] != "EAresSeasonType::Act":
+                continue
+            start_time = datetime.fromisoformat(season["startTime"]).timestamp()
+            end_time = datetime.fromisoformat(season["endTime"]).timestamp()
+
+            if start_time <= date <= end_time:
+                return season["uuid"]
+        return None

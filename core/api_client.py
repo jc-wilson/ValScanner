@@ -38,7 +38,7 @@ class ValoRank:
         self.uuid_handler.season_uuid_function()
         self.skin_handler = SkinHandler()
         self.version_data = self.get_version_from_log()
-        self.current_act = "3ea2b318-423b-cf86-25da-7cbb0eefbe2d"
+        self.current_act = self.uuid_handler.current_season()
         self.e1_to_e4 = [
             "3f61c772-4560-cd3f-5d3f-a7ab5abda6b3",
             "0530b9c4-4980-f2ee-df5d-09864cd00542",
