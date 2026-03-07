@@ -31,7 +31,7 @@ from core.owned_skins import OwnedSkins
 from core.player_loadout import PlayerLoadout
 from core.http_session import SharedSession
 
-CURRENT_VERSION = "1.6.1"
+CURRENT_VERSION = "1.6.2"
 UPDATE_CHECK_URL = "https://WWTB.app/version.json"
 WEBSITE_URL = "https://WWTB.app/"
 
