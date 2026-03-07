@@ -9,8 +9,8 @@ from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect, QSizePolicy, QProgressBar, QCheckBox,
     QGraphicsOpacityEffect, QLineEdit
 )
-from PySide6.QtCore import Qt, QTimer, QSize, QPropertyAnimation, Property, QEasingCurve
-from PySide6.QtGui import QPixmap, QIcon, QFontDatabase, QFont, QColor, QPainter, QCloseEvent
+from PySide6.QtCore import Qt, QTimer, QSize, QPropertyAnimation, Property, QEasingCurve, QUrl
+from PySide6.QtGui import QPixmap, QIcon, QFontDatabase, QFont, QColor, QPainter, QCloseEvent, QDesktopServices
 import sys
 import os
 import random
@@ -20,6 +20,7 @@ import websockets
 import ssl
 import base64
 import json
+import requests
 from core.api_client import ValoRank
 from core.dodge_button import dodge
 from core.instalock_agent import instalock_agent
@@ -29,6 +30,10 @@ from core.owned_agents import OwnedAgents
 from core.owned_skins import OwnedSkins
 from core.player_loadout import PlayerLoadout
 from core.http_session import SharedSession
+
+CURRENT_VERSION = "1.6.1"
+UPDATE_CHECK_URL = "https://WWTB.app/version.json"
+WEBSITE_URL = "https://WWTB.app/"
 
 
 def resource_path(relative_path):
@@ -2614,11 +2619,106 @@ class ValorantStatsWindow(QMainWindow):
         self.gamemode_value.setText(gamemode)
         self.server_value.setText(server)
 
+class UpdatePopup(QDialog):
+    def __init__(self, latest_version, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+
+        container = QWidget(self)
+        container.setObjectName("popupCard")
+        container.setFixedSize(400, 200)
+
+        main_layout = QVBoxLayout(container)
+        main_layout.setContentsMargins(30, 30, 30, 30)
+        main_layout.setSpacing(16)
+
+        title = QLabel("Update Available!")
+        title.setObjectName("title")
+        title.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(title)
+
+        msg = QLabel(f"Version {latest_version} is available.\nYou are currently on version {CURRENT_VERSION}.")
+        msg.setObjectName("subtitle")
+        msg.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(msg)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
+
+        update_btn = QPushButton("Download Update")
+        update_btn.setObjectName("accentButton")
+        update_btn.setCursor(Qt.PointingHandCursor)
+        update_btn.setFixedSize(160, 40)
+        update_btn.clicked.connect(self.open_website)
+
+        close_btn = QPushButton("Later")
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setFixedSize(100, 40)
+        close_btn.clicked.connect(self.close)
+
+        btn_layout.addStretch()
+        btn_layout.addWidget(update_btn)
+        btn_layout.addWidget(close_btn)
+        btn_layout.addStretch()
+
+        main_layout.addLayout(btn_layout)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(40, 40, 40, 40)
+        outer.addWidget(container)
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(50)
+        shadow.setOffset(0, 12)
+        shadow.setColor(QColor(0, 0, 0, 180))
+        container.setGraphicsEffect(shadow)
+
+        self.setStyleSheet("""
+            #popupCard {
+                background-color: #1a1f2e;
+                border-radius: 22px;
+                border: 1px solid rgba(255, 255, 255, 0.05);
+            }
+            #title { color: #e3e8ff; font-size: 22px; font-weight: 600; }
+            #subtitle { color: #a0abcc; font-size: 14px; }
+            QPushButton {
+                background-color: rgba(255, 255, 255, 0.06);
+                border: none; color: #f4f6ff; font-size: 14px;
+                font-weight: 700; border-radius: 12px;
+            }
+            QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }
+            QPushButton#accentButton {
+                background-color: #355cff;
+            }
+            QPushButton#accentButton:hover {
+                background-color: #4668ff;
+            }
+        """)
+
+    def open_website(self):
+        QDesktopServices.openUrl(QUrl(WEBSITE_URL))
+        self.accept()
+
+def check_for_updates():
+    try:
+        response = requests.get(UPDATE_CHECK_URL, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            latest_version = data.get("tag_name", CURRENT_VERSION).replace("v", "")
+            if latest_version != CURRENT_VERSION:
+                popup = UpdatePopup(latest_version)
+                popup.exec()
+    except Exception:
+        pass
+
 
 async def main():
+    check_for_updates()
+
     window = ValorantStatsWindow([])
-    window.show()
     await window.init_agents()
+    window.show()
     asyncio.create_task(window.refresh_data())
     return window
 
