@@ -152,12 +152,20 @@ class UUIDHandler:
             variants.insert(0, uuid)
         return variants
 
-    def loadout_uuid_function(self, uuid):
-        print(uuid)
+    def loadout_uuid_function(self, uuid, owned_levels):
         for skin in self.skin_uuids["data"]:
             for chroma in skin["chromas"]:
                 if chroma["uuid"] == uuid:
-                    return [skin["uuid"], skin["levels"][-1]["uuid"], uuid]
+                    if skin["levels"][-1]["uuid"] in owned_levels:
+                        return [skin["uuid"], skin["levels"][-1]["uuid"], uuid]
+                    elif skin["levels"][-2]["uuid"] in owned_levels:
+                        return [skin["uuid"], skin["levels"][-2]["uuid"], uuid]
+                    elif skin["levels"][-3]["uuid"] in owned_levels:
+                        return [skin["uuid"], skin["levels"][-3]["uuid"], uuid]
+                    elif skin["levels"][-4]["uuid"] in owned_levels:
+                        return [skin["uuid"], skin["levels"][-3]["uuid"], uuid]
+                    else:
+                        return [skin["uuid"], skin["levels"][0]["uuid"], uuid]
         return ["", "", ""]
 
     def season_uuid_function(self):

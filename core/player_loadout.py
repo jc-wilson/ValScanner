@@ -32,13 +32,11 @@ class PlayerLoadout:
             if resp.status == 200:
                 self.current_loadout = await resp.json()
 
-        print(f"Current loadout: {self.current_loadout}")
-
-    async def modify_loadout(self, desired_skins, uuid_handler):
+    async def modify_loadout(self, desired_skins, owned_levels, uuid_handler):
         await self.get_loadout()
 
         for skin in desired_skins:
-            self.IDs.append(uuid_handler.loadout_uuid_function(skin))
+            self.IDs.append(uuid_handler.loadout_uuid_function(skin, owned_levels))
 
         self.modified_loadout = self.current_loadout.copy()
 

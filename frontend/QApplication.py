@@ -651,7 +651,7 @@ class LoadoutsPopup(QDialog):
                 func = PlayerLoadout().modify_loadout
 
             import inspect
-            result = func(preset_data, self.uuid_handler)
+            result = func(preset_data, self.owned_skins, self.uuid_handler)
             if inspect.isawaitable(result):
                 await result
 
