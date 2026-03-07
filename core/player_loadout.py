@@ -35,6 +35,9 @@ class PlayerLoadout:
     async def modify_loadout(self, desired_skins, owned_levels, uuid_handler):
         await self.get_loadout()
 
+        owned_levels = owned_levels["Skins"]
+        owned_levels = [level for sublist in owned_levels.values() for level in sublist]
+
         for skin in desired_skins:
             self.IDs.append(uuid_handler.loadout_uuid_function(skin, owned_levels))
 
