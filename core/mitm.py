@@ -2,10 +2,7 @@ import asyncio
 import json
 import subprocess
 import threading
-from datetime import datetime
 from pathlib import Path
-
-import aiofiles
 
 from core.ConfigMITM import ConfigMITM
 from core.SharedValues import host, port, xmppPort
@@ -18,6 +15,28 @@ TRACKED_PROCESS_NAMES = [
     "VALORANT.exe",
     "VALORANT-Win64-Shipping.exe",
 ]
+
+
+class InMemoryLogStream:
+    def __init__(self, max_entries: int = 5000):
+        self.max_entries = max_entries
+        self.entries = []
+        self._lock = asyncio.Lock()
+        self._closed = False
+
+    async def write(self, message: str) -> None:
+        if self._closed:
+            return
+        async with self._lock:
+            self.entries.append(message)
+            if len(self.entries) > self.max_entries:
+                del self.entries[:-self.max_entries]
+
+    async def flush(self) -> None:
+        return
+
+    async def close(self) -> None:
+        self._closed = True
 
 
 async def is_process_running(process_name: str) -> bool:
@@ -80,13 +99,9 @@ class RiotMitmService:
         if self._started:
             return
 
-        log_dir = Path("./logs")
-        log_dir.mkdir(parents=True, exist_ok=True)
-        log_path = log_dir / f"{int(datetime.now().timestamp())}.txt"
-
-        self._log_stream = await aiofiles.open(log_path, mode="w", encoding="utf-8")
+        self._log_stream = InMemoryLogStream()
         await self._log_stream.write(json.dumps({
-            "type": "valorant-xmpp-logger-python",
+            "type": "ValScanner-xmpp-logger-python",
             "version": "1.0.0",
         }) + "\n")
 

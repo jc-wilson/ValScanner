@@ -37,6 +37,26 @@ CURRENT_VERSION = "1.6.2"
 UPDATE_CHECK_URL = "https://ValScanner.com/version.json"
 WEBSITE_URL = "https://ValScanner.com/"
 
+THEME_MAIN = "#111823"
+THEME_WINDOW = "#0a1018"
+THEME_PANEL = "#0f1722"
+THEME_CARD = "#131d2a"
+THEME_CARD_ALT = "#182536"
+THEME_BORDER = "#27384d"
+THEME_BORDER_SOFT = "#203043"
+THEME_TEXT = "#eef4ff"
+THEME_MUTED = "#93a4bb"
+THEME_ACCENT = "#4da3ff"
+THEME_ACCENT_HOVER = "#6ab4ff"
+THEME_ACCENT_PRESSED = "#347fda"
+THEME_TEAL = "#46d7b0"
+THEME_TEAL_HOVER = "#63e4c0"
+THEME_RED = "#c65a61"
+THEME_RED_HOVER = "#d87077"
+THEME_RED_PRESSED = "#ad4951"
+THEME_GOLD = "#f0b35a"
+THEME_CYAN = "#7ae6ff"
+
 
 def resource_path(relative_path):
     if getattr(sys, 'frozen', False):
@@ -105,20 +125,20 @@ class VariantSelectorPopup(QDialog):
         shadow.setColor(QColor(0, 0, 0, 180))
         container.setGraphicsEffect(shadow)
 
-        self.setStyleSheet("""
-            #popupCard { background-color: #1a1f2e; border-radius: 22px; border: 1px solid rgba(255, 255, 255, 0.05); }
-            #title { color: #e3e8ff; font-size: 26px; font-weight: 600; margin-bottom: 20px;}
-            #skinLabel { color: #8c95b4; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
-            #skinTile { background-color: #13192a; border-radius: 18px; border: 1px solid rgba(255, 255, 255, 0.05); }
-            #skinTile:hover { border: 1px solid rgba(77, 108, 255, 0.6); background-color: #192139; }
-            #skinPreview { background-color: rgba(7, 10, 19, 0.6); border-radius: 12px; border: 1px dashed rgba(255, 255, 255, 0.08); }
-            #skinPreview[empty="true"] { color: #8c95b4; font-size: 11px; letter-spacing: 1px; }
-            QPushButton { background-color: rgba(255, 255, 255, 0.06); border: none; color: #f4f6ff; font-size: 18px; font-weight: 700; border-radius: 16px; }
-            QPushButton:hover { background-color: rgba(255, 87, 107, 0.35); }
-            QToolTip { background-color: #0b0f19; color: #f4f6ff; border: 1px solid rgba(77, 108, 255, 0.3); border-radius: 4px; padding: 4px 8px; font-size: 12px; }
-            QScrollBar:vertical { background: transparent; width: 14px; margin: 0px 0px 0px 0px; }
-            QScrollBar::handle:vertical { background: rgba(66, 86, 124, 0.8); min-height: 32px; border-radius: 7px; }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { background: none; height: 0px; }
+        self.setStyleSheet(f"""
+            #popupCard {{ background-color: {THEME_MAIN}; border-radius: 22px; border: 1px solid {THEME_BORDER_SOFT}; }}
+            #title {{ color: {THEME_TEXT}; font-size: 26px; font-weight: 600; margin-bottom: 20px;}}
+            #skinLabel {{ color: {THEME_MUTED}; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }}
+            #skinTile {{ background-color: {THEME_CARD}; border-radius: 18px; border: 1px solid {THEME_BORDER_SOFT}; }}
+            #skinTile:hover {{ border: 1px solid {THEME_ACCENT}; background-color: {THEME_CARD_ALT}; }}
+            #skinPreview {{ background-color: {THEME_WINDOW}; border-radius: 12px; border: 1px dashed {THEME_BORDER_SOFT}; }}
+            #skinPreview[empty="true"] {{ color: {THEME_MUTED}; font-size: 11px; letter-spacing: 1px; }}
+            QPushButton {{ background-color: {THEME_CARD_ALT}; border: none; color: {THEME_TEXT}; font-size: 18px; font-weight: 700; border-radius: 16px; }}
+            QPushButton:hover {{ background-color: {THEME_ACCENT}; }}
+            QToolTip {{ background-color: {THEME_WINDOW}; color: {THEME_TEXT}; border: 1px solid {THEME_BORDER}; border-radius: 4px; padding: 4px 8px; font-size: 12px; }}
+            QScrollBar:vertical {{ background: transparent; width: 14px; margin: 0px; }}
+            QScrollBar::handle:vertical {{ background: {THEME_BORDER}; min-height: 32px; border-radius: 7px; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ background: none; height: 0px; }}
         """)
 
     def build_variant_tile(self, variant_id):
@@ -282,20 +302,20 @@ class SkinSelectorPopup(QDialog):
         shadow.setColor(QColor(0, 0, 0, 180))
         container.setGraphicsEffect(shadow)
 
-        self.setStyleSheet("""
-            #popupCard { background-color: #1a1f2e; border-radius: 22px; border: 1px solid rgba(255, 255, 255, 0.05); }
-            #title { color: #e3e8ff; font-size: 26px; font-weight: 600; margin-bottom: 20px;}
-            #skinLabel { color: #8c95b4; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
-            #skinTile { background-color: #13192a; border-radius: 18px; border: 1px solid rgba(255, 255, 255, 0.05); }
-            #skinTile:hover { border: 1px solid rgba(77, 108, 255, 0.6); background-color: #192139; }
-            #skinPreview { background-color: rgba(7, 10, 19, 0.6); border-radius: 12px; border: 1px dashed rgba(255, 255, 255, 0.08); }
-            #skinPreview[empty="true"] { color: #8c95b4; font-size: 11px; letter-spacing: 1px; }
-            QPushButton { background-color: rgba(255, 255, 255, 0.06); border: none; color: #f4f6ff; font-size: 18px; font-weight: 700; border-radius: 16px; }
-            QPushButton:hover { background-color: rgba(255, 87, 107, 0.35); }
-            QToolTip { background-color: #0b0f19; color: #f4f6ff; border: 1px solid rgba(77, 108, 255, 0.3); border-radius: 4px; padding: 4px 8px; font-size: 12px; }
-            QScrollBar:vertical { background: transparent; width: 14px; margin: 0px 0px 0px 0px; }
-            QScrollBar::handle:vertical { background: rgba(66, 86, 124, 0.8); min-height: 32px; border-radius: 7px; }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { background: none; height: 0px; }
+        self.setStyleSheet(f"""
+            #popupCard {{ background-color: {THEME_MAIN}; border-radius: 22px; border: 1px solid {THEME_BORDER_SOFT}; }}
+            #title {{ color: {THEME_TEXT}; font-size: 26px; font-weight: 600; margin-bottom: 20px;}}
+            #skinLabel {{ color: {THEME_MUTED}; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }}
+            #skinTile {{ background-color: {THEME_CARD}; border-radius: 18px; border: 1px solid {THEME_BORDER_SOFT}; }}
+            #skinTile:hover {{ border: 1px solid {THEME_ACCENT}; background-color: {THEME_CARD_ALT}; }}
+            #skinPreview {{ background-color: {THEME_WINDOW}; border-radius: 12px; border: 1px dashed {THEME_BORDER_SOFT}; }}
+            #skinPreview[empty="true"] {{ color: {THEME_MUTED}; font-size: 11px; letter-spacing: 1px; }}
+            QPushButton {{ background-color: {THEME_CARD_ALT}; border: none; color: {THEME_TEXT}; font-size: 18px; font-weight: 700; border-radius: 16px; }}
+            QPushButton:hover {{ background-color: {THEME_ACCENT}; }}
+            QToolTip {{ background-color: {THEME_WINDOW}; color: {THEME_TEXT}; border: 1px solid {THEME_BORDER}; border-radius: 4px; padding: 4px 8px; font-size: 12px; }}
+            QScrollBar:vertical {{ background: transparent; width: 14px; margin: 0px; }}
+            QScrollBar::handle:vertical {{ background: {THEME_BORDER}; min-height: 32px; border-radius: 7px; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ background: none; height: 0px; }}
         """)
 
     def build_skin_tile(self, clean_id, resolved_name):
@@ -557,37 +577,37 @@ class LoadoutsPopup(QDialog):
         shadow.setColor(QColor(0, 0, 0, 180))
         container.setGraphicsEffect(shadow)
 
-        self.setStyleSheet("""
-            #popupCard { background-color: #1a1f2e; border-radius: 22px; border: 1px solid rgba(255, 255, 255, 0.05); }
-            #presetsCard { background-color: #13192a; border-radius: 18px; border: 1px solid rgba(255, 255, 255, 0.05); }
-            #title { color: #e3e8ff; font-size: 26px; font-weight: 600; margin-bottom: 20px;}
-            #skinLabel { color: #8c95b4; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
-            QPushButton#skinTile { background-color: #13192a; border-radius: 18px; border: 1px solid rgba(255, 255, 255, 0.05); }
-            QPushButton#skinTile:hover { border: 1px solid rgba(77, 108, 255, 0.6); background-color: #192139; }
-            #skinPreview { background-color: rgba(7, 10, 19, 0.6); border-radius: 12px; border: 1px dashed rgba(255, 255, 255, 0.08); }
-            #skinPreview[empty="true"] { color: #8c95b4; font-size: 11px; letter-spacing: 1px; }
-            QPushButton { background-color: rgba(255, 255, 255, 0.06); border: none; color: #f4f6ff; font-size: 18px; font-weight: 700; border-radius: 16px; }
-            QPushButton:hover { background-color: rgba(255, 87, 107, 0.35); }
-            QPushButton#accentButton { background-color: #355cff; border-radius: 8px; font-size: 14px; padding: 6px 12px; }
-            QPushButton#accentButton:hover { background-color: #4668ff; }
-            #presetInput { background-color: rgba(7, 10, 19, 0.6); border: 1px solid rgba(86, 104, 138, 0.6); color: #f4f6ff; font-size: 14px; padding: 0 10px; border-radius: 8px; height: 36px; }
-            QPushButton#submitBtn { background-color: #32e2b2; color: #000; border-radius: 8px; font-size: 14px; font-weight: bold; padding: 6px 12px; }
-            QPushButton#submitBtn:hover { background-color: #40f2c0; }
-            QPushButton#cancelBtn { background-color: #ff4654; color: #fff; border-radius: 8px; font-size: 14px; font-weight: bold; padding: 6px 12px; }
-            QPushButton#cancelBtn:hover { background-color: #ff5e6a; }
-            QPushButton#presetSaveBtn { background-color: #32e2b2; color: #000; border-radius: 8px; font-size: 16px; font-weight: bold; }
-            QPushButton#presetSaveBtn:hover { background-color: #40f2c0; }
-            QPushButton#presetCancelBtn { background-color: #ff4654; color: #fff; border-radius: 8px; font-size: 16px; font-weight: bold; }
-            QPushButton#presetCancelBtn:hover { background-color: #ff5e6a; }
-            QPushButton#presetApplyBtn { background-color: #32e2b2; color: #000; font-size: 13px; border-radius: 8px; padding: 6px 12px; font-weight: 600; }
-            QPushButton#presetApplyBtn:hover { background-color: #40f2c0; }
-            QToolTip { background-color: #0b0f19; color: #f4f6ff; border: 1px solid rgba(77, 108, 255, 0.3); border-radius: 4px; padding: 4px 8px; font-size: 12px; }
-            #presetRow { background-color: rgba(26, 41, 64, 0.5); border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.05); }
-            #presetRow:hover { border: 1px solid rgba(77, 108, 255, 0.4); background-color: rgba(36, 51, 74, 0.6); }
-            #presetRowSelected { background-color: rgba(13, 19, 30, 0.9); border-radius: 14px; border: 1px solid rgba(77, 108, 255, 0.4); }
-            #presetName { color: #e3e8ff; font-weight: 600; font-size: 16px; }
-            QPushButton#presetDelBtn { background-color: #ff2c2c; font-size: 13px; border-radius: 8px; padding: 6px 12px; font-weight: 600; }
-            QPushButton#presetDelBtn:hover { background-color: #ff4545; }
+        self.setStyleSheet(f"""
+            #popupCard {{ background-color: {THEME_MAIN}; border-radius: 22px; border: 1px solid {THEME_BORDER_SOFT}; }}
+            #presetsCard {{ background-color: {THEME_CARD}; border-radius: 18px; border: 1px solid {THEME_BORDER_SOFT}; }}
+            #title {{ color: {THEME_TEXT}; font-size: 26px; font-weight: 600; margin-bottom: 20px;}}
+            #skinLabel {{ color: {THEME_MUTED}; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }}
+            QPushButton#skinTile {{ background-color: {THEME_CARD}; border-radius: 18px; border: 1px solid {THEME_BORDER_SOFT}; }}
+            QPushButton#skinTile:hover {{ border: 1px solid {THEME_ACCENT}; background-color: {THEME_CARD_ALT}; }}
+            #skinPreview {{ background-color: {THEME_WINDOW}; border-radius: 12px; border: 1px dashed {THEME_BORDER_SOFT}; }}
+            #skinPreview[empty="true"] {{ color: {THEME_MUTED}; font-size: 11px; letter-spacing: 1px; }}
+            QPushButton {{ background-color: {THEME_CARD_ALT}; border: none; color: {THEME_TEXT}; font-size: 18px; font-weight: 700; border-radius: 16px; }}
+            QPushButton:hover {{ background-color: {THEME_ACCENT}; }}
+            QPushButton#accentButton {{ background-color: {THEME_ACCENT}; border-radius: 8px; font-size: 14px; padding: 6px 12px; }}
+            QPushButton#accentButton:hover {{ background-color: {THEME_ACCENT_HOVER}; }}
+            #presetInput {{ background-color: {THEME_WINDOW}; border: 1px solid {THEME_BORDER}; color: {THEME_TEXT}; font-size: 14px; padding: 0 10px; border-radius: 8px; height: 36px; }}
+            QPushButton#submitBtn {{ background-color: {THEME_TEAL}; color: #071018; border-radius: 8px; font-size: 14px; font-weight: bold; padding: 6px 12px; }}
+            QPushButton#submitBtn:hover {{ background-color: {THEME_TEAL_HOVER}; }}
+            QPushButton#cancelBtn {{ background-color: {THEME_RED}; color: {THEME_TEXT}; border-radius: 8px; font-size: 14px; font-weight: bold; padding: 6px 12px; }}
+            QPushButton#cancelBtn:hover {{ background-color: {THEME_RED_HOVER}; }}
+            QPushButton#presetSaveBtn {{ background-color: {THEME_TEAL}; color: #071018; border-radius: 8px; font-size: 16px; font-weight: bold; }}
+            QPushButton#presetSaveBtn:hover {{ background-color: {THEME_TEAL_HOVER}; }}
+            QPushButton#presetCancelBtn {{ background-color: {THEME_RED}; color: {THEME_TEXT}; border-radius: 8px; font-size: 16px; font-weight: bold; }}
+            QPushButton#presetCancelBtn:hover {{ background-color: {THEME_RED_HOVER}; }}
+            QPushButton#presetApplyBtn {{ background-color: {THEME_TEAL}; color: #071018; font-size: 13px; border-radius: 8px; padding: 6px 12px; font-weight: 600; }}
+            QPushButton#presetApplyBtn:hover {{ background-color: {THEME_TEAL_HOVER}; }}
+            QToolTip {{ background-color: {THEME_WINDOW}; color: {THEME_TEXT}; border: 1px solid {THEME_BORDER}; border-radius: 4px; padding: 4px 8px; font-size: 12px; }}
+            #presetRow {{ background-color: {THEME_CARD_ALT}; border-radius: 14px; border: 1px solid {THEME_BORDER_SOFT}; }}
+            #presetRow:hover {{ border: 1px solid {THEME_ACCENT}; background-color: {THEME_CARD}; }}
+            #presetRowSelected {{ background-color: {THEME_PANEL}; border-radius: 14px; border: 1px solid {THEME_ACCENT}; }}
+            #presetName {{ color: {THEME_TEXT}; font-weight: 600; font-size: 16px; }}
+            QPushButton#presetDelBtn {{ background-color: {THEME_RED_PRESSED}; font-size: 13px; border-radius: 8px; padding: 6px 12px; font-weight: 600; }}
+            QPushButton#presetDelBtn:hover {{ background-color: {THEME_RED}; }}
         """)
 
         self.loadouts_dir = resource_path("loadouts")
@@ -827,7 +847,7 @@ class LoadoutsPopup(QDialog):
             y_skin = (88 - scaled_skin.height()) // 2
             painter.drawPixmap(x_skin, y_skin, scaled_skin)
         else:
-            painter.setPen(QColor("#8c95b4"))
+            painter.setPen(QColor(THEME_MUTED))
             font = painter.font()
             font.setPixelSize(11)
             font.setLetterSpacing(QFont.AbsoluteSpacing, 1)
@@ -1011,45 +1031,45 @@ class AgentPopup(QDialog):
         shadow.setColor(QColor(0, 0, 0, 180))
         container.setGraphicsEffect(shadow)
 
-        self.setStyleSheet("""
-            #popupCard {
-                background-color: #1a1f2e;
+        self.setStyleSheet(f"""
+            #popupCard {{
+                background-color: {THEME_MAIN};
                 border-radius: 22px;
-                border: 1px solid rgba(255, 255, 255, 0.05);
-            }
-            #title { color: #e3e8ff; font-size: 22px; font-weight: 600; }
-            #subtitle { color: #a0abcc; font-size: 14px; }
-            #agentLabel {
-                color: #8c95b4; font-size: 12px; letter-spacing: 1px;
+                border: 1px solid {THEME_BORDER_SOFT};
+            }}
+            #title {{ color: {THEME_TEXT}; font-size: 22px; font-weight: 600; }}
+            #subtitle {{ color: {THEME_MUTED}; font-size: 14px; }}
+            #agentLabel {{
+                color: {THEME_MUTED}; font-size: 12px; letter-spacing: 1px;
                 text-transform: uppercase;
-            }
-            #agentTile {
-                background-color: #13192a;
+            }}
+            #agentTile {{
+                background-color: {THEME_CARD};
                 border-radius: 18px;
-                border: 1px solid rgba(255, 255, 255, 0.05);
-            }
-            #agentTile:hover {
-                border: 1px solid rgba(77, 108, 255, 0.6);
-                background-color: #192139;
-            }
-            #agentTileDisabled {
-                background-color: #0d111c;
+                border: 1px solid {THEME_BORDER_SOFT};
+            }}
+            #agentTile:hover {{
+                border: 1px solid {THEME_ACCENT};
+                background-color: {THEME_CARD_ALT};
+            }}
+            #agentTileDisabled {{
+                background-color: {THEME_WINDOW};
                 border-radius: 18px;
-                border: 1px solid rgba(255, 255, 255, 0.02);
-            }
-            #exitTile {
-                background-color: #1f2436;
+                border: 1px solid {THEME_BORDER_SOFT};
+            }}
+            #exitTile {{
+                background-color: {THEME_CARD_ALT};
                 border-radius: 18px;
-                border: 1px solid rgba(255, 255, 255, 0.05);
-            }
-            #exitTile QPushButton {
-                background-color: rgba(255, 255, 255, 0.06);
-                border: none; color: #f4f6ff; font-size: 28px;
+                border: 1px solid {THEME_BORDER_SOFT};
+            }}
+            #exitTile QPushButton {{
+                background-color: {THEME_CARD};
+                border: none; color: {THEME_TEXT}; font-size: 28px;
                 font-weight: 700; border-radius: 16px;
-            }
-            #exitTile QPushButton:hover {
-                background-color: rgba(255, 87, 107, 0.35);
-            }
+            }}
+            #exitTile QPushButton:hover {{
+                background-color: {THEME_RED};
+            }}
         """)
 
     def build_agent_tile(self, agent_name):
@@ -1080,7 +1100,7 @@ class AgentPopup(QDialog):
                 self.agent_icons[agent_name].scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         else:
             icon_label.setText("?")
-            icon_label.setStyleSheet("color: #8c95b4; font-size: 24px;")
+            icon_label.setStyleSheet(f"color: {THEME_MUTED}; font-size: 24px;")
 
         name_label = QLabel(agent_name)
         name_label.setObjectName("agentLabel")
@@ -1192,52 +1212,52 @@ class WeaponPopup(QDialog):
         shadow.setColor(QColor(0, 0, 0, 180))
         container.setGraphicsEffect(shadow)
 
-        self.setStyleSheet("""
-            #popupCard {
-                background-color: #1a1f2e;
+        self.setStyleSheet(f"""
+            #popupCard {{
+                background-color: {THEME_MAIN};
                 border-radius: 22px;
-                border: 1px solid rgba(255, 255, 255, 0.05);
-            }
-            #title { color: #e3e8ff; font-size: 22px; font-weight: 600; }
-            #subtitle { color: #a0abcc; font-size: 14px; }
-            #weaponLabel {
-                color: #8c95b4; font-size: 12px; letter-spacing: 1px;
+                border: 1px solid {THEME_BORDER_SOFT};
+            }}
+            #title {{ color: {THEME_TEXT}; font-size: 22px; font-weight: 600; }}
+            #subtitle {{ color: {THEME_MUTED}; font-size: 14px; }}
+            #weaponLabel {{
+                color: {THEME_MUTED}; font-size: 12px; letter-spacing: 1px;
                 text-transform: uppercase;
-            }
-            #skinLabel {
-                color: #d1d1d1; font-size: 12px; font-weight: 600; letter-spacing: 1px;
+            }}
+            #skinLabel {{
+                color: {THEME_TEXT}; font-size: 12px; font-weight: 600; letter-spacing: 1px;
                 text-transform: uppercase;
-            }
-            #skinTile {
-                background-color: #13192a;
+            }}
+            #skinTile {{
+                background-color: {THEME_CARD};
                 border-radius: 18px;
-                border: 1px solid rgba(255, 255, 255, 0.05);
-            }
-            #skinTile:hover {
-                border: 1px solid rgba(77, 108, 255, 0.6);
-                background-color: #192139;
-            }
-            #skinPreview {
-                background-color: rgba(7, 10, 19, 0.6);
+                border: 1px solid {THEME_BORDER_SOFT};
+            }}
+            #skinTile:hover {{
+                border: 1px solid {THEME_ACCENT};
+                background-color: {THEME_CARD_ALT};
+            }}
+            #skinPreview {{
+                background-color: {THEME_WINDOW};
                 border-radius: 12px;
-                border: 1px dashed rgba(255, 255, 255, 0.08);
-            }
-            #skinPreview[empty="true"] {
-                color: #8c95b4; font-size: 11px; letter-spacing: 1px;
-            }
-            #exitTile {
-                background-color: #1f2436;
+                border: 1px dashed {THEME_BORDER_SOFT};
+            }}
+            #skinPreview[empty="true"] {{
+                color: {THEME_MUTED}; font-size: 11px; letter-spacing: 1px;
+            }}
+            #exitTile {{
+                background-color: {THEME_CARD_ALT};
                 border-radius: 18px;
-                border: 1px solid rgba(255, 255, 255, 0.05);
-            }
-            #exitTile:hover {
-                background-color: rgba(255, 87, 107, 0.35);
-            }
-            QToolTip {
-                background-color: #0b0f19; color: #f4f6ff;
-                border: 1px solid rgba(77, 108, 255, 0.3);
+                border: 1px solid {THEME_BORDER_SOFT};
+            }}
+            #exitTile:hover {{
+                background-color: {THEME_RED};
+            }}
+            QToolTip {{
+                background-color: {THEME_WINDOW}; color: {THEME_TEXT};
+                border: 1px solid {THEME_BORDER};
                 border-radius: 4px; padding: 4px 8px; font-size: 12px;
-            }
+            }}
         """)
 
         self.resize(1200, 750)
@@ -1375,18 +1395,21 @@ class ToggleSwitch(QCheckBox):
         p.setPen(Qt.NoPen)
 
         if self.isChecked():
-            p.setBrush(QColor("#355cff"))
+            p.setBrush(QColor(THEME_ACCENT))
         else:
-            p.setBrush(QColor("#162133"))
+            p.setBrush(QColor(THEME_CARD_ALT))
 
         p.drawRoundedRect(0, 0, self.width(), self.height(), 11, 11)
 
-        p.setBrush(QColor("#f4f6ff"))
+        p.setBrush(QColor(THEME_TEXT))
         p.drawEllipse(int(self._position), 3, 16, 16)
         p.end()
 
 
 class ValorantStatsWindow(QMainWindow):
+    MAX_VISIBLE_PLAYER_ROWS = 5
+    MIN_PLAYER_ROW_HEIGHT = 156
+
     def __init__(self, players=None):
         super().__init__()
 
@@ -1505,8 +1528,8 @@ class ValorantStatsWindow(QMainWindow):
 
         header_layout.addWidget(self.refresh_button, alignment=Qt.AlignVCenter)
 
-        left_panel, self.left_layout = self.build_team_panel("red")
-        right_panel, self.right_layout = self.build_team_panel("blue")
+        left_panel, self.left_scroll_area, self.left_layout = self.build_team_panel("red")
+        right_panel, self.right_scroll_area, self.right_layout = self.build_team_panel("blue")
 
         main_splitter = QSplitter(Qt.Horizontal)
         main_splitter.addWidget(left_panel)
@@ -1527,6 +1550,7 @@ class ValorantStatsWindow(QMainWindow):
 
         self.apply_theme()
         self.load_players(players or [])
+        QTimer.singleShot(0, self.refresh_player_row_heights)
 
         self.startup_coordinator = AppStartupCoordinator(self.set_status_message)
         self.party_tracker = PartyTracker.get()
@@ -1542,6 +1566,7 @@ class ValorantStatsWindow(QMainWindow):
         self.party_icon = QPixmap(resource_path("assets/group.png"))
         self._party_refresh_scheduled = False
         self.startup_task = None
+        self._startup_bootstrapped = False
         self.ws_task = None
         self._buddy_icons_task = None
         self._skin_icons_task = None
@@ -1559,12 +1584,20 @@ class ValorantStatsWindow(QMainWindow):
 
         self._latency_start_time = None
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.refresh_player_row_heights()
+
     def set_status_message(self, message):
         self.status_value.setText(message)
 
 
     def start_runtime_tasks(self):
         loop = asyncio.get_running_loop()
+
+        if self._startup_bootstrapped:
+            self.start_asset_tasks()
+            return
 
         if self.startup_task is None:
             self.startup_task = loop.create_task(self.bootstrap_startup())
@@ -1618,21 +1651,24 @@ class ValorantStatsWindow(QMainWindow):
             self.safe_load_players(self.valo_rank.frontend_data)
 
     async def bootstrap_startup(self):
-        started = await self.startup_coordinator.initialize()
-        if not started and self.startup_coordinator.restart_required:
-            await self.prompt_restart_for_party_detection()
-        else:
-            self.set_party_detection_enabled(self.startup_coordinator.party_detection_enabled)
-            self.start_websocket_listener()
-            await self.refresh_data()
-        self.start_asset_tasks()
+        try:
+            started = await self.startup_coordinator.initialize()
+            if not started and self.startup_coordinator.restart_required:
+                await self.prompt_restart_for_party_detection()
+            else:
+                self.set_party_detection_enabled(self.startup_coordinator.party_detection_enabled)
+                self.start_websocket_listener()
+                await self.refresh_data()
+        finally:
+            self._startup_bootstrapped = True
+            self.start_asset_tasks()
 
     async def prompt_restart_for_party_detection(self):
         running = ", ".join(self.startup_coordinator.running_processes) or "Riot Client / Valorant"
         answer = QMessageBox.question(
             self,
             "Restart Riot Client",
-            f"Riot Client needs to be restarted for party detection to work.\n\nCurrently running: {running}\n\nRestart Riot Client and Valorant now?",
+            f"Riot Client needs to be restarted for party detection to work.\n\nCurrently running: {running}\n\nRestart Riot Client and Valorant now?\n\nSelecting No will disable party detection until ValScanner is restarted.",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.Yes,
         )
@@ -1730,6 +1766,7 @@ class ValorantStatsWindow(QMainWindow):
                 handler = LockfileHandler()
                 ready = await handler.lockfile_data_function(retries=1)
                 if not ready or not handler.port or not handler.password:
+                    await self.startup_coordinator.ensure_riot_with_mitm()
                     self.set_status_message("Waiting for Riot Client and Valorant...")
                     await asyncio.sleep(5)
                     continue
@@ -1846,7 +1883,7 @@ class ValorantStatsWindow(QMainWindow):
         panel.setObjectName("compactPanel")
         panel.setProperty("teamColor", colour_key)
         panel_layout = QVBoxLayout(panel)
-        panel_layout.setContentsMargins(15, 12, 15, 15)
+        panel_layout.setContentsMargins(15, 15, 15, 15)
         panel_layout.setSpacing(12)
 
         scroll_area = QScrollArea()
@@ -1862,7 +1899,39 @@ class ValorantStatsWindow(QMainWindow):
         scroll_area.setWidget(content)
         panel_layout.addWidget(scroll_area)
 
-        return panel, content_layout
+        return panel, scroll_area, content_layout
+
+    def get_visible_player_row_height(self, scroll_area, layout, player_count):
+        visible_rows = min(max(player_count, 1), self.MAX_VISIBLE_PLAYER_ROWS)
+        viewport_height = scroll_area.viewport().height()
+        if viewport_height <= 0:
+            return self.MIN_PLAYER_ROW_HEIGHT
+
+        margins = layout.contentsMargins()
+        available_height = (
+            viewport_height
+            - margins.top()
+            - margins.bottom()
+            - (max(visible_rows - 1, 0) * layout.spacing())
+        )
+        return max(self.MIN_PLAYER_ROW_HEIGHT, available_height // visible_rows)
+
+    def refresh_player_row_heights(self):
+        self.update_team_row_heights(self.left_scroll_area, self.left_layout)
+        self.update_team_row_heights(self.right_scroll_area, self.right_layout)
+
+    def update_team_row_heights(self, scroll_area, layout):
+        player_rows = [
+            layout.itemAt(index).widget()
+            for index in range(layout.count())
+            if isinstance(layout.itemAt(index).widget(), QFrame)
+        ]
+        if not player_rows:
+            return
+
+        row_height = self.get_visible_player_row_height(scroll_area, layout, len(player_rows))
+        for row in player_rows:
+            row.setFixedHeight(row_height)
 
     def clear_layout(self, layout):
         if layout is None:
@@ -1940,7 +2009,7 @@ class ValorantStatsWindow(QMainWindow):
                 y_v = (28 - scaled_v.height()) // 2
                 painter.drawPixmap(x_v, y_v, scaled_v)
             else:
-                painter.setPen(QColor("#8c95b4"))
+                painter.setPen(QColor(THEME_MUTED))
                 painter.drawText(0, 0, 65, 28, Qt.AlignCenter, "-")
 
             if p_pixmap:
@@ -1949,7 +2018,7 @@ class ValorantStatsWindow(QMainWindow):
                 y_p = (28 - scaled_p.height()) // 2
                 painter.drawPixmap(x_p, y_p, scaled_p)
             else:
-                painter.setPen(QColor("#8c95b4"))
+                painter.setPen(QColor(THEME_MUTED))
                 painter.drawText(75, 0, 65, 28, Qt.AlignCenter, "-")
 
             painter.end()
@@ -1968,31 +2037,40 @@ class ValorantStatsWindow(QMainWindow):
         if group_index is None or self.party_icon.isNull():
             return None
 
-        border_color, background_color = self.party_group_colours[group_index % len(self.party_group_colours)]
+        border_color, _background_color = self.party_group_colours[group_index % len(self.party_group_colours)]
         overlay = QFrame()
-        overlay.setFixedSize(34, 34)
+        overlay.setFixedSize(32, 22)
         overlay.setToolTip(str(player.get("party_group_label", "Party")))
         overlay.setStyleSheet(
-            f"background-color: {background_color}; border: 2px solid {border_color}; border-radius: 17px;"
+            "background: transparent;"
+        )
+
+        face = QFrame(overlay)
+        face.setGeometry(0, 0, 32, 22)
+        face.setStyleSheet(
+            f"background-color: {border_color};"
+            "border-top-right-radius: 12px;"
+            "border-bottom-left-radius: 10px;"
+            "border-bottom-right-radius: 0px;"
+            "border-top-left-radius: 6px;"
         )
 
         icon_label = QLabel(overlay)
         icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setGeometry(5, 5, 24, 24)
-        tinted = self.party_icon.scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        canvas = QPixmap(24, 24)
+        icon_label.setGeometry(6, 2, 20, 18)
+
+        tinted = self.party_icon.scaled(14, 14, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        canvas = QPixmap(20, 18)
         canvas.fill(Qt.transparent)
         painter = QPainter(canvas)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.drawPixmap((24 - tinted.width()) // 2, (24 - tinted.height()) // 2, tinted)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        painter.drawPixmap((20 - tinted.width()) // 2, (18 - tinted.height()) // 2, tinted)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        painter.fillRect(canvas.rect(), QColor("#071222"))
         painter.end()
         icon_label.setPixmap(canvas)
-
-        shadow = QGraphicsDropShadowEffect(overlay)
-        shadow.setBlurRadius(14)
-        shadow.setOffset(0, 0)
-        shadow.setColor(QColor(border_color))
-        overlay.setGraphicsEffect(shadow)
+        icon_label.raise_()
         return overlay
 
     def create_player_row(self, player):
@@ -2002,9 +2080,10 @@ class ValorantStatsWindow(QMainWindow):
         else:
             row.setObjectName("compactRow")
         row.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        row.setMinimumHeight(self.MIN_PLAYER_ROW_HEIGHT)
 
         outer_layout = QVBoxLayout(row)
-        outer_layout.setContentsMargins(12, 5, 8, 9)
+        outer_layout.setContentsMargins(12, 4, 4, 9)
         outer_layout.setSpacing(0)
 
         content_frame = QFrame()
@@ -2146,17 +2225,17 @@ class ValorantStatsWindow(QMainWindow):
             try:
                 val = float(change)
                 if val > 0:
-                    bg_color = "#32e2b2"
+                    bg_color = THEME_TEAL
                     text_color = "#000000"
                 elif val < 0:
-                    bg_color = "#ff4654"
-                    text_color = "#ffffff"
+                    bg_color = THEME_RED
+                    text_color = THEME_TEXT
                 else:
                     bg_color = "#7f7f7f"
-                    text_color = "#ffffff"
+                    text_color = THEME_TEXT
             except (ValueError, TypeError):
                 bg_color = "#7f7f7f"
-                text_color = "#ffffff"
+                text_color = THEME_TEXT
 
             circle_label.setStyleSheet(
                 f"background-color: {bg_color}; color: {text_color}; border-radius: 16px; font-weight: 700; font-size: 11px;")
@@ -2219,17 +2298,17 @@ class ValorantStatsWindow(QMainWindow):
             try:
                 val = float(change)
                 if val > 0:
-                    bg_color = "#32e2b2"
+                    bg_color = THEME_TEAL
                     text_color = "#000000"
                 elif val < 0:
-                    bg_color = "#ff4654"
-                    text_color = "#ffffff"
+                    bg_color = THEME_RED
+                    text_color = THEME_TEXT
                 else:
                     bg_color = "#7f7f7f"
-                    text_color = "#ffffff"
+                    text_color = THEME_TEXT
             except (ValueError, TypeError):
                 bg_color = "#7f7f7f"
-                text_color = "#ffffff"
+                text_color = THEME_TEXT
 
             circle_label.setStyleSheet(
                 f"background-color: {bg_color}; color: {text_color}; border-radius: 16px; font-weight: 700; font-size: 11px;"
@@ -2262,7 +2341,7 @@ class ValorantStatsWindow(QMainWindow):
             peak_row.addWidget(peak_icon_label)
         elif peak_name not in ("[]", ""):
             peak_icon_label.setText(peak_name)
-            peak_icon_label.setStyleSheet("color: #8c95b4; font-size: 16px; font-weight: bold;")
+            peak_icon_label.setStyleSheet(f"color: {THEME_MUTED}; font-size: 16px; font-weight: bold;")
             peak_row.addWidget(peak_icon_label)
 
         left_rank_col.addLayout(peak_row)
@@ -2287,7 +2366,7 @@ class ValorantStatsWindow(QMainWindow):
             )
         else:
             current_rank_icon_label.setText(rank_name if rank_name not in ("[]", "") else "N/A")
-            current_rank_icon_label.setStyleSheet("color: #8c95b4; font-size: 14px; font-weight: bold;")
+            current_rank_icon_label.setStyleSheet(f"color: {THEME_MUTED}; font-size: 14px; font-weight: bold;")
 
         right_rank_col.addWidget(current_rank_icon_label, 1)
 
@@ -2305,7 +2384,9 @@ class ValorantStatsWindow(QMainWindow):
         rr_bar.setFixedWidth(108)
         rr_bar.setToolTip(f"{rr_value_str} RR")
         rr_bar.setStyleSheet(
-            "QProgressBar { background-color: rgba(255, 255, 255, 0.05); border-radius: 3px; border: none; } QProgressBar::chunk { background-color: #355cff; border-radius: 3px; }")
+            f"QProgressBar {{ background-color: {THEME_CARD_ALT}; border-radius: 3px; border: none; }}"
+            f" QProgressBar::chunk {{ background-color: {THEME_ACCENT}; border-radius: 3px; }}"
+        )
 
         right_rank_col.addWidget(rr_bar, 0, Qt.AlignHCenter | Qt.AlignBottom)
 
@@ -2371,265 +2452,265 @@ class ValorantStatsWindow(QMainWindow):
 
     def apply_theme(self):
         base_style = (
-            "QMainWindow {"
-            " background-color: #05070c;"
-            "}"
-            "QWidget {"
-            " color: #f4f6ff;"
-            " font-size: 13px;"
-            "}"
-            "QFrame#headerFrame {"
-            " background: qlineargradient(x1:0, y1:0, x2:1, y2:1,"
-            "  stop:0 #101626, stop:1 #070a11);"
-            " border-radius: 22px;"
-            " border: 1px solid rgba(63, 76, 107, 0.45);"
-            " padding: 3px;"
-            "}"
-            "QProgressBar#loadingBar {"
-            " border: none; background: rgba(255,255,255,0.05);"
-            "}"
-            "QProgressBar#loadingBar::chunk {"
-            " background-color: #355cff;"
-            "}"
-            "QLabel#sectionLabel {"
-            " color: #9aa4c4;"
-            " font-size: 12px;"
-            " letter-spacing: 1.6px;"
-            " text-transform: uppercase;"
-            " font-weight: 700;"
-            "}"
-            "QFrame#agentBlock {"
-            " background-color: rgba(13, 19, 30, 0.92);"
-            " border-radius: 16px;"
-            " border: 1px solid rgba(63, 76, 107, 0.35);"
-            "}"
-            "QFrame#metaChip {"
-            " background-color: rgba(15, 22, 35, 0.88);"
-            " border-radius: 14px;"
-            " border: 1px solid rgba(63, 76, 107, 0.35);"
-            " min-width: 160px;"
-            "}"
-            "QFrame#compactPanel {"
-            " background-color: rgba(11, 15, 25, 0.92);"
-            " border-radius: 22px;"
-            " border: 1px solid rgba(63, 76, 107, 0.35);"
-            "}"
-            "QFrame#compactRow {"
-            " background-color: rgba(13, 18, 30, 0.92);"
-            " border-radius: 16px;"
-            " border: 1px solid rgba(63, 76, 107, 0.3);"
-            "}"
-            "QFrame#compactRow:hover {"
-            " border: 1px solid rgba(86, 104, 138, 0.6);"
-            "}"
-            "QFrame#compactRowUser {"
-            " background-color: rgba(20, 28, 45, 0.92);"
-            " border-radius: 16px;"
-            " border: 1px solid rgba(53, 92, 255, 0.35);"
-            "}"
-            "QFrame#compactRowUser:hover {"
-            " border: 1px solid rgba(77, 108, 255, 0.65);"
-            " background-color: rgba(24, 34, 52, 0.92);"
-            "}"
-            "QLabel#agentBadge {"
-            " background-color: rgba(53, 92, 255, 0.18);"
-            " color: #a7bbff;"
-            " border-radius: 12px;"
-            " padding: 3px 8px;"
-            " font-size: 11px;"
-            " letter-spacing: 1.2px;"
-            " text-transform: uppercase;"
-            " font-weight: 700;"
-            "}"
-            "QLabel#metaLabel {"
-            " color: #7e8aa7;"
-            " font-size: 12px;"
-            " letter-spacing: 1.6px;"
-            " text-transform: uppercase;"
-            "}"
-            "QLabel#metaValue {"
-            " font-size: 16px;"
-            " font-weight: 700;"
-            " color: #f7f8ff;"
-            "}"
-            "QLabel#metaAux {"
-            " color: #8b96b6;"
-            " font-size: 12px;"
-            "}"
-            "QLabel#playerName {"
-            " font-size: 18px;"
-            " font-weight: 700;"
-            " color: #f7f8ff;"
-            "}"
-            "QLabel#playerName a {"
-            " color: inherit;"
-            " text-decoration: none;"
-            "}"
-            "QLabel#playerName a:hover {"
-            " color: #6bc2ff;"
-            "}"
-            "QLabel#playerLevelBadge {"
-            " background-color: #5dd8fc;"
-            " color: #000000;"
-            " font-size: 16px;"
-            " font-weight: 700;"
-            " padding: 1px 4px;"
-            " border-radius: 4px;"
-            " margin: 2px;"
-            "}"
-            "QLabel#emptyState {"
-            " color: #7e8aa7;"
-            " font-style: italic;"
-            " letter-spacing: 0.6px;"
-            "}"
-            "QFrame#compactStat {"
-            " background-color: rgba(20, 28, 44, 0.82);"
-            " border-radius: 12px;"
-            " padding: 4px 6px;"
-            "}"
-            "QLabel#compactStatTitle {"
-            " color: #7e8aa7;"
-            " font-size: 10px;"
-            " letter-spacing: 1.2px;"
-            " text-transform: uppercase;"
-            "}"
-            "QLabel#compactStatValue {"
-            " font-size: 14px;"
-            " font-weight: 600;"
-            " color: #f4f6ff;"
-            "}"
-            "QLabel#compactStatValue[style*=color] {"
-            " font-weight: 700;"
-            "}"
-            "QScrollArea {"
-            " background: transparent;"
-            " border: none;"
-            "}"
-            "QScrollArea > QWidget > QWidget {"
-            " background: transparent;"
-            "}"
-            "QPushButton {"
-            " background-color: #162133;"
-            " border-radius: 14px;"
-            " padding: 9px 17px;"
-            " color: #f4f6ff;"
-            " border: 1px solid rgba(86, 104, 138, 0.6);"
-            " font-weight: 600;"
-            " letter-spacing: 0.6px;"
-            "}"
-            "QPushButton:hover {"
-            " background-color: #1e2c44;"
-            "}"
-            "QPushButton:pressed {"
-            " background-color: #121b2b;"
-            "}"
-            "QPushButton:disabled {"
-            " background-color: #0d121c;"
-            " color: #5d6577;"
-            " border: 1px solid #151b29;"
-            "}"
-            "QPushButton#accentButton {"
-            " background-color: #355cff;"
-            " border: none;"
-            "}"
-            "QPushButton#accentButton:hover {"
-            " background-color: #4668ff;"
-            "}"
-            "QPushButton#accentButton:pressed {"
-            " background-color: #2a4bd1;"
-            "}"
-            "QPushButton#secondaryButton {"
-            " background-color: rgba(26, 41, 64, 0.85);"
-            "}"
-            "QPushButton#dodgeButton {"
-            " background-color: #b94a48;"
-            " border: none;"
-            "}"
-            "QPushButton#dodgeButton:hover {"
-            " background-color: #c55b59;"
-            "}"
-            "QPushButton#dodgeButton:pressed {"
-            " background-color: #a14341;"
-            "}"
-            "QPushButton#refreshButton {"
-            " background-color: rgba(26, 39, 60, 0.85);"
-            " border-radius: 26px;"
-            " border: 1px solid rgba(86, 104, 138, 0.6);"
-            " padding: 9px;"
-            "}"
-            "QPushButton#refreshButton:hover {"
-            " background-color: rgba(44, 63, 95, 0.95);"
-            "}"
-            "QPushButton#compactSkinButton {"
-            " background-color: rgba(18, 27, 42, 0.9);"
-            " border-radius: 12px;"
-            " padding: 4px 10px;"
-            " border: 1px solid rgba(86, 104, 138, 0.45);"
-            " font-size: 11px;"
-            " letter-spacing: 0.4px;"
-            " color: #dfe6ff;"
-            "}"
-            "QPushButton#compactSkinButton:hover {"
-            " background-color: rgba(30, 43, 65, 0.95);"
-            " border: 1px solid rgba(128, 151, 196, 0.7);"
-            "}"
-            "QPushButton#agentSelectButton {"
-            " background-color: rgba(23, 34, 52, 0.85);"
-            " border-radius: 12px;"
-            " padding: 8px 12px;"
-            " border: 1px solid rgba(86, 104, 138, 0.6);"
-            " font-weight: 600;"
-            " letter-spacing: 0.5px;"
-            " color: #f4f6ff;"
-            " text-align: left;"
-            "}"
-            "QPushButton#agentSelectButton:hover {"
-            " border: 1px solid rgba(128, 151, 196, 0.7);"
-            " background-color: rgba(30, 45, 65, 0.95);"
-            "}"
-            "QComboBox {"
-            " background-color: rgba(23, 34, 52, 0.85);"
-            " border-radius: 12px;"
-            " padding: 8px 12px;"
-            " border: 1px solid rgba(86, 104, 138, 0.6);"
-            " font-weight: 600;"
-            " letter-spacing: 0.5px;"
-            "}"
-            "QComboBox::drop-down {"
-            " border: none;"
-            " width: 24px;"
-            "}"
-            "QComboBox::down-arrow {"
-            " image: none;"
-            "}"
-            "QScrollBar:vertical {"
-            " background: transparent;"
-            " width: 14px;"
-            " margin: 18px 6px 18px 6px;"
-            "}"
-            "QScrollBar::handle:vertical {"
-            " background: rgba(66, 86, 124, 0.8);"
-            " min-height: 32px;"
-            " border-radius: 7px;"
-            "}"
-            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
-            " background: none;"
-            " height: 0px;"
-            "}"
-            "QScrollBar:horizontal {"
-            " background: transparent;"
-            " height: 14px;"
-            " margin: 6px 18px 6px 18px;"
-            "}"
-            "QScrollBar::handle:horizontal {"
-            " background: rgba(66, 86, 124, 0.8);"
-            " min-width: 32px;"
-            " border-radius: 7px;"
-            "}"
-            "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
-            " background: none;"
-            " width: 0px;"
-            "}"
+            f"QMainWindow {{"
+            f" background-color: {THEME_WINDOW};"
+            f"}}"
+            f"QWidget {{"
+            f" color: {THEME_TEXT};"
+            f" font-size: 13px;"
+            f"}}"
+            f"QFrame#headerFrame {{"
+            f" background: qlineargradient(x1:0, y1:0, x2:1, y2:1,"
+            f"  stop:0 {THEME_MAIN}, stop:1 {THEME_PANEL});"
+            f" border-radius: 22px;"
+            f" border: 1px solid {THEME_BORDER};"
+            f" padding: 3px;"
+            f"}}"
+            f"QProgressBar#loadingBar {{"
+            f" border: none; background: {THEME_CARD};"
+            f"}}"
+            f"QProgressBar#loadingBar::chunk {{"
+            f" background-color: {THEME_ACCENT};"
+            f"}}"
+            f"QLabel#sectionLabel {{"
+            f" color: {THEME_MUTED};"
+            f" font-size: 12px;"
+            f" letter-spacing: 1.6px;"
+            f" text-transform: uppercase;"
+            f" font-weight: 700;"
+            f"}}"
+            f"QFrame#agentBlock {{"
+            f" background-color: {THEME_MAIN};"
+            f" border-radius: 16px;"
+            f" border: 1px solid {THEME_BORDER_SOFT};"
+            f"}}"
+            f"QFrame#metaChip {{"
+            f" background-color: {THEME_PANEL};"
+            f" border-radius: 14px;"
+            f" border: 1px solid {THEME_BORDER_SOFT};"
+            f" min-width: 160px;"
+            f"}}"
+            f"QFrame#compactPanel {{"
+            f" background-color: {THEME_MAIN};"
+            f" border-radius: 22px;"
+            f" border: 1px solid {THEME_BORDER_SOFT};"
+            f"}}"
+            f"QFrame#compactRow {{"
+            f" background-color: {THEME_CARD};"
+            f" border-radius: 16px;"
+            f" border: 1px solid {THEME_BORDER_SOFT};"
+            f"}}"
+            f"QFrame#compactRow:hover {{"
+            f" border: 1px solid {THEME_BORDER};"
+            f"}}"
+            f"QFrame#compactRowUser {{"
+            f" background-color: {THEME_CARD_ALT};"
+            f" border-radius: 16px;"
+            f" border: 1px solid {THEME_ACCENT};"
+            f"}}"
+            f"QFrame#compactRowUser:hover {{"
+            f" border: 1px solid {THEME_ACCENT_HOVER};"
+            f" background-color: {THEME_PANEL};"
+            f"}}"
+            f"QLabel#agentBadge {{"
+            f" background-color: {THEME_PANEL};"
+            f" color: {THEME_ACCENT_HOVER};"
+            f" border-radius: 12px;"
+            f" padding: 3px 8px;"
+            f" font-size: 11px;"
+            f" letter-spacing: 1.2px;"
+            f" text-transform: uppercase;"
+            f" font-weight: 700;"
+            f"}}"
+            f"QLabel#metaLabel {{"
+            f" color: {THEME_MUTED};"
+            f" font-size: 12px;"
+            f" letter-spacing: 1.6px;"
+            f" text-transform: uppercase;"
+            f"}}"
+            f"QLabel#metaValue {{"
+            f" font-size: 16px;"
+            f" font-weight: 700;"
+            f" color: {THEME_TEXT};"
+            f"}}"
+            f"QLabel#metaAux {{"
+            f" color: {THEME_MUTED};"
+            f" font-size: 12px;"
+            f"}}"
+            f"QLabel#playerName {{"
+            f" font-size: 18px;"
+            f" font-weight: 700;"
+            f" color: {THEME_TEXT};"
+            f"}}"
+            f"QLabel#playerName a {{"
+            f" color: inherit;"
+            f" text-decoration: none;"
+            f"}}"
+            f"QLabel#playerName a:hover {{"
+            f" color: {THEME_CYAN};"
+            f"}}"
+            f"QLabel#playerLevelBadge {{"
+            f" background-color: {THEME_CYAN};"
+            f" color: #04111a;"
+            f" font-size: 16px;"
+            f" font-weight: 700;"
+            f" padding: 1px 4px;"
+            f" border-radius: 4px;"
+            f" margin: 2px;"
+            f"}}"
+            f"QLabel#emptyState {{"
+            f" color: {THEME_MUTED};"
+            f" font-style: italic;"
+            f" letter-spacing: 0.6px;"
+            f"}}"
+            f"QFrame#compactStat {{"
+            f" background-color: {THEME_CARD_ALT};"
+            f" border-radius: 12px;"
+            f" padding: 4px 6px;"
+            f"}}"
+            f"QLabel#compactStatTitle {{"
+            f" color: {THEME_MUTED};"
+            f" font-size: 10px;"
+            f" letter-spacing: 1.2px;"
+            f" text-transform: uppercase;"
+            f"}}"
+            f"QLabel#compactStatValue {{"
+            f" font-size: 14px;"
+            f" font-weight: 600;"
+            f" color: {THEME_TEXT};"
+            f"}}"
+            f"QLabel#compactStatValue[style*=color] {{"
+            f" font-weight: 700;"
+            f"}}"
+            f"QScrollArea {{"
+            f" background: transparent;"
+            f" border: none;"
+            f"}}"
+            f"QScrollArea > QWidget > QWidget {{"
+            f" background: transparent;"
+            f"}}"
+            f"QPushButton {{"
+            f" background-color: {THEME_CARD_ALT};"
+            f" border-radius: 14px;"
+            f" padding: 9px 17px;"
+            f" color: {THEME_TEXT};"
+            f" border: 1px solid {THEME_BORDER};"
+            f" font-weight: 600;"
+            f" letter-spacing: 0.6px;"
+            f"}}"
+            f"QPushButton:hover {{"
+            f" background-color: {THEME_BORDER};"
+            f"}}"
+            f"QPushButton:pressed {{"
+            f" background-color: {THEME_PANEL};"
+            f"}}"
+            f"QPushButton:disabled {{"
+            f" background-color: {THEME_WINDOW};"
+            f" color: #607086;"
+            f" border: 1px solid {THEME_BORDER_SOFT};"
+            f"}}"
+            f"QPushButton#accentButton {{"
+            f" background-color: {THEME_ACCENT};"
+            f" border: none;"
+            f"}}"
+            f"QPushButton#accentButton:hover {{"
+            f" background-color: {THEME_ACCENT_HOVER};"
+            f"}}"
+            f"QPushButton#accentButton:pressed {{"
+            f" background-color: {THEME_ACCENT_PRESSED};"
+            f"}}"
+            f"QPushButton#secondaryButton {{"
+            f" background-color: {THEME_CARD};"
+            f"}}"
+            f"QPushButton#dodgeButton {{"
+            f" background-color: {THEME_RED};"
+            f" border: none;"
+            f"}}"
+            f"QPushButton#dodgeButton:hover {{"
+            f" background-color: {THEME_RED_HOVER};"
+            f"}}"
+            f"QPushButton#dodgeButton:pressed {{"
+            f" background-color: {THEME_RED_PRESSED};"
+            f"}}"
+            f"QPushButton#refreshButton {{"
+            f" background-color: {THEME_CARD};"
+            f" border-radius: 26px;"
+            f" border: 1px solid {THEME_BORDER};"
+            f" padding: 9px;"
+            f"}}"
+            f"QPushButton#refreshButton:hover {{"
+            f" background-color: {THEME_CARD_ALT};"
+            f"}}"
+            f"QPushButton#compactSkinButton {{"
+            f" background-color: {THEME_PANEL};"
+            f" border-radius: 12px;"
+            f" padding: 4px 10px;"
+            f" border: 1px solid {THEME_BORDER_SOFT};"
+            f" font-size: 11px;"
+            f" letter-spacing: 0.4px;"
+            f" color: {THEME_TEXT};"
+            f"}}"
+            f"QPushButton#compactSkinButton:hover {{"
+            f" background-color: {THEME_CARD_ALT};"
+            f" border: 1px solid {THEME_ACCENT};"
+            f"}}"
+            f"QPushButton#agentSelectButton {{"
+            f" background-color: {THEME_CARD_ALT};"
+            f" border-radius: 12px;"
+            f" padding: 8px 12px;"
+            f" border: 1px solid {THEME_BORDER};"
+            f" font-weight: 600;"
+            f" letter-spacing: 0.5px;"
+            f" color: {THEME_TEXT};"
+            f" text-align: left;"
+            f"}}"
+            f"QPushButton#agentSelectButton:hover {{"
+            f" border: 1px solid {THEME_ACCENT};"
+            f" background-color: {THEME_CARD};"
+            f"}}"
+            f"QComboBox {{"
+            f" background-color: {THEME_CARD_ALT};"
+            f" border-radius: 12px;"
+            f" padding: 8px 12px;"
+            f" border: 1px solid {THEME_BORDER};"
+            f" font-weight: 600;"
+            f" letter-spacing: 0.5px;"
+            f"}}"
+            f"QComboBox::drop-down {{"
+            f" border: none;"
+            f" width: 24px;"
+            f"}}"
+            f"QComboBox::down-arrow {{"
+            f" image: none;"
+            f"}}"
+            f"QScrollBar:vertical {{"
+            f" background: transparent;"
+            f" width: 14px;"
+            f" margin: 18px 6px 18px 6px;"
+            f"}}"
+            f"QScrollBar::handle:vertical {{"
+            f" background: {THEME_BORDER};"
+            f" min-height: 32px;"
+            f" border-radius: 7px;"
+            f"}}"
+            f"QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{"
+            f" background: none;"
+            f" height: 0px;"
+            f"}}"
+            f"QScrollBar:horizontal {{"
+            f" background: transparent;"
+            f" height: 14px;"
+            f" margin: 6px 18px 6px 18px;"
+            f"}}"
+            f"QScrollBar::handle:horizontal {{"
+            f" background: {THEME_BORDER};"
+            f" min-width: 32px;"
+            f" border-radius: 7px;"
+            f"}}"
+            f"QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{"
+            f" background: none;"
+            f" width: 0px;"
+            f"}}"
         )
 
         self.setStyleSheet(base_style)
@@ -2711,6 +2792,13 @@ class ValorantStatsWindow(QMainWindow):
         self.refresh_button.setEnabled(False)
         try:
             print("Fetching latest Valorant stats...")
+            handler = LockfileHandler()
+            ready = await handler.lockfile_data_function(retries=1)
+            if not ready:
+                await self.startup_coordinator.ensure_riot_with_mitm()
+                self.safe_load_players({})
+                self.update_metadata()
+                return
             if prematch_id:
                 await self.valo_rank.valo_stats(prematch_id=prematch_id)
             elif match_id:
@@ -2730,8 +2818,8 @@ class ValorantStatsWindow(QMainWindow):
         self.right_players = []
 
         if not players:
-            self.populate_team_layout(self.left_layout, [], "Waiting for Attacking team...")
-            self.populate_team_layout(self.right_layout, [], "Waiting for Defending team...")
+            self.populate_team_layout(self.left_scroll_area, self.left_layout, [], "Waiting for Attacking team...")
+            self.populate_team_layout(self.right_scroll_area, self.right_layout, [], "Waiting for Defending team...")
             self.update_metadata()
             return
 
@@ -2751,11 +2839,15 @@ class ValorantStatsWindow(QMainWindow):
                 elif team == "Blue":
                     self.right_players.append(player)
 
-        self.populate_team_layout(self.left_layout, self.left_players, "Waiting for Attacking team...")
-        self.populate_team_layout(self.right_layout, self.right_players, "Waiting for Defending team...")
+        self.populate_team_layout(
+            self.left_scroll_area, self.left_layout, self.left_players, "Waiting for Attacking team..."
+        )
+        self.populate_team_layout(
+            self.right_scroll_area, self.right_layout, self.right_players, "Waiting for Defending team..."
+        )
         self.update_metadata()
 
-    def populate_team_layout(self, layout, players, empty_message):
+    def populate_team_layout(self, scroll_area, layout, players, empty_message):
         self.clear_layout(layout)
         if not players:
             placeholder = QLabel(empty_message)
@@ -2766,6 +2858,7 @@ class ValorantStatsWindow(QMainWindow):
 
         for player in players:
             layout.addWidget(self.create_player_row(player))
+        self.update_team_row_heights(scroll_area, layout)
 
     def update_metadata(self):
         gamemode = "Unknown"
@@ -2836,26 +2929,26 @@ class UpdatePopup(QDialog):
         shadow.setColor(QColor(0, 0, 0, 180))
         container.setGraphicsEffect(shadow)
 
-        self.setStyleSheet("""
-            #popupCard {
-                background-color: #1a1f2e;
+        self.setStyleSheet(f"""
+            #popupCard {{
+                background-color: {THEME_MAIN};
                 border-radius: 22px;
-                border: 1px solid rgba(255, 255, 255, 0.05);
-            }
-            #title { color: #e3e8ff; font-size: 22px; font-weight: 600; }
-            #subtitle { color: #a0abcc; font-size: 14px; }
-            QPushButton {
-                background-color: rgba(255, 255, 255, 0.06);
-                border: none; color: #f4f6ff; font-size: 14px;
+                border: 1px solid {THEME_BORDER_SOFT};
+            }}
+            #title {{ color: {THEME_TEXT}; font-size: 22px; font-weight: 600; }}
+            #subtitle {{ color: {THEME_MUTED}; font-size: 14px; }}
+            QPushButton {{
+                background-color: {THEME_CARD_ALT};
+                border: none; color: {THEME_TEXT}; font-size: 14px;
                 font-weight: 700; border-radius: 12px;
-            }
-            QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }
-            QPushButton#accentButton {
-                background-color: #355cff;
-            }
-            QPushButton#accentButton:hover {
-                background-color: #4668ff;
-            }
+            }}
+            QPushButton:hover {{ background-color: {THEME_BORDER}; }}
+            QPushButton#accentButton {{
+                background-color: {THEME_ACCENT};
+            }}
+            QPushButton#accentButton:hover {{
+                background-color: {THEME_ACCENT_HOVER};
+            }}
         """)
 
     def open_website(self):
@@ -2879,7 +2972,9 @@ async def main():
     check_for_updates()
 
     window = ValorantStatsWindow([])
+    await window.startup_coordinator.ensure_riot_with_mitm()
     await window.init_agents()
+    await window.bootstrap_startup()
     window.show()
     return window
 
@@ -2893,7 +2988,6 @@ if __name__ == "__main__":
     asyncio.set_event_loop(loop)
 
     window = loop.run_until_complete(main())
-    loop.call_soon(window.start_runtime_tasks)
     with loop:
         loop.run_forever()
 

@@ -32,6 +32,12 @@ class AppStartupCoordinator:
         riot_ready = await lockfile_handler.lockfile_data_function(retries=1)
         already_running = await is_riot_or_valorant_running() or riot_ready
 
+        if self.mitm_service._started:
+            self.restart_required = False
+            self.party_detection_enabled = True
+            self.set_status("Waiting for Riot Client and Valorant...")
+            return True
+
         if already_running:
             await self.refresh_running_processes()
             self.restart_required = True
@@ -42,6 +48,21 @@ class AppStartupCoordinator:
         self.restart_required = False
         self.party_detection_enabled = True
         self.set_status("Starting party detection...")
+        await self.mitm_service.start()
+        await self.ensure_riot_started()
+        return True
+
+    async def ensure_riot_with_mitm(self):
+        lockfile_handler = LockfileHandler()
+        riot_ready = await lockfile_handler.lockfile_data_function(retries=1)
+        already_running = await is_riot_or_valorant_running() or riot_ready
+
+        if already_running:
+            return False
+
+        self.party_detection_enabled = True
+        self.restart_required = False
+        self.set_status("Starting Riot Client with party detection...")
         await self.mitm_service.start()
         await self.ensure_riot_started()
         return True

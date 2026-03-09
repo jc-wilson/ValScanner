@@ -88,14 +88,27 @@ class OwnedSkins:
 
     async def handler_func(self):
         handler = MatchDetectionHandler()
-        await handler.puuid_shard_header_getter()
+        ready = await handler.puuid_shard_header_getter()
+        if (
+            not ready
+            or not handler.user_puuid
+            or not handler.match_id_header
+            or not handler.shard
+            or str(handler.shard).lower() == "none"
+        ):
+            self.puuid = None
+            self.shard = None
+            self.header = None
+            return False
 
         self.puuid = handler.user_puuid
         self.shard = handler.shard
         self.header = handler.match_id_header
+        return True
 
     async def get_owned_items(self):
-        await self.handler_func()
+        if not await self.handler_func():
+            return
 
         session = SharedSession.get()
 
@@ -153,7 +166,8 @@ class OwnedSkins:
         return self.owned_items
 
     async def get_current_loadout(self):
-        await self.handler_func()
+        if not await self.handler_func():
+            return
 
         session = SharedSession.get()
 

@@ -31,7 +31,18 @@ class OwnedAgents:
         uuid_handler.agent_uuid_function()
 
         handler = MatchDetectionHandler()
-        await handler.puuid_shard_header_getter()
+        ready = await handler.puuid_shard_header_getter()
+        if (
+            not ready
+            or not handler.user_puuid
+            or not handler.match_id_header
+            or not handler.shard
+            or str(handler.shard).lower() == "none"
+        ):
+            self.all_agents.sort()
+            self.combo = self.all_agents.copy()
+            self.combo.extend(["Random", "Duelist", "Initiator", "Controller", "Sentinel"])
+            return False
 
         session = SharedSession.get()
         async with session.get(
@@ -63,3 +74,5 @@ class OwnedAgents:
         for agent in self.sentinels:
             if agent in self.all_agents:
                 self.owned_sentinels.append(agent)
+
+        return True

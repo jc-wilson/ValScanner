@@ -410,7 +410,7 @@ class ValoRank:
                             "peak_rank": self.mmr[puuid]["highest_rank"]["patched_tier"],
                             "peak_act": self.mmr[puuid]["highest_rank"]["season"].upper(),
                             "team": bor,
-                            "rating_change": [0, 0, 0, 0, 0],
+                            "rating_change": [0, 0, 0],
                             "puuid": puuid
                         }
                         self.used_puuids.append(puuid)
@@ -458,14 +458,14 @@ class ValoRank:
                         "peak_rank": self.mmr[puuid]["highest_rank"]["patched_tier"],
                         "peak_act": self.mmr[puuid]["highest_rank"]["season"].upper(),
                         "team": bor,
-                        "rating_change": [0, 0, 0, 0, 0],
+                        "rating_change": [0, 0, 0],
                         "puuid": puuid
                     }
                     self.used_puuids.append(puuid)
                     return
                 else:
-                    if self.zero_check[puuid] >= 6:
-                        end_index = 5
+                    if self.zero_check[puuid] >= 4:
+                        end_index = 3
                     else:
                         end_index = self.zero_check[puuid]
                     async with session.get(

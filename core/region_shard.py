@@ -20,6 +20,8 @@ def region_shard_func():
         "region": endpoint.group()[12:14],
         "shard": endpoint.group()[17:19],
     }
+    if data["region"].lower() == "none" or data["shard"].lower() == "none":
+        return None
     print(data["region"])
     print(data["shard"])
     return data
