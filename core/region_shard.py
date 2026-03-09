@@ -1,24 +1,25 @@
-import re
 import os
+import re
 from pathlib import Path
-from functools import lru_cache
 
-@lru_cache(maxsize=1)
+
 def region_shard_func():
-    # Finds ShooterGameLog
     sgl_loc = rf"{os.getenv('LOCALAPPDATA')}\VALORANT\Saved\Logs\ShooterGame.log"
-    if os.path.exists(Path(rf'{sgl_loc}')):
-        sgl_path = Path(rf'{sgl_loc}')
+    sgl_path = Path(sgl_loc)
+    if not sgl_path.exists():
+        return None
 
-        sgl_read = open(sgl_path, "r", encoding="utf-8", errors="ignore")
+    with open(sgl_path, "r", encoding="utf-8", errors="ignore") as sgl_read:
         sgl_data = sgl_read.read()
-        sgl_read.close()
 
-        endpoint = re.search("https://glz-(.+?)-1.(.+?).a.pvp.net", sgl_data)
-        region = endpoint.group()[12:14]
-        shard = endpoint.group()[17:19]
-        print(region)
-        print(shard)
+    endpoint = re.search(r"https://glz-(.+?)-1.(.+?).a.pvp.net", sgl_data)
+    if endpoint is None:
+        return None
 
-        data = {"region": region, "shard": shard}
-        return data
+    data = {
+        "region": endpoint.group()[12:14],
+        "shard": endpoint.group()[17:19],
+    }
+    print(data["region"])
+    print(data["shard"])
+    return data

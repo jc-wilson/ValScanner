@@ -49,7 +49,6 @@ class SkinHandler:
                             buddy_uuids.append("")
 
         elif self.skins_pre:
-            print(self.skins_pre)
             for player in self.skins_pre["Loadouts"]:
                 if player["Subject"] == puuid:
                     for weapons in player["Items"]:

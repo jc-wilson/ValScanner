@@ -1,15 +1,20 @@
-import os
-import json
-import pathlib
+import asyncio
 import base64
-import urllib3
-import re
-import aiohttp
+import json
+import os
 import time
 from pathlib import Path
+
+import aiohttp
+import urllib3
+
 from core.http_session import SharedSession
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+class RiotClientNotReady(Exception):
+    pass
 
 
 class LockfileHandler:
@@ -25,56 +30,94 @@ class LockfileHandler:
         if self._initialized:
             return
 
-        self.access_token = []
-        self.entitlement_token = []
-        self.puuid = []
-        self.client_version = []
+        self.access_token = None
+        self.entitlement_token = None
+        self.puuid = None
+        self.client_version = None
         self.port = None
         self.password = None
         self.exp_time = 0
         self._initialized = True
 
-    async def lockfile_data_function(self):
-        if time.time() < self.exp_time and self.access_token:
-            return
+    def reset_state(self):
+        self.access_token = None
+        self.entitlement_token = None
+        self.puuid = None
+        self.client_version = None
+        self.port = None
+        self.password = None
+        self.exp_time = 0
 
+    async def lockfile_data_function(self, retries=1, retry_delay=0, raise_on_failure=False):
+        last_error = None
+        for attempt in range(max(retries, 1)):
+            try:
+                if await self._load_lockfile_data():
+                    return True
+            except RiotClientNotReady as exc:
+                last_error = exc
+                self.reset_state()
+            except Exception as exc:
+                last_error = exc
+                self.reset_state()
+
+            if attempt < retries - 1 and retry_delay:
+                await asyncio.sleep(retry_delay)
+
+        if raise_on_failure and last_error is not None:
+            raise RiotClientNotReady(str(last_error)) from last_error
+        return False
+
+    async def _load_lockfile_data(self):
         lockfile_loc = rf"{os.getenv('LOCALAPPDATA')}\Riot Games\Riot Client\Config\lockfile"
-        if os.path.exists(Path(rf'{lockfile_loc}')):
-            lockfile_path = Path(rf'{lockfile_loc}')
+        lockfile_path = Path(lockfile_loc)
+        if not lockfile_path.exists():
+            raise RiotClientNotReady("Riot lockfile not found")
 
-            with open(lockfile_path, "r") as lockfile_read:
-                lockfile_data = lockfile_read.read()
+        with open(lockfile_path, "r", encoding="utf-8") as lockfile_read:
+            lockfile_data = lockfile_read.read().strip()
 
-            lockfile_data_colon_loc = [i for i, x in enumerate(lockfile_data) if x == ":"]
-            self.port = lockfile_data[lockfile_data_colon_loc[1] + 1:lockfile_data_colon_loc[2]]
-            self.password = lockfile_data[lockfile_data_colon_loc[2] + 1:lockfile_data_colon_loc[3]]
+        parts = lockfile_data.split(":")
+        if len(parts) < 5:
+            raise RiotClientNotReady("Riot lockfile is malformed")
 
-            auth = aiohttp.BasicAuth('riot', self.password)
-            session = SharedSession.get()
+        self.port = parts[2]
+        self.password = parts[3]
 
+        auth = aiohttp.BasicAuth("riot", self.password)
+        session = SharedSession.get()
+
+        try:
             async with session.get(
-                    f"https://127.0.0.1:{self.port}/entitlements/v1/token",
-                    auth=auth,
-                    ssl=False
+                f"https://127.0.0.1:{self.port}/entitlements/v1/token",
+                auth=auth,
+                ssl=False,
             ) as tokens_response:
+                if tokens_response.status != 200:
+                    raise RiotClientNotReady(f"Token endpoint not ready ({tokens_response.status})")
                 entitlements = await tokens_response.json()
 
             async with session.get(
-                    f"https://127.0.0.1:{self.port}/product-session/v1/external-sessions",
-                    auth=auth,
-                    ssl=False
+                f"https://127.0.0.1:{self.port}/product-session/v1/external-sessions",
+                auth=auth,
+                ssl=False,
             ) as session_response:
+                if session_response.status != 200:
+                    raise RiotClientNotReady(f"Session endpoint not ready ({session_response.status})")
                 session_data = await session_response.json()
+        except aiohttp.ClientError as exc:
+            raise RiotClientNotReady(f"Failed to reach Riot local API: {exc}") from exc
 
-            self.access_token = entitlements["accessToken"]
-            self.entitlement_token = entitlements["token"]
-            self.puuid = entitlements["subject"]
-            self.client_version = session_data["host_app"]["version"]
+        self.access_token = entitlements.get("accessToken")
+        self.entitlement_token = entitlements.get("token")
+        self.puuid = entitlements.get("subject")
+        self.client_version = session_data.get("host_app", {}).get("version")
 
-            payload_b64 = self.access_token.split('.')[1]
-            payload_b64 += '=' * (-len(payload_b64) % 4)
-            payload = json.loads(base64.urlsafe_b64decode(payload_b64).decode('utf-8'))
+        if not all([self.access_token, self.entitlement_token, self.puuid, self.client_version]):
+            raise RiotClientNotReady("Riot local API returned incomplete auth data")
 
-            self.exp_time = payload['exp']
-        else:
-            print("error")
+        payload_b64 = self.access_token.split('.')[1]
+        payload_b64 += '=' * (-len(payload_b64) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64).decode('utf-8'))
+        self.exp_time = payload.get('exp', 0)
+        return True

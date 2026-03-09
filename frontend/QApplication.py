@@ -1,4 +1,4 @@
-from html import escape
+﻿from html import escape
 from urllib.parse import quote
 import time
 
@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QGridLayout, QHBoxLayout, QWidget, QLabel, QPushButton,
     QComboBox, QFrame, QSplitter, QScrollArea, QDialog,
     QGraphicsDropShadowEffect, QSizePolicy, QProgressBar, QCheckBox,
-    QGraphicsOpacityEffect, QLineEdit
+    QGraphicsOpacityEffect, QLineEdit, QMessageBox
 )
 from PySide6.QtCore import Qt, QTimer, QSize, QPropertyAnimation, Property, QEasingCurve, QUrl
 from PySide6.QtGui import QPixmap, QIcon, QFontDatabase, QFont, QColor, QPainter, QCloseEvent, QDesktopServices
@@ -30,10 +30,12 @@ from core.owned_agents import OwnedAgents
 from core.owned_skins import OwnedSkins
 from core.player_loadout import PlayerLoadout
 from core.http_session import SharedSession
+from core.party_tracker import PartyTracker
+from core.startup_coordinator import AppStartupCoordinator
 
 CURRENT_VERSION = "1.6.2"
-UPDATE_CHECK_URL = "https://WWTB.app/version.json"
-WEBSITE_URL = "https://WWTB.app/"
+UPDATE_CHECK_URL = "https://ValScanner.com/version.json"
+WEBSITE_URL = "https://ValScanner.com/"
 
 
 def resource_path(relative_path):
@@ -1107,7 +1109,7 @@ class AgentPopup(QDialog):
         layout.setContentsMargins(12, 6, 12, 6)
         layout.setAlignment(Qt.AlignCenter)
 
-        exit_button = QPushButton("×")
+        exit_button = QPushButton("X")
         exit_button.setFixedSize(96, 40)
         exit_button.setCursor(Qt.PointingHandCursor)
         exit_button.clicked.connect(self.close)
@@ -1397,7 +1399,7 @@ class ValorantStatsWindow(QMainWindow):
         self.owned_agent_handler = OwnedAgents()
 
         font_path = resource_path("assets/fonts/unicons-line.ttf")
-        print("🔍 Loading font from:", font_path)
+        print("Loading font from:", font_path)
 
         font_id = QFontDatabase.addApplicationFont(font_path)
         font_families = QFontDatabase.applicationFontFamilies(font_id)
@@ -1405,11 +1407,11 @@ class ValorantStatsWindow(QMainWindow):
         if font_families:
             app_font = QFont(font_families[0], 11)
             QApplication.setFont(app_font)
-            print(f"✅ Loaded font: {font_families[0]}")
+            print(f"Loaded font: {font_families[0]}")
         else:
-            print("⚠️ Failed to load custom font, falling back to default.")
+            print("Failed to load custom font, falling back to default.")
 
-        self.setWindowTitle("Who Will They Be")
+        self.setWindowTitle("ValScanner")
         self.setMinimumSize(1500, 860)
         self.setWindowIcon(QIcon(resource_path("assets/logoone.png")))
 
@@ -1463,18 +1465,13 @@ class ValorantStatsWindow(QMainWindow):
 
         self.gamemode_chip, self.gamemode_value = self.build_meta_chip("Gamemode")
         self.server_chip, self.server_value = self.build_meta_chip("Server")
+        self.status_value = QLabel("Initializing...")
+        self.status_value.setObjectName("sectionLabel")
 
         self.agent_icons = None
         self.rank_icons = None
         self.buddy_icons = None
-
-        from core.asset_loader import download_and_cache_buddies
-        task2 = asyncio.create_task(download_and_cache_buddies())
-        task2.add_done_callback(self._on_buddies_loaded)
-
-        from core.asset_loader import download_and_cache_skins
-        task = asyncio.create_task(download_and_cache_skins())
-        task.add_done_callback(self._on_skins_loaded)
+        self.skin_icons = {}
 
         header_frame = QFrame()
         header_frame.setObjectName("headerFrame")
@@ -1498,6 +1495,7 @@ class ValorantStatsWindow(QMainWindow):
         agent_layout.addWidget(self.auto_lock_switch)
 
         header_layout.addWidget(agent_block, alignment=Qt.AlignVCenter)
+        header_layout.addWidget(self.status_value, alignment=Qt.AlignVCenter)
 
         header_layout.addStretch(1)
 
@@ -1528,11 +1526,25 @@ class ValorantStatsWindow(QMainWindow):
         self.setCentralWidget(container)
 
         self.apply_theme()
+        self.load_players(players or [])
 
-        if players:
-            self.load_players(players)
-
-        self.ws_task = asyncio.create_task(self.websocket_listener())
+        self.startup_coordinator = AppStartupCoordinator(self.set_status_message)
+        self.party_tracker = PartyTracker.get()
+        self.party_tracker.subscribe(self.on_party_data_updated)
+        self.party_detection_enabled = True
+        self.party_group_colours = [
+            ("#f7a15d", "rgba(247, 161, 93, 0.2)"),
+            ("#5dc2ff", "rgba(93, 194, 255, 0.2)"),
+            ("#7de38d", "rgba(125, 227, 141, 0.2)"),
+            ("#d58bff", "rgba(213, 139, 255, 0.2)"),
+            ("#ffe06b", "rgba(255, 224, 107, 0.2)"),
+        ]
+        self.party_icon = QPixmap(resource_path("assets/group.png"))
+        self._party_refresh_scheduled = False
+        self.startup_task = None
+        self.ws_task = None
+        self._buddy_icons_task = None
+        self._skin_icons_task = None
 
         self.refreshed_pregame = None
         self.refreshed_game = None
@@ -1547,6 +1559,94 @@ class ValorantStatsWindow(QMainWindow):
 
         self._latency_start_time = None
 
+    def set_status_message(self, message):
+        self.status_value.setText(message)
+
+
+    def start_runtime_tasks(self):
+        loop = asyncio.get_running_loop()
+
+        if self.startup_task is None:
+            self.startup_task = loop.create_task(self.bootstrap_startup())
+
+    def start_asset_tasks(self):
+        loop = asyncio.get_running_loop()
+
+        if self._buddy_icons_task is None:
+            from core.asset_loader import download_and_cache_buddies
+
+            self._buddy_icons_task = loop.create_task(download_and_cache_buddies())
+            self._buddy_icons_task.add_done_callback(
+                lambda task: QTimer.singleShot(0, lambda: self._on_buddies_loaded(task))
+            )
+
+        if self._skin_icons_task is None:
+            from core.asset_loader import download_and_cache_skins
+
+            self._skin_icons_task = loop.create_task(download_and_cache_skins())
+            self._skin_icons_task.add_done_callback(
+                lambda task: QTimer.singleShot(0, lambda: self._on_skins_loaded(task))
+            )
+
+    def start_websocket_listener(self):
+        if self.ws_task is None or self.ws_task.done():
+            loop = asyncio.get_running_loop()
+            self.ws_task = loop.create_task(self.websocket_listener())
+
+    def set_party_detection_enabled(self, enabled):
+        self.party_detection_enabled = bool(enabled)
+        self.valo_rank.set_party_detection_enabled(self.party_detection_enabled)
+        if not self.party_detection_enabled and self.valo_rank.frontend_data:
+            if self.party_tracker.clear_party_metadata(self.valo_rank.frontend_data):
+                self.safe_load_players(self.valo_rank.frontend_data)
+
+    def on_party_data_updated(self):
+        if not self.party_detection_enabled:
+            return
+        if self._party_refresh_scheduled:
+            return
+        self._party_refresh_scheduled = True
+        QTimer.singleShot(0, self.apply_live_party_updates)
+
+    def apply_live_party_updates(self):
+        self._party_refresh_scheduled = False
+        if not self.party_detection_enabled:
+            return
+        if not getattr(self.valo_rank, "frontend_data", None):
+            return
+        if self.valo_rank.apply_party_metadata():
+            self.safe_load_players(self.valo_rank.frontend_data)
+
+    async def bootstrap_startup(self):
+        started = await self.startup_coordinator.initialize()
+        if not started and self.startup_coordinator.restart_required:
+            await self.prompt_restart_for_party_detection()
+        else:
+            self.set_party_detection_enabled(self.startup_coordinator.party_detection_enabled)
+            self.start_websocket_listener()
+            await self.refresh_data()
+        self.start_asset_tasks()
+
+    async def prompt_restart_for_party_detection(self):
+        running = ", ".join(self.startup_coordinator.running_processes) or "Riot Client / Valorant"
+        answer = QMessageBox.question(
+            self,
+            "Restart Riot Client",
+            f"Riot Client needs to be restarted for party detection to work.\n\nCurrently running: {running}\n\nRestart Riot Client and Valorant now?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if answer == QMessageBox.Yes:
+            await self.startup_coordinator.restart_riot_client()
+            self.set_party_detection_enabled(True)
+        else:
+            await self.startup_coordinator.disable_party_detection()
+            self.set_party_detection_enabled(False)
+            self.set_status_message("Party detection is disabled for this session.")
+
+        self.start_websocket_listener()
+        await self.refresh_data()
+
     def closeEvent(self, event: QCloseEvent):
         if not getattr(self, "_is_shutting_down", False):
             self._is_shutting_down = True
@@ -1559,8 +1659,18 @@ class ValorantStatsWindow(QMainWindow):
         from core.http_session import SharedSession
         await SharedSession.close()
 
+        if hasattr(self, 'startup_task') and self.startup_task:
+            self.startup_task.cancel()
         if hasattr(self, 'ws_task') and self.ws_task:
             self.ws_task.cancel()
+        if hasattr(self, '_buddy_icons_task') and self._buddy_icons_task:
+            self._buddy_icons_task.cancel()
+        if hasattr(self, '_skin_icons_task') and self._skin_icons_task:
+            self._skin_icons_task.cancel()
+        if hasattr(self, 'party_tracker') and self.party_tracker:
+            self.party_tracker.unsubscribe(self.on_party_data_updated)
+        if hasattr(self, 'startup_coordinator') and self.startup_coordinator:
+            await self.startup_coordinator.shutdown()
 
         self.close()
 
@@ -1618,13 +1728,13 @@ class ValorantStatsWindow(QMainWindow):
         while True:
             try:
                 handler = LockfileHandler()
-                await handler.lockfile_data_function()
-
-                self.puuid = handler.puuid
-
-                if not handler.port or not handler.password:
+                ready = await handler.lockfile_data_function(retries=1)
+                if not ready or not handler.port or not handler.password:
+                    self.set_status_message("Waiting for Riot Client and Valorant...")
                     await asyncio.sleep(5)
                     continue
+
+                self.puuid = handler.puuid
 
                 auth = base64.b64encode(f"riot:{handler.password}".encode()).decode()
                 headers = {"Authorization": f"Basic {auth}"}
@@ -1637,6 +1747,7 @@ class ValorantStatsWindow(QMainWindow):
                 print(f"Connecting to WebSocket on port {handler.port}...")
 
                 async with websockets.connect(url, additional_headers=headers, ssl=ssl_context) as ws:
+                    self.set_status_message("Connected to Riot Client. Waiting for match data...")
                     print("WebSocket Connected!")
                     await ws.send(json.dumps([5, "OnJsonApiEvent"]))
 
@@ -1658,7 +1769,6 @@ class ValorantStatsWindow(QMainWindow):
                                 self.seen_prematch_ids.add(prematch_id)
 
                                 self.run_valo_stats(prematch_id=prematch_id)
-
                                 self.last_seen = None
 
                                 if self.auto_lock_switch.isChecked():
@@ -1666,7 +1776,6 @@ class ValorantStatsWindow(QMainWindow):
                                     self.instalock_agent()
 
                             elif "/core-game/v1/matches" in uri:
-
                                 match_id = uri[-36:]
 
                                 try:
@@ -1679,23 +1788,30 @@ class ValorantStatsWindow(QMainWindow):
                                     continue
 
                                 self.seen_match_ids.add(match_id)
-
                                 print(match_id)
-
                                 self.run_valo_stats(match_id=match_id)
-
                                 self.last_seen = None
 
             except Exception as e:
                 print(f"WebSocket error: {e}")
+                self.set_status_message("Waiting for Riot Client and Valorant...")
                 await asyncio.sleep(5)
 
     def _on_skins_loaded(self, task):
-        self.skin_icons = task.result()
+        try:
+            self.skin_icons = task.result()
+        except Exception as exc:
+            print(f"Skin icon load failed: {exc}")
+            self.skin_icons = {}
+            return
         self.safe_load_players(self.valo_rank.frontend_data)
 
     def _on_buddies_loaded(self, task):
-        self.buddy_icons = task.result()
+        try:
+            self.buddy_icons = task.result()
+        except Exception as exc:
+            print(f"Buddy icon load failed: {exc}")
+            self.buddy_icons = {}
 
     def open_skin_popup(self, player_name, skins):
         popup = WeaponPopup(
@@ -1785,6 +1901,7 @@ class ValorantStatsWindow(QMainWindow):
 
     def create_skin_button(self, player):
         skins = player.get("skins") or {}
+        skin_icons = getattr(self, "skin_icons", {}) or {}
         button = QPushButton()
         button.setCursor(Qt.PointingHandCursor)
         button.setObjectName("compactSkinButton")
@@ -1803,13 +1920,13 @@ class ValorantStatsWindow(QMainWindow):
             vandal_id = vandal_data[0] if isinstance(vandal_data, list) and len(vandal_data) > 0 else vandal_data
             phantom_id = phantom_data[0] if isinstance(phantom_data, list) and len(phantom_data) > 0 else phantom_data
 
-            v_pixmap = self.skin_icons.get(str(vandal_id)) if vandal_id else None
+            v_pixmap = skin_icons.get(str(vandal_id)) if vandal_id else None
             if not v_pixmap and vandal_id:
-                v_pixmap = self.skin_icons.get(str(vandal_id).lower())
+                v_pixmap = skin_icons.get(str(vandal_id).lower())
 
-            p_pixmap = self.skin_icons.get(str(phantom_id)) if phantom_id else None
+            p_pixmap = skin_icons.get(str(phantom_id)) if phantom_id else None
             if not p_pixmap and phantom_id:
-                p_pixmap = self.skin_icons.get(str(phantom_id).lower())
+                p_pixmap = skin_icons.get(str(phantom_id).lower())
 
             canvas = QPixmap(140, 28)
             canvas.fill(Qt.transparent)
@@ -1846,6 +1963,38 @@ class ValorantStatsWindow(QMainWindow):
 
         return button
 
+    def build_party_overlay(self, player):
+        group_index = player.get("party_group_index")
+        if group_index is None or self.party_icon.isNull():
+            return None
+
+        border_color, background_color = self.party_group_colours[group_index % len(self.party_group_colours)]
+        overlay = QFrame()
+        overlay.setFixedSize(34, 34)
+        overlay.setToolTip(str(player.get("party_group_label", "Party")))
+        overlay.setStyleSheet(
+            f"background-color: {background_color}; border: 2px solid {border_color}; border-radius: 17px;"
+        )
+
+        icon_label = QLabel(overlay)
+        icon_label.setAlignment(Qt.AlignCenter)
+        icon_label.setGeometry(5, 5, 24, 24)
+        tinted = self.party_icon.scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        canvas = QPixmap(24, 24)
+        canvas.fill(Qt.transparent)
+        painter = QPainter(canvas)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.drawPixmap((24 - tinted.width()) // 2, (24 - tinted.height()) // 2, tinted)
+        painter.end()
+        icon_label.setPixmap(canvas)
+
+        shadow = QGraphicsDropShadowEffect(overlay)
+        shadow.setBlurRadius(14)
+        shadow.setOffset(0, 0)
+        shadow.setColor(QColor(border_color))
+        overlay.setGraphicsEffect(shadow)
+        return overlay
+
     def create_player_row(self, player):
         row = QFrame()
         if player.get("puuid") == self.puuid:
@@ -1854,8 +2003,17 @@ class ValorantStatsWindow(QMainWindow):
             row.setObjectName("compactRow")
         row.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(12, 9, 12, 9)
+        outer_layout = QVBoxLayout(row)
+        outer_layout.setContentsMargins(12, 5, 8, 9)
+        outer_layout.setSpacing(0)
+
+        content_frame = QFrame()
+        content_layout = QGridLayout(content_frame)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
+
+        row_layout = QHBoxLayout()
+        row_layout.setContentsMargins(0, 0, 0, 0)
         row_layout.setSpacing(18)
 
         icon_wrapper = QFrame()
@@ -1882,7 +2040,6 @@ class ValorantStatsWindow(QMainWindow):
         level_label = QLabel(f"{level_value}")
         level_label.setObjectName("playerLevelBadge")
         level_label.setAlignment(Qt.AlignCenter)
-
         icon_layout.addWidget(agent_icon_label, 0, 0)
         icon_layout.addWidget(level_label, 0, 0, Qt.AlignBottom | Qt.AlignLeft)
 
@@ -1912,7 +2069,7 @@ class ValorantStatsWindow(QMainWindow):
         vtl_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         vtl_label.setOpenExternalLinks(True)
         vtl_url = f"https://vtl.lol/id/{player.get('puuid')}"
-        vtl_label.setText(f"<a href='{vtl_url}' style='text-decoration: none; font-size: 16px;'>🔗</a>")
+        vtl_label.setText(f"<a href='{vtl_url}' style='text-decoration: none; font-size: 13px;'>🔗</a>")
         vtl_label.setToolTip("View on VTL.lol")
         name_row.addWidget(vtl_label)
 
@@ -2155,9 +2312,14 @@ class ValorantStatsWindow(QMainWindow):
         rank_area_layout.addLayout(right_rank_col)
 
         row_layout.addLayout(rank_area_layout)
+        content_layout.addLayout(row_layout, 0, 0)
 
+        party_overlay = self.build_party_overlay(player)
+        if party_overlay is not None:
+            content_layout.addWidget(party_overlay, 0, 0, Qt.AlignTop | Qt.AlignRight)
+
+        outer_layout.addWidget(content_frame)
         return row
-
     def apply_stat_colour(self, label, value, category):
         colour = None
         try:
@@ -2557,7 +2719,7 @@ class ValorantStatsWindow(QMainWindow):
                 await self.valo_rank.lobby_load(party_id=party_id)
             else:
                 await self.valo_rank.valo_stats()
-            print("✅ Data fetched. Refreshing table...")
+            print("? Data fetched. Refreshing table...")
             self.safe_load_players(self.valo_rank.frontend_data)
             self.update_metadata()
         finally:
@@ -2719,7 +2881,6 @@ async def main():
     window = ValorantStatsWindow([])
     await window.init_agents()
     window.show()
-    asyncio.create_task(window.refresh_data())
     return window
 
 
@@ -2732,5 +2893,9 @@ if __name__ == "__main__":
     asyncio.set_event_loop(loop)
 
     window = loop.run_until_complete(main())
+    loop.call_soon(window.start_runtime_tasks)
     with loop:
         loop.run_forever()
+
+
+

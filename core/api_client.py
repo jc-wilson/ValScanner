@@ -1,9 +1,10 @@
-from core.detection import MatchDetectionHandler
+﻿from core.detection import MatchDetectionHandler
 from core.local_api import LockfileHandler
 from core.valorant_uuid import UUIDHandler
 from core.skins import SkinHandler
 from concurrent.futures import ThreadPoolExecutor
 from core.http_session import SharedSession
+from core.party_tracker import PartyTracker
 import requests
 import sys
 import os
@@ -37,6 +38,8 @@ class ValoRank:
         self.uuid_handler.agent_uuid_function()
         self.uuid_handler.season_uuid_function()
         self.skin_handler = SkinHandler()
+        self.party_tracker = PartyTracker.get()
+        self.party_detection_enabled = True
         self.version_data = self.get_version_from_log()
         self.current_act = self.uuid_handler.current_season()
         self.e1_to_e4 = [
@@ -112,7 +115,10 @@ class ValoRank:
     async def lobby_load(self, party_id=None):
         self.frontend_data = {}
         self.handler = MatchDetectionHandler()
-        await self.handler.detect_match_handler()
+        if not await self.handler.detect_match_handler():
+            return False
+        if not self.handler.match_id_header or not self.handler.region or not self.handler.shard:
+            return False
 
         session = SharedSession.get()
         async with session.get(
@@ -156,12 +162,13 @@ class ValoRank:
                 "team": "Red",
                 "puuid": player["puuid"]
             }
+        self.apply_party_metadata()
+        return True
 
     # Gamemode and server detection function
     def gs_func(self):
         self.gs = []
         if self.handler.player_info_pre:
-            print(self.handler.player_info_pre)
             self.gs.append(self.handler.player_info_pre["Mode"])
             self.gs.append(self.handler.player_info_pre["GamePodID"])
         elif self.handler.player_info:
@@ -187,6 +194,17 @@ class ValoRank:
                     if self.handler.player_info_pre["IsRanked"] == 0:
                         self.gs[0] = "Unrated"
 
+
+    def set_party_detection_enabled(self, enabled):
+        self.party_detection_enabled = bool(enabled)
+        if not self.party_detection_enabled:
+            self.party_tracker.clear_party_metadata(self.frontend_data)
+
+    def apply_party_metadata(self):
+        if not self.party_detection_enabled:
+            return self.party_tracker.clear_party_metadata(self.frontend_data)
+        return self.party_tracker.enrich_frontend_data(self.frontend_data)
+
     async def valo_stats(self, prematch_id=None, match_id=None):
         if prematch_id:
             self.handler = MatchDetectionHandler(prematch_id=prematch_id)
@@ -195,12 +213,12 @@ class ValoRank:
         else:
             self.handler = MatchDetectionHandler()
 
-        await self.handler.player_info_retrieval()
+        if not await self.handler.player_info_retrieval():
+            return False
 
-        try:
-            current_match_id = self.handler.in_match
-        except AttributeError:
-            return
+        current_match_id = self.handler.in_match
+        if not current_match_id or not self.handler.match_id_header:
+            return False
 
         if self.last_match_id != current_match_id:
             self.used_puuids = []
@@ -251,7 +269,9 @@ class ValoRank:
                     for player in self.pip["AllyTeam"]["Players"]:
                         self.ca[player.get("Subject")] = player.get("CharacterID")
 
-        self.modified_header = self.handler.match_id_header
+        self.modified_header = dict(self.handler.match_id_header or {})
+        if not self.modified_header:
+            return False
         self.modified_header["X-Riot-ClientVersion"] = self.version_data
 
         async def stat_collector(puuid, session):
@@ -474,14 +494,20 @@ class ValoRank:
                 self.used_puuids.append(puuid)
                 await self.calc_stats(puuid)
 
+        if not self.cmp:
+            return False
+
         session = SharedSession.get()
         tasks = [asyncio.create_task(stat_collector(puuid, session)) for puuid in self.cmp]
         await asyncio.gather(*tasks)
 
         for index, puuid in enumerate(self.cmp):
-            self.frontend_data[puuid]["agent"] = self.uuid_handler.agent_converter(self.ca[puuid])
+            if puuid in self.frontend_data:
+                self.frontend_data[puuid]["agent"] = self.uuid_handler.agent_converter(self.ca[puuid])
 
         await self.assign_skins()
+        self.apply_party_metadata()
+        return True
 
     async def calc_stats(self, puuid):
         stats_list = []
@@ -586,6 +612,9 @@ class ValoRank:
             f"{puuid} {stats_list[0]['name']}#{stats_list[0]['tag']}'s ({self.uuid_handler.agent_converter(self.ca[puuid])}) level is {stats_list[0]['level']} | W/L % in last {match_count_kd} matches: {wl} | ACS in the last {match_count_kd} matches: {str(acs)[:5]} | KD in last {match_count_kd} matches: {str(kd)[0:4]} | HS in last {match_count_kd} matches: hs is: {str(hs)[:4]}% | current rank is: {self.mmr[puuid]['current_data']['currenttierpatched']} | current rr is: {self.mmr[puuid]['current_data']['ranking_in_tier']} | rr changes in last 5 matches: {self.rating_changes[puuid][0]}, {self.rating_changes[puuid][1]}, {self.rating_changes[puuid][2]}, {self.rating_changes[puuid][3]}, {self.rating_changes[puuid][4]} | highest rank was: {self.mmr[puuid]['highest_rank']['patched_tier']} | peak act was: {self.mmr[puuid]['highest_rank']['season']}")
 
     async def load_more_matches(self):
+        if not self.cmp or not getattr(self, "modified_header", None) or not self.handler.shard:
+            return False
+
         session = SharedSession.get()
         for puuid in self.cmp:
             if self.zero_check[puuid] <= self.start:
@@ -615,6 +644,7 @@ class ValoRank:
             await self.calc_stats(puuid)
 
             await self.assign_skins()
+            self.apply_party_metadata()
 
             print("load more matches finished")
 
@@ -622,6 +652,9 @@ class ValoRank:
         self.end += 5
 
     async def assign_skins(self, on_update=None):
+        if not self.handler.in_match or not self.handler.match_id_header or not self.handler.region or not self.handler.shard:
+            return False
+
         if len(self.used_puuids) == len(self.cmp):
             session = SharedSession.get()
             tasks = [

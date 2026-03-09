@@ -164,15 +164,13 @@ async def download_and_cache_buddies(cache_dir=None, threads=40):
 
     print("\n✅ Download complete. Loading pixmaps...")
 
-    # Load images into QPixmap directly on the main thread
+    # Load images into QPixmap directly on the main thread.
+    # Avoid yielding here because modal Qt dialogs can spin a nested event loop
+    # and trigger qasync task re-entry while this task is still active.
     pixmaps = {}
-    for count, (uuid, file_path) in enumerate(file_map.items()):
+    for uuid, file_path in file_map.items():
         if os.path.exists(file_path):
             pixmaps[uuid] = QPixmap(file_path)
-
-            # Yield control to the event loop every 50 images so the UI doesn't freeze
-            if count % 50 == 0:
-                await asyncio.sleep(0)
 
     print(f"Loaded {len(pixmaps)} total icons.")
     return pixmaps
@@ -244,15 +242,13 @@ async def download_and_cache_skins(cache_dir=None, threads=40):
 
     print("\n✅ Download complete. Loading pixmaps...")
 
-    # Load images into QPixmap directly on the main thread
+    # Load images into QPixmap directly on the main thread.
+    # Avoid yielding here because modal Qt dialogs can spin a nested event loop
+    # and trigger qasync task re-entry while this task is still active.
     pixmaps = {}
-    for count, (uuid, file_path) in enumerate(file_map.items()):
+    for uuid, file_path in file_map.items():
         if os.path.exists(file_path):
             pixmaps[uuid] = QPixmap(file_path)
-
-            # Yield control to the event loop every 50 images so the UI doesn't freeze
-            if count % 50 == 0:
-                await asyncio.sleep(0)
 
     print(f"Loaded {len(pixmaps)} total icons.")
     return pixmaps
