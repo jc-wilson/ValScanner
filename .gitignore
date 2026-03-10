@@ -12,3 +12,4 @@ dist/
 assets/
 core/__pycache__/
 scratch_test.txt
+loadouts/
