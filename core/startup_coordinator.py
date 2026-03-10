@@ -32,6 +32,12 @@ class AppStartupCoordinator:
         riot_ready = await lockfile_handler.lockfile_data_function(retries=1)
         already_running = await is_riot_or_valorant_running() or riot_ready
 
+        if self.mitm_service.can_reuse_active_session():
+            self.restart_required = False
+            self.party_detection_enabled = True
+            self.set_status("Waiting for Riot Client and Valorant...")
+            return True
+
         if self.mitm_service._started:
             self.restart_required = False
             self.party_detection_enabled = True
@@ -53,6 +59,12 @@ class AppStartupCoordinator:
         return True
 
     async def ensure_riot_with_mitm(self):
+        if self.mitm_service.can_reuse_active_session():
+            self.party_detection_enabled = True
+            self.restart_required = False
+            self.set_status("Waiting for Riot Client and Valorant...")
+            return True
+
         lockfile_handler = LockfileHandler()
         riot_ready = await lockfile_handler.lockfile_data_function(retries=1)
         already_running = await is_riot_or_valorant_running() or riot_ready
@@ -100,5 +112,37 @@ class AppStartupCoordinator:
     async def wait_before_retry(self):
         await asyncio.sleep(self.retry_interval)
 
+    async def wait_for_riot_processes_to_exit(self):
+        while True:
+            running_processes = await self.refresh_running_processes()
+            if not running_processes:
+                self.running_processes = []
+                self.mitm_service.mark_background_hold(False)
+                return
+            await self.wait_before_retry()
+
+    async def shutdown_for_app_exit(self, allow_background=True):
+        running_processes = await self.refresh_running_processes()
+        should_background = (
+            allow_background
+            and bool(running_processes)
+            and self.mitm_service.can_reuse_active_session()
+        )
+
+        if should_background:
+            self.mitm_service.mark_background_hold(True)
+            self.set_status("ValScanner will finish closing after Riot Client exits.")
+            return {
+                "background_helper": True,
+                "running_processes": list(running_processes),
+            }
+
+        await self.shutdown()
+        return {
+            "background_helper": False,
+            "running_processes": list(running_processes),
+        }
+
     async def shutdown(self):
+        self.mitm_service.mark_background_hold(False)
         await self.mitm_service.stop()

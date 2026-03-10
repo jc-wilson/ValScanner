@@ -94,6 +94,8 @@ class RiotMitmService:
         self._config_thread = None
         self._log_stream = None
         self._started = False
+        self._owns_running_session = False
+        self._background_hold = False
 
     async def start(self):
         if self._started:
@@ -128,6 +130,14 @@ class RiotMitmService:
             self._log_stream = None
 
         self._started = False
+        self._owns_running_session = False
+        self._background_hold = False
+
+    def can_reuse_active_session(self) -> bool:
+        return self._started and self._owns_running_session
+
+    def mark_background_hold(self, enabled: bool) -> None:
+        self._background_hold = bool(enabled)
 
     async def ensure_riot_started(self):
         if await is_riot_client_running():
@@ -137,6 +147,8 @@ class RiotMitmService:
             raise FileNotFoundError(f"Riot Client not found at {self.riot_client_path}")
 
         await start_riot_client(str(self.riot_client_path), self.host, self.http_port, wait=False)
+        self._owns_running_session = True
+        self._background_hold = False
         return True
 
     async def kill_game_processes(self):
@@ -155,6 +167,8 @@ class RiotMitmService:
     async def restart_riot_client(self):
         await self.kill_game_processes()
         await asyncio.sleep(2)
+        self._owns_running_session = False
+        self._background_hold = False
         return await self.ensure_riot_started()
 
 

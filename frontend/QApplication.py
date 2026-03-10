@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QTimer, QSize, QPropertyAnimation, Property, QEasingCurve, QUrl
 from PySide6.QtGui import QPixmap, QIcon, QFontDatabase, QFont, QColor, QPainter, QCloseEvent, QDesktopServices
+from PySide6.QtNetwork import QLocalServer, QLocalSocket
 import sys
 import os
 import random
@@ -33,9 +34,10 @@ from core.http_session import SharedSession
 from core.party_tracker import PartyTracker
 from core.startup_coordinator import AppStartupCoordinator
 
-CURRENT_VERSION = "1.6.2"
+CURRENT_VERSION = "1.7.1"
 UPDATE_CHECK_URL = "https://ValScanner.com/version.json"
 WEBSITE_URL = "https://ValScanner.com/"
+APP_INSTANCE_KEY = "ValScanner.SingleInstance"
 
 THEME_MAIN = "#111823"
 THEME_WINDOW = "#0a1018"
@@ -1570,6 +1572,13 @@ class ValorantStatsWindow(QMainWindow):
         self.ws_task = None
         self._buddy_icons_task = None
         self._skin_icons_task = None
+        self._close_requested = False
+        self._allow_native_close = False
+        self._final_shutdown_started = False
+        self._background_helper_active = False
+        self._background_helper_task = None
+        self._activation_server = None
+        self._activation_server_name = None
 
         self.refreshed_pregame = None
         self.refreshed_game = None
@@ -1591,6 +1600,46 @@ class ValorantStatsWindow(QMainWindow):
     def set_status_message(self, message):
         self.status_value.setText(message)
 
+    def attach_activation_server(self, activation_server, server_name):
+        self._activation_server = activation_server
+        self._activation_server_name = server_name
+        if self._activation_server is None:
+            return
+        self._activation_server.newConnection.connect(self._handle_activation_connections)
+        self._handle_activation_connections()
+
+    def _handle_activation_connections(self):
+        if self._activation_server is None:
+            return
+        while self._activation_server.hasPendingConnections():
+            socket = self._activation_server.nextPendingConnection()
+            if socket is None:
+                continue
+            socket.readyRead.connect(lambda sock=socket: self._process_activation_socket(sock))
+            socket.disconnected.connect(socket.deleteLater)
+            self._process_activation_socket(socket)
+
+    def _process_activation_socket(self, socket):
+        if socket is None:
+            return
+        socket.readAll()
+        asyncio.create_task(self.restore_from_activation())
+        socket.disconnectFromServer()
+
+    async def restore_from_activation(self):
+        if self._background_helper_task and not self._background_helper_task.done():
+            self._background_helper_task.cancel()
+        self._background_helper_task = None
+        self._background_helper_active = False
+        self._close_requested = False
+        self._final_shutdown_started = False
+
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+        self.start_asset_tasks()
+        self.start_websocket_listener()
+        await self.refresh_data()
 
     def start_runtime_tasks(self):
         loop = asyncio.get_running_loop()
@@ -1684,31 +1733,108 @@ class ValorantStatsWindow(QMainWindow):
         await self.refresh_data()
 
     def closeEvent(self, event: QCloseEvent):
-        if not getattr(self, "_is_shutting_down", False):
-            self._is_shutting_down = True
-            event.ignore()
-            asyncio.create_task(self.shutdown_app())
-        else:
+        if self._allow_native_close:
             event.accept()
+            return
 
-    async def shutdown_app(self):
-        from core.http_session import SharedSession
-        await SharedSession.close()
+        event.ignore()
+        if self._close_requested:
+            return
 
-        if hasattr(self, 'startup_task') and self.startup_task:
-            self.startup_task.cancel()
-        if hasattr(self, 'ws_task') and self.ws_task:
+        self._close_requested = True
+        asyncio.create_task(self.request_close())
+
+    async def request_close(self):
+        shutdown_result = await self.startup_coordinator.shutdown_for_app_exit(allow_background=True)
+        if shutdown_result.get("background_helper"):
+            self.enter_background_helper_mode(shutdown_result.get("running_processes", []))
+            return
+
+        await self.finalize_shutdown()
+
+    def enter_background_helper_mode(self, running_processes):
+        self._background_helper_active = True
+        self._close_requested = False
+        self.set_status_message("ValScanner will finish closing after Riot Client exits.")
+
+        if self.ws_task and not self.ws_task.done():
             self.ws_task.cancel()
-        if hasattr(self, '_buddy_icons_task') and self._buddy_icons_task:
+        self.ws_task = None
+
+        if self.startup_task and not self.startup_task.done():
+            self.startup_task.cancel()
+        self.startup_task = None
+
+        if self._buddy_icons_task and not self._buddy_icons_task.done():
             self._buddy_icons_task.cancel()
-        if hasattr(self, '_skin_icons_task') and self._skin_icons_task:
+        self._buddy_icons_task = None
+
+        if self._skin_icons_task and not self._skin_icons_task.done():
             self._skin_icons_task.cancel()
+        self._skin_icons_task = None
+
+        running = ", ".join(running_processes) or "Riot Client / Valorant"
+        QMessageBox.information(
+            self,
+            "Closing In Background",
+            f"ValScanner will stay in the background until {running} exits so Riot social features keep working.",
+        )
+        self.hide()
+
+        if self._background_helper_task is None or self._background_helper_task.done():
+            loop = asyncio.get_running_loop()
+            self._background_helper_task = loop.create_task(self.wait_for_background_shutdown())
+
+    async def wait_for_background_shutdown(self):
+        try:
+            await SharedSession.close()
+            await self.startup_coordinator.wait_for_riot_processes_to_exit()
+            await self.finalize_shutdown()
+        except asyncio.CancelledError:
+            pass
+
+    async def finalize_shutdown(self):
+        if self._final_shutdown_started:
+            return
+
+        self._final_shutdown_started = True
+        self._background_helper_active = False
+
+        await SharedSession.close()
+        self._cancel_runtime_tasks()
+
         if hasattr(self, 'party_tracker') and self.party_tracker:
             self.party_tracker.unsubscribe(self.on_party_data_updated)
         if hasattr(self, 'startup_coordinator') and self.startup_coordinator:
             await self.startup_coordinator.shutdown()
+        if self._activation_server is not None:
+            self._activation_server.close()
+            if self._activation_server_name:
+                QLocalServer.removeServer(self._activation_server_name)
+            self._activation_server = None
 
-        self.close()
+        self._allow_native_close = True
+        app = QApplication.instance()
+        if app is not None:
+            app.quit()
+        else:
+            self.close()
+
+    def _cancel_runtime_tasks(self):
+        current_task = asyncio.current_task()
+        task_names = (
+            'startup_task',
+            'ws_task',
+            '_buddy_icons_task',
+            '_skin_icons_task',
+            '_background_helper_task',
+        )
+        for task_name in task_names:
+            task = getattr(self, task_name, None)
+            if task is None or task.done() or task is current_task:
+                continue
+            task.cancel()
+            setattr(self, task_name, None)
 
     async def init_agents(self):
         await self.owned_agent_handler.owned_agents_func()
@@ -2968,6 +3094,28 @@ def check_for_updates():
         pass
 
 
+def notify_existing_instance(server_name):
+    socket = QLocalSocket()
+    socket.connectToServer(server_name)
+    if not socket.waitForConnected(250):
+        return False
+    socket.write(b"show")
+    socket.flush()
+    socket.waitForBytesWritten(250)
+    socket.disconnectFromServer()
+    return True
+
+
+def create_activation_server(server_name):
+    activation_server = QLocalServer()
+    if activation_server.listen(server_name):
+        return activation_server
+    QLocalServer.removeServer(server_name)
+    if activation_server.listen(server_name):
+        return activation_server
+    raise RuntimeError(f"Unable to listen for single-instance activation on {server_name}")
+
+
 async def main():
     check_for_updates()
 
@@ -2982,14 +3130,17 @@ async def main():
 if __name__ == "__main__":
     from PySide6 import QtCore
 
+    if notify_existing_instance(APP_INSTANCE_KEY):
+        sys.exit(0)
+
     app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
     app.setWindowIcon(QIcon(resource_path("assets/logoone.png")))
+    activation_server = create_activation_server(APP_INSTANCE_KEY)
     loop = qasync.QEventLoop(app)
     asyncio.set_event_loop(loop)
 
     window = loop.run_until_complete(main())
+    window.attach_activation_server(activation_server, APP_INSTANCE_KEY)
     with loop:
         loop.run_forever()
-
-
-
