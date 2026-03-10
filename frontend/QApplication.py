@@ -1423,7 +1423,7 @@ class ValorantStatsWindow(QMainWindow):
         self.uuid_handler.season_uuid_function()
         self.owned_agent_handler = OwnedAgents()
 
-        font_path = resource_path("assets/fonts/unicons-line.ttf")
+        font_path = resource_path("assets/fonts/Inter-UI-Regular.otf")
         print("Loading font from:", font_path)
 
         font_id = QFontDatabase.addApplicationFont(font_path)
