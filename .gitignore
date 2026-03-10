@@ -1,8 +1,8 @@
 build/
-build_WWTB.bat
+build_exe.bat
 changelog.txt
 to do list.txt
-WWTB.spec
+ValScanner.spec
 .idea/
 .venv/
 core/agent_uuids.json
