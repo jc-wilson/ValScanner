@@ -1706,6 +1706,7 @@ class ValorantStatsWindow(QMainWindow):
                 await self.prompt_restart_for_party_detection()
             else:
                 self.set_party_detection_enabled(self.startup_coordinator.party_detection_enabled)
+                await self.init_agents()
                 self.start_websocket_listener()
                 await self.refresh_data()
         finally:
@@ -3121,7 +3122,6 @@ async def main():
 
     window = ValorantStatsWindow([])
     await window.startup_coordinator.ensure_riot_with_mitm()
-    await window.init_agents()
     await window.bootstrap_startup()
     window.show()
     return window
