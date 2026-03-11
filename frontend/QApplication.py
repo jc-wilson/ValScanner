@@ -1570,6 +1570,8 @@ class ValorantStatsWindow(QMainWindow):
         self.startup_task = None
         self._startup_bootstrapped = False
         self.ws_task = None
+        self._agent_icons_task = None
+        self._rank_icons_task = None
         self._buddy_icons_task = None
         self._skin_icons_task = None
         self._close_requested = False
@@ -1654,6 +1656,22 @@ class ValorantStatsWindow(QMainWindow):
     def start_asset_tasks(self):
         loop = asyncio.get_running_loop()
 
+        if self._agent_icons_task is None:
+            from core.asset_loader import download_and_cache_agent_icons
+
+            self._agent_icons_task = loop.create_task(download_and_cache_agent_icons())
+            self._agent_icons_task.add_done_callback(
+                lambda task: QTimer.singleShot(0, lambda: self._on_agents_loaded(task))
+            )
+
+        if self._rank_icons_task is None:
+            from core.asset_loader import download_and_cache_rank_icons
+
+            self._rank_icons_task = loop.create_task(download_and_cache_rank_icons())
+            self._rank_icons_task.add_done_callback(
+                lambda task: QTimer.singleShot(0, lambda: self._on_ranks_loaded(task))
+            )
+
         if self._buddy_icons_task is None:
             from core.asset_loader import download_and_cache_buddies
 
@@ -1706,7 +1724,6 @@ class ValorantStatsWindow(QMainWindow):
                 await self.prompt_restart_for_party_detection()
             else:
                 self.set_party_detection_enabled(self.startup_coordinator.party_detection_enabled)
-                await self.init_agents()
                 self.start_websocket_listener()
                 await self.refresh_data()
         finally:
@@ -1765,6 +1782,14 @@ class ValorantStatsWindow(QMainWindow):
         if self.startup_task and not self.startup_task.done():
             self.startup_task.cancel()
         self.startup_task = None
+
+        if self._agent_icons_task and not self._agent_icons_task.done():
+            self._agent_icons_task.cancel()
+        self._agent_icons_task = None
+
+        if self._rank_icons_task and not self._rank_icons_task.done():
+            self._rank_icons_task.cancel()
+        self._rank_icons_task = None
 
         if self._buddy_icons_task and not self._buddy_icons_task.done():
             self._buddy_icons_task.cancel()
@@ -1826,6 +1851,8 @@ class ValorantStatsWindow(QMainWindow):
         task_names = (
             'startup_task',
             'ws_task',
+            '_agent_icons_task',
+            '_rank_icons_task',
             '_buddy_icons_task',
             '_skin_icons_task',
             '_background_helper_task',
@@ -1840,12 +1867,6 @@ class ValorantStatsWindow(QMainWindow):
     async def init_agents(self):
         await self.owned_agent_handler.owned_agents_func()
 
-        from core.asset_loader import download_and_cache_agent_icons
-        self.agent_icons = await download_and_cache_agent_icons()
-
-        from core.asset_loader import download_and_cache_rank_icons
-        self.rank_icons = await download_and_cache_rank_icons()
-
         if self.owned_agent_handler.combo:
             initial_agent = self.owned_agent_handler.combo[-5]
             self.agent_select_btn.setText(initial_agent)
@@ -1858,6 +1879,7 @@ class ValorantStatsWindow(QMainWindow):
                         self.agent_icons[item] = QPixmap(icon_path)
 
     def open_agent_popup(self):
+        asyncio.create_task(self.init_agents())
         combo_list = self.owned_agent_handler.agents if getattr(self.owned_agent_handler, "combo", None) else ["Random"]
         owned_list = self.owned_agent_handler.combo
         popup = AgentPopup(combo_list, owned_list, getattr(self, "agent_icons", {}), self.on_agent_selected, self)
@@ -1976,6 +1998,20 @@ class ValorantStatsWindow(QMainWindow):
         except Exception as exc:
             print(f"Buddy icon load failed: {exc}")
             self.buddy_icons = {}
+
+    def _on_agents_loaded(self, task):
+        try:
+            self.agent_icons = task.result()
+        except Exception as exc:
+            print(f"Agent icon load failed: {exc}")
+            self.agent_icons = {}
+
+    def _on_ranks_loaded(self, task):
+        try:
+            self.rank_icons = task.result()
+        except Exception as exc:
+            print(f"Rank icon load failed: {exc}")
+            self.rank_icons = {}
 
     def open_skin_popup(self, player_name, skins):
         popup = WeaponPopup(
