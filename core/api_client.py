@@ -492,7 +492,7 @@ class ValoRank:
 
                 await gather_matches()
                 self.used_puuids.append(puuid)
-                await self.calc_stats(puuid)
+                await self.calc_stats(puuid, session)
 
         if not self.cmp:
             return False
@@ -509,7 +509,7 @@ class ValoRank:
         self.apply_party_metadata()
         return True
 
-    async def calc_stats(self, puuid):
+    async def calc_stats(self, puuid, session):
         stats_list = []
         wl_list = []  # tracks wins and losses
         hs_list = []
@@ -517,10 +517,7 @@ class ValoRank:
             for player in match["players"]:
                 if player["subject"] == puuid:
                     stats_list.append({
-                        "name": player.get("gameName"),
-                        "tag": player.get("tagLine"),
                         "stats": player.get("stats"),
-                        "level": player.get("accountLevel"),
                         "team": player.get("teamId")
                     })
 
@@ -590,10 +587,33 @@ class ValoRank:
 
         if self.mmr[puuid]["current_data"]["currenttierpatched"] == "Unrated":
             self.mmr[puuid]["current_data"]["currenttierpatched"] = "Unranked"
+
+        async with session.get(
+                f"https://pd.{self.handler.shard}.a.pvp.net/match-history/v1/history/{puuid}?startIndex={0}&endIndex={1}",
+                headers=self.handler.match_id_header
+        ) as resp:
+            riot_name = await resp.json(content_type=None)
+
+        match_id_name = riot_name["History"][0]["MatchID"]
+
+        async with session.get(
+                f"https://pd.{self.handler.shard}.a.pvp.net/match-details/v1/matches/{match_id_name}",
+                headers=self.handler.match_id_header
+        ) as resp:
+            match_stats_name = await resp.json(content_type=None)
+
+        for player in match_stats_name["players"]:
+            if player["subject"] == puuid:
+                ntl = {
+                    "name": player.get("gameName"),
+                    "tag": player.get("tagLine"),
+                    "level": player.get("accountLevel"),
+                }
+
         self.frontend_data[puuid] = {
-            "name": f"{stats_list[0]['name']}#{stats_list[0]['tag']}",
+            "name": f"{ntl['name']}#{ntl['tag']}",
             "agent": self.uuid_handler.agent_converter(self.ca[puuid]),
-            "level": stats_list[0]['level'],
+            "level": ntl['level'],
             "matches": match_count_kd,
             "wl": str(wl),
             "acs": str(acs)[:5],
@@ -609,7 +629,7 @@ class ValoRank:
         }
 
         print(
-            f"{puuid} {stats_list[0]['name']}#{stats_list[0]['tag']}'s ({self.uuid_handler.agent_converter(self.ca[puuid])}) level is {stats_list[0]['level']} | W/L % in last {match_count_kd} matches: {wl} | ACS in the last {match_count_kd} matches: {str(acs)[:5]} | KD in last {match_count_kd} matches: {str(kd)[0:4]} | HS in last {match_count_kd} matches: hs is: {str(hs)[:4]}% | current rank is: {self.mmr[puuid]['current_data']['currenttierpatched']} | current rr is: {self.mmr[puuid]['current_data']['ranking_in_tier']} | rr changes in last 5 matches: {self.rating_changes[puuid][0]}, {self.rating_changes[puuid][1]}, {self.rating_changes[puuid][2]}, {self.rating_changes[puuid][3]}, {self.rating_changes[puuid][4]} | highest rank was: {self.mmr[puuid]['highest_rank']['patched_tier']} | peak act was: {self.mmr[puuid]['highest_rank']['season']}")
+            f"{puuid} {ntl['name']}#{ntl['tag']}'s ({self.uuid_handler.agent_converter(self.ca[puuid])}) level is {ntl['level']} | W/L % in last {match_count_kd} matches: {wl} | ACS in the last {match_count_kd} matches: {str(acs)[:5]} | KD in last {match_count_kd} matches: {str(kd)[0:4]} | HS in last {match_count_kd} matches: hs is: {str(hs)[:4]}% | current rank is: {self.mmr[puuid]['current_data']['currenttierpatched']} | current rr is: {self.mmr[puuid]['current_data']['ranking_in_tier']} | rr changes in last 5 matches: {self.rating_changes[puuid][0]}, {self.rating_changes[puuid][1]}, {self.rating_changes[puuid][2]}, {self.rating_changes[puuid][3]}, {self.rating_changes[puuid][4]} | highest rank was: {self.mmr[puuid]['highest_rank']['patched_tier']} | peak act was: {self.mmr[puuid]['highest_rank']['season']}")
 
     async def load_more_matches(self):
         if not self.cmp or not getattr(self, "modified_header", None) or not self.handler.shard:
@@ -641,7 +661,7 @@ class ValoRank:
 
             self.match_stats[puuid].extend(new_matches)
 
-            await self.calc_stats(puuid)
+            await self.calc_stats(puuid, session)
 
             await self.assign_skins()
             self.apply_party_metadata()
