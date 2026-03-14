@@ -82,6 +82,9 @@ async def download_and_cache_map_icons(cache_dir=None):
     icons = {}
 
     for map in maps:
+        if map["uuid"] in ["1f10dab3-4294-3827-fa35-c2aa00213cf3", "5914d1e0-40c4-cfdd-6b88-eba06347686c", "a38a3f9a-4042-844c-8970-a3ac2f7ce93d",
+                           "a264de0f-4a04-9c78-c97a-a6b192ce6e86", "a9009649-421f-d5d5-f80c-0cbe02c125bb", "ee613ee9-28b7-4beb-9666-08db13bb2244"]:
+            continue
         uuid = map["uuid"]
         icon_url = map["listViewIcon"]
         if not icon_url:

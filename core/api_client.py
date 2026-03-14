@@ -38,8 +38,6 @@ class ValoRank:
         self.uuid_handler = UUIDHandler()
         self.uuid_handler.agent_uuid_function()
         self.uuid_handler.season_uuid_function()
-        self.uuid_handler.gamemode_uuid_function()
-        self.gamemodes = self.uuid_handler.gamemode_uuids
         self.skin_handler = SkinHandler()
         self.party_tracker = PartyTracker.get()
         self.party_detection_enabled = True
