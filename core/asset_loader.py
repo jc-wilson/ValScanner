@@ -67,6 +67,44 @@ async def download_and_cache_agent_icons(cache_dir=None):
     print(f"Loaded {len(icons)} agent icons (cached in {cache_dir})")
     return icons
 
+async def download_and_cache_map_icons(cache_dir=None):
+    if cache_dir is None:
+        cache_dir = get_external_path("assets/maps")
+    os.makedirs(cache_dir, exist_ok=True)
+
+    print("Fetching map icons from Valorant API...")
+    session = SharedSession.get()
+    async with session.get("https://valorant-api.com/v1/maps") as resp:
+        if resp.status == 200:
+            maps = await resp.json(content_type=None)
+            maps = maps["data"]
+
+    icons = {}
+
+    for map in maps:
+        uuid = map["uuid"]
+        icon_url = map["listViewIcon"]
+        if not icon_url:
+            print("failed to retrieve icon url")
+            continue
+
+        safe_name = re.sub(r'[\\/*?:"<>|]', "_", uuid)
+        file_path = os.path.join(cache_dir, f"{safe_name}.png")
+
+        # Download only if not already cached
+        if not os.path.exists(file_path):
+            print(f"⬇️ Downloading {uuid} icon...")
+            img_data = requests.get(icon_url).content
+            with open(file_path, "wb") as f:
+                f.write(img_data)
+
+        # Load QPixmap from local file
+        pixmap = QPixmap(file_path)
+        icons[uuid] = pixmap
+
+    print(f"Loaded {len(icons)} rank icons (cached in {cache_dir})")
+    return icons
+
 async def download_and_cache_rank_icons(cache_dir=None):
     if cache_dir is None:
         cache_dir = get_external_path("assets/ranks")

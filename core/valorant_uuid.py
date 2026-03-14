@@ -23,6 +23,8 @@ class UUIDHandler:
         self.skin_uuids_path = get_external_path("core/skin_uuids.json")
         self.season_uuids_path = get_external_path("core/season_uuids.json")
         self.buddy_uuids_path = get_external_path("core/buddy_uuids.json")
+        self.map_uuids_path = get_external_path("core/map_uuids.json")
+        self.gamemode_uuids_path = get_external_path("core/gamemode_uuids.json")
 
         os.makedirs(os.path.dirname(self.agent_uuids_path), exist_ok=True)
 
@@ -93,6 +95,40 @@ class UUIDHandler:
                     result = skin["displayName"]
                     return result
         return result
+
+    async def map_uuid_function(self):
+        try:
+            with open(self.map_uuids_path, "r", encoding="utf-8") as a:
+                self.map_uuids = json.load(a)
+        except FileNotFoundError:
+            print("Requested map uuid information from valorant-api.com")
+            session = SharedSession.get()
+            async with session.get("https://valorant-api.com/v1/maps") as resp:
+                if resp.status == 200:
+                    response = await resp.json()
+
+            with open(self.map_uuids_path, "w", encoding="utf-8") as f:
+                json.dump(response, f, indent=2)
+
+            with open(self.map_uuids_path) as a:
+                self.map_uuids = json.load(a)
+
+    async def gamemode_uuid_function(self):
+        try:
+            with open(self.gamemode_uuids_path, "r", encoding="utf-8") as a:
+                self.gamemode_uuids = json.load(a)
+        except FileNotFoundError:
+            print("Requested gamemode uuid information from valorant-api.com")
+            session = SharedSession.get()
+            async with session.get("https://valorant-api.com/v1/gamemodes") as resp:
+                if resp.status == 200:
+                    response = await resp.json()
+
+            with open(self.gamemode_uuids_path, "w", encoding="utf-8") as f:
+                json.dump(response, f, indent=2)
+
+            with open(self.gamemode_uuids_path) as a:
+                self.gamemode_uuids = json.load(a)
 
     async def buddy_uuid_function(self):
         try:

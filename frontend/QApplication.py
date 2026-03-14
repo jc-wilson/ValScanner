@@ -1496,6 +1496,7 @@ class ValorantStatsWindow(QMainWindow):
         self.agent_icons = None
         self.rank_icons = None
         self.buddy_icons = None
+        self.map_icons = None
         self.skin_icons = {}
 
         header_frame = QFrame()
@@ -1574,6 +1575,7 @@ class ValorantStatsWindow(QMainWindow):
         self._rank_icons_task = None
         self._buddy_icons_task = None
         self._skin_icons_task = None
+        self._map_icons_task = None
         self._close_requested = False
         self._allow_native_close = False
         self._final_shutdown_started = False
@@ -1678,6 +1680,14 @@ class ValorantStatsWindow(QMainWindow):
             self._buddy_icons_task = loop.create_task(download_and_cache_buddies())
             self._buddy_icons_task.add_done_callback(
                 lambda task: QTimer.singleShot(0, lambda: self._on_buddies_loaded(task))
+            )
+
+        if self._map_icons_task is None:
+            from core.asset_loader import download_and_cache_map_icons
+
+            self._map_icons_task = loop.create_task(download_and_cache_map_icons())
+            self._map_icons_task.add_done_callback(
+                lambda task: QTimer.singleShot(0, lambda: self._on_maps_loaded(task))
             )
 
         if self._skin_icons_task is None:
@@ -1794,6 +1804,10 @@ class ValorantStatsWindow(QMainWindow):
         if self._buddy_icons_task and not self._buddy_icons_task.done():
             self._buddy_icons_task.cancel()
         self._buddy_icons_task = None
+
+        if self._map_icons_task and not self._map_icons_task.done():
+            self._map_icons_task.cancel()
+        self._map_icons_task = None
 
         if self._skin_icons_task and not self._skin_icons_task.done():
             self._skin_icons_task.cancel()
@@ -1954,12 +1968,17 @@ class ValorantStatsWindow(QMainWindow):
                                     continue
                                 self.seen_prematch_ids.add(prematch_id)
 
-                                self.run_valo_stats(prematch_id=prematch_id)
-                                self.last_seen = None
-
-                                if self.auto_lock_switch.isChecked():
+                                if self.map_lock_switch.isChecked():
+                                    self.run_valo_stats(prematch_id=prematch_id, )
+                                    self.last_seen = None
+                                elif self.auto_lock_switch.isChecked():
+                                    self.run_valo_stats(prematch_id=prematch_id)
+                                    self.last_seen = None
                                     await asyncio.sleep(6.75)
                                     self.instalock_agent()
+                                else:
+                                    self.run_valo_stats(prematch_id=prematch_id)
+                                    self.last_seen = None
 
                             elif "/core-game/v1/matches" in uri:
                                 match_id = uri[-36:]
@@ -1982,6 +2001,14 @@ class ValorantStatsWindow(QMainWindow):
                 print(f"WebSocket error: {e}")
                 self.set_status_message("Waiting for Riot Client and Valorant...")
                 await asyncio.sleep(5)
+
+    def _on_maps_loaded(self, task):
+        try:
+            self.map_icons = task.result()
+        except Exception as exc:
+            print(f"Map icon load failed: {exc}")
+            self.map_icons = {}
+            return
 
     def _on_skins_loaded(self, task):
         try:
@@ -2924,15 +2951,15 @@ class ValorantStatsWindow(QMainWindow):
         finally:
             self.dodge_button.setEnabled(True)
 
-    def run_valo_stats(self, prematch_id=None, match_id=None, party_id=None):
-        if prematch_id:
-            asyncio.create_task(self.refresh_data(prematch_id=prematch_id))
-        elif match_id:
-            asyncio.create_task(self.refresh_data(match_id=match_id))
-        elif party_id:
-            asyncio.create_task(self.refresh_data(party_id=party_id))
-        else:
-            asyncio.create_task(self.refresh_data())
+    def run_valo_stats(self, prematch_id=None, match_id=None, party_id=None, map_instalock=None):
+        asyncio.create_task(
+            self.refresh_data(
+                prematch_id=prematch_id,
+                match_id=match_id,
+                party_id=party_id,
+                map_instalock=map_instalock
+            )
+        )
 
     def run_load_more_matches_button(self):
         if self.load_more_matches_button.isEnabled():
@@ -2948,7 +2975,7 @@ class ValorantStatsWindow(QMainWindow):
             self.refresh_button.setEnabled(True)
             self.load_more_matches_button.setEnabled(True)
 
-    async def refresh_data(self, prematch_id=None, match_id=None, party_id=None):
+    async def refresh_data(self, prematch_id=None, match_id=None, party_id=None, map_instalock=None):
         if not self.refresh_button.isEnabled():
             return
 
@@ -2962,10 +2989,8 @@ class ValorantStatsWindow(QMainWindow):
                 self.safe_load_players({})
                 self.update_metadata()
                 return
-            if prematch_id:
-                await self.valo_rank.valo_stats(prematch_id=prematch_id)
-            elif match_id:
-                await self.valo_rank.valo_stats(match_id=match_id)
+            if prematch_id or match_id or map_instalock:
+                await self.valo_rank.valo_stats(prematch_id=prematch_id, match_id=match_id, map_instalock=map_instalock)
             elif party_id:
                 await self.valo_rank.lobby_load(party_id=party_id)
             else:

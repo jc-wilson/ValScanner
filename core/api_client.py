@@ -5,6 +5,7 @@ from core.skins import SkinHandler
 from concurrent.futures import ThreadPoolExecutor
 from core.http_session import SharedSession
 from core.party_tracker import PartyTracker
+from core.map_instalock_agent import map_instalock_agent
 import requests
 import sys
 import os
@@ -37,6 +38,8 @@ class ValoRank:
         self.uuid_handler = UUIDHandler()
         self.uuid_handler.agent_uuid_function()
         self.uuid_handler.season_uuid_function()
+        self.uuid_handler.gamemode_uuid_function()
+        self.gamemodes = self.uuid_handler.gamemode_uuids
         self.skin_handler = SkinHandler()
         self.party_tracker = PartyTracker.get()
         self.party_detection_enabled = True
@@ -205,7 +208,7 @@ class ValoRank:
             return self.party_tracker.clear_party_metadata(self.frontend_data)
         return self.party_tracker.enrich_frontend_data(self.frontend_data)
 
-    async def valo_stats(self, prematch_id=None, match_id=None):
+    async def valo_stats(self, prematch_id=None, match_id=None, map_instalock=None):
         if prematch_id:
             self.handler = MatchDetectionHandler(prematch_id=prematch_id)
         elif match_id:
@@ -242,6 +245,9 @@ class ValoRank:
         if self.handler.player_info_pre:
             self.pip = self.handler.player_info_pre
 
+            if map_instalock and prematch_id:
+                map_instalock_agent(self.pip["MapID"], self.handler)
+
         if self.handler.player_info:
             if not self.cmp:
                 for player in self.handler.player_info["Players"]:
@@ -253,7 +259,6 @@ class ValoRank:
                             self.cmp.append(player.get("Subject"))
                     except:
                         pass
-
         elif self.pip:
             if not self.cmp:
                 for player in self.pip["AllyTeam"]["Players"]:
