@@ -14,7 +14,6 @@ import math
 import time
 import asyncio
 import json
-import aiohttp
 
 
 class ValoRank:
@@ -99,6 +98,57 @@ class ValoRank:
             on_update(self.frontend_data)
         await asyncio.sleep(0.05)
 
+    def _format_response_preview(self, body, limit=180):
+        preview = " ".join(str(body or "").split())
+        if len(preview) > limit:
+            return f"{preview[:limit]}..."
+        return preview or "<empty>"
+
+    def _get_retry_after_seconds(self, resp, default_seconds=2):
+        retry_after = resp.headers.get("Retry-After")
+        if retry_after is None:
+            return default_seconds
+
+        try:
+            return max(1, math.ceil(float(retry_after)))
+        except (TypeError, ValueError):
+            return default_seconds
+
+    async def _read_json_response(self, resp, context):
+        body = await resp.text()
+
+        if resp.status >= 400:
+            preview = self._format_response_preview(body)
+            raise RuntimeError(f"{context} failed with HTTP {resp.status}: {preview}")
+
+        if not body.strip():
+            raise RuntimeError(f"{context} returned an empty response.")
+
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError:
+            preview = self._format_response_preview(body)
+            raise RuntimeError(f"{context} returned invalid JSON: {preview}")
+
+    async def request_json(self, session, method, url, context, headers=None, json_body=None, retries=5):
+        for attempt in range(retries):
+            async with session.request(method, url, headers=headers, json=json_body) as resp:
+                if resp.status == 429:
+                    retry_after = self._get_retry_after_seconds(resp)
+                    print(
+                        f"Rate limited for {context}. Waiting {retry_after}s before retry "
+                        f"({attempt + 1}/{retries})."
+                    )
+                    if attempt == retries - 1:
+                        preview = self._format_response_preview(await resp.text())
+                        raise RuntimeError(
+                            f"{context} is still rate limited after {retries} attempts: {preview}"
+                        )
+                    await asyncio.sleep(retry_after)
+                    continue
+
+                return await self._read_json_response(resp, context)
+
     def get_version_from_log(self):
         log_path = os.path.expandvars(r"%LOCALAPPDATA%\VALORANT\Saved\Logs\ShooterGame.log")
 
@@ -122,11 +172,13 @@ class ValoRank:
             return False
 
         session = SharedSession.get()
-        async with session.get(
-                f"https://glz-{self.handler.region}-1.{self.handler.shard}.a.pvp.net/parties/v1/parties/{party_id}",
-                headers=self.handler.match_id_header
-        ) as party_response:
-            party_info = await party_response.json(content_type=None)
+        party_info = await self.request_json(
+            session,
+            "GET",
+            f"https://glz-{self.handler.region}-1.{self.handler.shard}.a.pvp.net/parties/v1/parties/{party_id}",
+            "Party info request",
+            headers=self.handler.match_id_header,
+        )
 
         pmi = []
         for player in party_info.get("Members", []):
@@ -139,12 +191,14 @@ class ValoRank:
             })
         puuids = [player.get("puuid") for player in pmi]
 
-        async with session.put(
-                f"https://pd.{self.handler.shard}.a.pvp.net/name-service/v2/players",
-                json=puuids,
-                headers={**self.handler.match_id_header, "Content-Type": "application/json"}
-        ) as nt_response:
-            nt = await nt_response.json(content_type=None)
+        nt = await self.request_json(
+            session,
+            "PUT",
+            f"https://pd.{self.handler.shard}.a.pvp.net/name-service/v2/players",
+            "Party name lookup request",
+            headers={**self.handler.match_id_header, "Content-Type": "application/json"},
+            json_body=puuids,
+        )
 
         for index, player in enumerate(pmi):
             self.frontend_data[player["puuid"]] = {
@@ -283,9 +337,13 @@ class ValoRank:
             else:
                 valorant_mmr = None
 
-                async with session.get(f"https://pd.{self.handler.shard}.a.pvp.net/mmr/v1/players/{puuid}",
-                                       headers=self.modified_header) as resp:
-                    valorant_mmr = await resp.json(content_type=None)
+                valorant_mmr = await self.request_json(
+                    session,
+                    "GET",
+                    f"https://pd.{self.handler.shard}.a.pvp.net/mmr/v1/players/{puuid}",
+                    f"MMR request for {puuid}",
+                    headers=self.modified_header,
+                )
 
                 if valorant_mmr["LatestCompetitiveUpdate"]:
                     peak_rank = 0
@@ -366,28 +424,34 @@ class ValoRank:
                 self.mmr[puuid]["current_data"]["currenttierpatched"] = self.mmr[puuid]["current_data"][
                     "currenttierpatched"].replace("Unrated", "Unranked")
 
-                async with session.get(
-                        f"https://pd.{self.handler.shard}.a.pvp.net/match-history/v1/history/{puuid}?startIndex={0}&endIndex={5}&queue=competitive",
-                        headers=self.handler.match_id_header
-                ) as resp:
-                    riot_matches = await resp.json(content_type=None)
+                riot_matches = await self.request_json(
+                    session,
+                    "GET",
+                    f"https://pd.{self.handler.shard}.a.pvp.net/match-history/v1/history/{puuid}?startIndex={0}&endIndex={5}&queue=competitive",
+                    f"Competitive match history request for {puuid}",
+                    headers=self.handler.match_id_header,
+                )
 
                 self.zero_check[puuid] = (riot_matches["Total"])
 
                 if riot_matches["Total"] == 0:
-                    async with session.get(
-                            f"https://pd.{self.handler.shard}.a.pvp.net/match-history/v1/history/{puuid}?startIndex={0}&endIndex={1}",
-                            headers=self.handler.match_id_header
-                    ) as resp:
-                        riot_name = await resp.json(content_type=None)
+                    riot_name = await self.request_json(
+                        session,
+                        "GET",
+                        f"https://pd.{self.handler.shard}.a.pvp.net/match-history/v1/history/{puuid}?startIndex={0}&endIndex={1}",
+                        f"Fallback match history request for {puuid}",
+                        headers=self.handler.match_id_header,
+                    )
 
                     if riot_name["Total"] == 0:
-                        async with session.put(
-                                f"https://pd.{self.handler.shard}.a.pvp.net/name-service/v2/players",
-                                json=[puuid],
-                                headers={**self.handler.match_id_header, "Content-Type": "application/json"}
-                        ) as resp:
-                            nt = await resp.json(content_type=None)
+                        nt = await self.request_json(
+                            session,
+                            "PUT",
+                            f"https://pd.{self.handler.shard}.a.pvp.net/name-service/v2/players",
+                            f"Name lookup request for {puuid}",
+                            headers={**self.handler.match_id_header, "Content-Type": "application/json"},
+                            json_body=[puuid],
+                        )
 
                         print(
                             f"{nt[0]['GameName']}#{nt[0]['TagLine']} ({self.uuid_handler.agent_converter(self.ca[puuid])}) has not played a game in the last 30 days")
@@ -422,11 +486,13 @@ class ValoRank:
                     match_id_name = riot_name["History"][0]["MatchID"]
 
                     print(f"session: {session}")
-                    async with session.get(
-                            f"https://pd.{self.handler.shard}.a.pvp.net/match-details/v1/matches/{match_id_name}",
-                            headers=self.handler.match_id_header
-                    ) as resp:
-                        match_stats_name = await resp.json(content_type=None)
+                    match_stats_name = await self.request_json(
+                        session,
+                        "GET",
+                        f"https://pd.{self.handler.shard}.a.pvp.net/match-details/v1/matches/{match_id_name}",
+                        f"Fallback match details request for {puuid}",
+                        headers=self.handler.match_id_header,
+                    )
 
                     ntl = []  # Name Tag Level
                     for player in match_stats_name["players"]:
@@ -471,11 +537,13 @@ class ValoRank:
                         end_index = 3
                     else:
                         end_index = self.zero_check[puuid]
-                    async with session.get(
-                            f"https://pd.{self.handler.shard}.a.pvp.net/mmr/v1/players/{puuid}/competitiveupdates?startIndex=0&endIndex={end_index}&queue=competitive",
-                            headers=self.handler.match_id_header
-                    ) as resp:
-                        rating_change = await resp.json(content_type=None)
+                    rating_change = await self.request_json(
+                        session,
+                        "GET",
+                        f"https://pd.{self.handler.shard}.a.pvp.net/mmr/v1/players/{puuid}/competitiveupdates?startIndex=0&endIndex={end_index}&queue=competitive",
+                        f"Competitive updates request for {puuid}",
+                        headers=self.handler.match_id_header,
+                    )
 
                     self.rating_changes[puuid] = []
                     for match in rating_change["Matches"]:
@@ -591,27 +659,42 @@ class ValoRank:
         if self.mmr[puuid]["current_data"]["currenttierpatched"] == "Unrated":
             self.mmr[puuid]["current_data"]["currenttierpatched"] = "Unranked"
 
-        async with session.get(
-                f"https://pd.{self.handler.shard}.a.pvp.net/match-history/v1/history/{puuid}?startIndex={0}&endIndex={1}",
-                headers=self.handler.match_id_header
-        ) as resp:
-            riot_name = await resp.json(content_type=None)
+        riot_name = await self.request_json(
+            session,
+            "GET",
+            f"https://pd.{self.handler.shard}.a.pvp.net/match-history/v1/history/{puuid}?startIndex={0}&endIndex={1}",
+            "Match history request",
+            headers=self.handler.match_id_header,
+        )
 
-        match_id_name = riot_name["History"][0]["MatchID"]
+        history = riot_name.get("History") or []
+        if not history:
+            raise RuntimeError("Match history request returned no matches for this player.")
 
-        async with session.get(
-                f"https://pd.{self.handler.shard}.a.pvp.net/match-details/v1/matches/{match_id_name}",
-                headers=self.handler.match_id_header
-        ) as resp:
-            match_stats_name = await resp.json(content_type=None)
+        match_id_name = history[0].get("MatchID")
+        if not match_id_name:
+            raise RuntimeError("Match history response did not include a MatchID.")
 
-        for player in match_stats_name["players"]:
+        match_stats_name = await self.request_json(
+            session,
+            "GET",
+            f"https://pd.{self.handler.shard}.a.pvp.net/match-details/v1/matches/{match_id_name}",
+            "Match details request",
+            headers=self.handler.match_id_header,
+        )
+
+        ntl = None
+        for player in match_stats_name.get("players", []):
             if player["subject"] == puuid:
                 ntl = {
                     "name": player.get("gameName"),
                     "tag": player.get("tagLine"),
                     "level": player.get("accountLevel"),
                 }
+                break
+
+        if ntl is None:
+            raise RuntimeError("Match details response did not include the requested player.")
 
         self.frontend_data[puuid] = {
             "name": f"{ntl['name']}#{ntl['tag']}",
@@ -645,14 +728,17 @@ class ValoRank:
 
 
             url = f"https://pd.{self.handler.shard}.a.pvp.net/match-history/v1/history/{puuid}?startIndex={self.start}&endIndex={self.end}&queue=competitive"
-            async with session.get(
-                url,
-                headers=self.modified_header
-            ) as response:
-                if response.status != 200:
-                    print(response.status)
-                    continue
-                self.riot_matches_new = await response.json()
+            try:
+                self.riot_matches_new = await self.request_json(
+                    session,
+                    "GET",
+                    url,
+                    f"Load more match history request for {puuid}",
+                    headers=self.modified_header,
+                )
+            except RuntimeError as exc:
+                print(exc)
+                continue
 
             riot_match_ids_new = [match["MatchID"] for match in self.riot_matches_new["History"]]
             match_urls_new = [f"https://pd.{self.handler.shard}.a.pvp.net/match-details/v1/matches/{mid}" for mid in
@@ -698,22 +784,15 @@ class ValoRank:
                 self.frontend_data[puuid]["skins"] = skins
 
     async def fetch(self, session, url, headers=None, retries=3):
-        for attempt in range(retries):
-            async with session.get(url, headers=headers) as response:
-                if response.status == 200:
-                    try:
-                        return await response.json(content_type=None)
-                    except aiohttp.ContentTypeError:
-                        text = await response.text()
-                        print(f"Unexpected response type at {url}:\n{text[:200]}...")
-                        return None
-                elif response.status == 429:
-                    retry_after = int(response.headers.get("Retry-After", "2"))
-                    print(f"Rate limited (429). Retrying in {retry_after}s... ({attempt + 1}/{retries})")
-                    await asyncio.sleep(retry_after)
-                else:
-                    print(f"Error {response.status} fetching {url}")
-                    return None
-
-        print(f"Failed to fetch {url} after {retries} retries.")
-        return None
+        try:
+            return await self.request_json(
+                session,
+                "GET",
+                url,
+                f"Match detail fetch for {url}",
+                headers=headers,
+                retries=retries,
+            )
+        except RuntimeError as exc:
+            print(exc)
+            return None

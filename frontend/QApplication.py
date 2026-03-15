@@ -3662,6 +3662,13 @@ class ValorantStatsWindow(QMainWindow):
             print("? Data fetched. Refreshing table...")
             self.safe_load_players(self.valo_rank.frontend_data)
             self.update_metadata()
+        except Exception as exc:
+            print(f"Refresh failed: {exc}")
+            QMessageBox.warning(
+                self,
+                "Refresh Failed",
+                f"ValScanner couldn't refresh player data.\n\n{exc}",
+            )
         finally:
             self.refresh_button.setEnabled(True)
 
