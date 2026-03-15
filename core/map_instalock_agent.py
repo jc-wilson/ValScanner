@@ -99,7 +99,7 @@ async def resolve_selection_to_agent_uuid(selection_value):
     return resolved or None
 
 
-async def map_instalock_agent(map_uuid, handler, delay_seconds=6):
+async def map_instalock_agent(map_uuid, handler, delay_seconds=6.5):
     if not map_uuid:
         print("Map-specific auto-lock: missing map identifier from pregame payload")
         return False

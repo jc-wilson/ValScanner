@@ -35,7 +35,7 @@ from core.http_session import SharedSession
 from core.party_tracker import PartyTracker
 from core.startup_coordinator import AppStartupCoordinator
 
-CURRENT_VERSION = "1.7.3"
+CURRENT_VERSION = "1.8"
 UPDATE_CHECK_URL = "https://ValScanner.com/version.json"
 WEBSITE_URL = "https://ValScanner.com/"
 APP_INSTANCE_KEY = "ValScanner.SingleInstance"
@@ -2787,7 +2787,7 @@ class ValorantStatsWindow(QMainWindow):
                                 elif self.auto_lock_switch.isChecked():
                                     self.run_valo_stats(prematch_id=prematch_id)
                                     self.last_seen = None
-                                    await asyncio.sleep(6.25)
+                                    await asyncio.sleep(6.66)
                                     self.instalock_agent()
                                 else:
                                     self.run_valo_stats(prematch_id=prematch_id)
