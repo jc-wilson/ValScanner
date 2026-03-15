@@ -107,6 +107,7 @@ THEME_RED_HOVER = "#d87077"
 THEME_RED_PRESSED = "#ad4951"
 THEME_GOLD = "#f0b35a"
 THEME_CYAN = "#7ae6ff"
+INITIAL_ASSET_GROUPS = ("agents", "ranks", "buddies", "maps", "skins")
 
 
 def resource_path(relative_path):
@@ -287,6 +288,88 @@ def ensure_map_agent_selection_data():
             json.dump(normalized_data, file, indent=2)
 
     return normalized_data
+
+
+class StartupLoadingWindow(QDialog):
+    def __init__(self):
+        super().__init__(None)
+        self.setWindowTitle("ValScanner Loading")
+        self.setModal(False)
+        self.setWindowFlags(
+            Qt.Dialog
+            | Qt.FramelessWindowHint
+            | Qt.WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt.WA_ShowWithoutActivating, True)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setFixedSize(320, 220)
+
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+
+        card = QFrame()
+        card.setObjectName("startupLoadingCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(28, 24, 28, 24)
+        card_layout.setSpacing(0)
+
+        self.logo_label = QLabel()
+        self.logo_label.setAlignment(Qt.AlignCenter)
+        logo_pixmap = QPixmap(resource_path("assets/logoone.png"))
+        if not logo_pixmap.isNull():
+            self.logo_label.setPixmap(
+                logo_pixmap.scaled(132, 132, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+        self.logo_label.setMinimumHeight(132)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setObjectName("loadingBar")
+        self.progress_bar.setRange(0, len(INITIAL_ASSET_GROUPS))
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setFixedHeight(8)
+        self.progress_bar.setFixedWidth(132)
+
+        card_layout.addWidget(self.logo_label, alignment=Qt.AlignCenter)
+        card_layout.addSpacing(28)
+        card_layout.addWidget(self.progress_bar, alignment=Qt.AlignHCenter)
+
+        outer_layout.addWidget(card)
+
+        self.setStyleSheet(
+            f"""
+            QDialog {{
+                background-color: transparent;
+            }}
+            QFrame#startupLoadingCard {{
+                background: transparent;
+                border: none;
+            }}
+            QProgressBar#loadingBar {{
+                border: none;
+                border-radius: 4px;
+                background: {THEME_CARD};
+            }}
+            QProgressBar#loadingBar::chunk {{
+                border-radius: 4px;
+                background-color: {THEME_ACCENT};
+            }}
+            """
+        )
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            return
+        geometry = self.frameGeometry()
+        geometry.moveCenter(screen.availableGeometry().center())
+        self.move(geometry.topLeft())
+
+    def update_progress(self, loaded_count, total_count):
+        total = max(total_count, 1)
+        self.progress_bar.setMaximum(total)
+        self.progress_bar.setValue(min(loaded_count, total))
 
 
 class VariantSelectorPopup(QDialog):
@@ -2132,6 +2215,10 @@ class ValorantStatsWindow(QMainWindow):
         self._background_helper_task = None
         self._activation_server = None
         self._activation_server_name = None
+        self._loading_window = None
+        self._loaded_asset_groups = set()
+        self._initial_assets_ready = asyncio.Event()
+        self._initial_window_ready = False
 
         self.refreshed_pregame = None
         self.refreshed_game = None
@@ -2153,6 +2240,39 @@ class ValorantStatsWindow(QMainWindow):
 
     def set_status_message(self, message):
         self.status_value.setText(message)
+
+    def show_loading_window(self):
+        self.hide()
+        if self._loading_window is None:
+            self._loading_window = StartupLoadingWindow()
+        self._loading_window.update_progress(len(self._loaded_asset_groups), len(INITIAL_ASSET_GROUPS))
+        self._loading_window.show()
+        self._loading_window.raise_()
+        self._loading_window.activateWindow()
+
+    def hide_loading_window(self):
+        if self._loading_window is None:
+            return
+        self._loading_window.hide()
+
+    def _mark_asset_group_loaded(self, asset_group):
+        self._loaded_asset_groups.add(asset_group)
+        if self._loading_window is not None:
+            self._loading_window.update_progress(len(self._loaded_asset_groups), len(INITIAL_ASSET_GROUPS))
+        if len(self._loaded_asset_groups) >= len(INITIAL_ASSET_GROUPS):
+            self._initial_assets_ready.set()
+
+    async def wait_for_initial_assets(self):
+        await self._initial_assets_ready.wait()
+
+    def finish_initial_window_setup(self):
+        if self._initial_window_ready:
+            return
+        self._initial_window_ready = True
+        self.hide_loading_window()
+        self.show()
+        self.raise_()
+        self.activateWindow()
 
     def attach_activation_server(self, activation_server, server_name):
         self._activation_server = activation_server
@@ -2188,9 +2308,13 @@ class ValorantStatsWindow(QMainWindow):
         self._close_requested = False
         self._final_shutdown_started = False
 
-        self.showNormal()
-        self.raise_()
-        self.activateWindow()
+        if not self._initial_window_ready:
+            self.show_loading_window()
+        else:
+            self.showNormal()
+            self.raise_()
+            self.activateWindow()
+
         self.start_asset_tasks()
         self.start_websocket_listener()
         await self.refresh_data()
@@ -2283,22 +2407,34 @@ class ValorantStatsWindow(QMainWindow):
             if not started and self.startup_coordinator.restart_required:
                 await self.prompt_restart_for_party_detection()
             else:
+                self.show_loading_window()
                 self.set_party_detection_enabled(self.startup_coordinator.party_detection_enabled)
                 self.start_websocket_listener()
                 await self.refresh_data()
         finally:
             self._startup_bootstrapped = True
+            self.show_loading_window()
             self.start_asset_tasks()
 
     async def prompt_restart_for_party_detection(self):
         running = ", ".join(self.startup_coordinator.running_processes) or "Riot Client / Valorant"
-        answer = QMessageBox.question(
-            self,
-            "Restart Riot Client",
-            f"Riot Client needs to be restarted for party detection to work.\n\nCurrently running: {running}\n\nRestart Riot Client and Valorant now?\n\nSelecting No will disable party detection until ValScanner is restarted.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.Yes,
+        prompt = QMessageBox()
+        prompt.setWindowTitle("Restart Riot Client")
+        prompt.setIcon(QMessageBox.Question)
+        prompt.setText("Party detection needs Riot Client to restart before startup can finish.")
+        prompt.setInformativeText(
+            f"Currently running: {running}\n\n"
+            "Pressing Yes will close Valorant and Riot Client, then launch Valorant for you.\n\n"
+            "Pressing No will keep ValScanner open, but party detection will stay disabled until ValScanner is restarted."
         )
+        prompt.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        prompt.setDefaultButton(QMessageBox.Yes)
+        prompt.setWindowFlag(Qt.WindowStaysOnTopHint, True)
+        prompt.setWindowModality(Qt.ApplicationModal)
+        QTimer.singleShot(0, prompt.raise_)
+        QTimer.singleShot(0, prompt.activateWindow)
+        answer = prompt.exec()
+        self.show_loading_window()
         if answer == QMessageBox.Yes:
             await self.startup_coordinator.restart_riot_client()
             self.set_party_detection_enabled(True)
@@ -2619,7 +2755,7 @@ class ValorantStatsWindow(QMainWindow):
                                 elif self.auto_lock_switch.isChecked():
                                     self.run_valo_stats(prematch_id=prematch_id)
                                     self.last_seen = None
-                                    await asyncio.sleep(6.75)
+                                    await asyncio.sleep(6.25)
                                     self.instalock_agent()
                                 else:
                                     self.run_valo_stats(prematch_id=prematch_id)
@@ -2653,7 +2789,8 @@ class ValorantStatsWindow(QMainWindow):
         except Exception as exc:
             print(f"Map icon load failed: {exc}")
             self.map_icons = {}
-            return
+        finally:
+            self._mark_asset_group_loaded("maps")
 
     def _on_skins_loaded(self, task):
         try:
@@ -2661,8 +2798,10 @@ class ValorantStatsWindow(QMainWindow):
         except Exception as exc:
             print(f"Skin icon load failed: {exc}")
             self.skin_icons = {}
-            return
-        self.safe_load_players(self.valo_rank.frontend_data)
+        else:
+            self.safe_load_players(self.valo_rank.frontend_data)
+        finally:
+            self._mark_asset_group_loaded("skins")
 
     def _on_buddies_loaded(self, task):
         try:
@@ -2670,6 +2809,8 @@ class ValorantStatsWindow(QMainWindow):
         except Exception as exc:
             print(f"Buddy icon load failed: {exc}")
             self.buddy_icons = {}
+        finally:
+            self._mark_asset_group_loaded("buddies")
 
     def _on_agents_loaded(self, task):
         try:
@@ -2677,6 +2818,8 @@ class ValorantStatsWindow(QMainWindow):
         except Exception as exc:
             print(f"Agent icon load failed: {exc}")
             self.agent_icons = {}
+        finally:
+            self._mark_asset_group_loaded("agents")
 
     def _on_ranks_loaded(self, task):
         try:
@@ -2684,6 +2827,8 @@ class ValorantStatsWindow(QMainWindow):
         except Exception as exc:
             print(f"Rank icon load failed: {exc}")
             self.rank_icons = {}
+        finally:
+            self._mark_asset_group_loaded("ranks")
 
     def open_skin_popup(self, player_name, skins):
         popup = WeaponPopup(
@@ -3855,7 +4000,8 @@ async def main():
     window = ValorantStatsWindow([])
     await window.startup_coordinator.ensure_riot_with_mitm()
     await window.bootstrap_startup()
-    window.show()
+    await window.wait_for_initial_assets()
+    window.finish_initial_window_setup()
     return window
 
 
