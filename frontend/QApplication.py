@@ -1,4 +1,4 @@
-from html import escape
+﻿from html import escape
 from urllib.parse import quote
 import time
 
@@ -9,8 +9,8 @@ from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect, QSizePolicy, QProgressBar, QCheckBox,
     QGraphicsOpacityEffect, QLineEdit, QMessageBox
 )
-from PySide6.QtCore import Qt, QTimer, QSize, QPropertyAnimation, Property, QEasingCurve, QUrl
-from PySide6.QtGui import QPixmap, QIcon, QFontDatabase, QFont, QColor, QPainter, QCloseEvent, QDesktopServices
+from PySide6.QtCore import Qt, QTimer, QSize, QPropertyAnimation, Property, QEasingCurve, QUrl, QPoint
+from PySide6.QtGui import QPixmap, QIcon, QFontDatabase, QFont, QColor, QPainter, QCloseEvent, QDesktopServices, QCursor
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 import sys
 import os
@@ -138,6 +138,108 @@ def get_map_selection_path():
 def get_map_display_name(map_uuid):
     return MAP_DISPLAY_NAMES.get(map_uuid, map_uuid)
 
+
+def get_clean_skin_name(raw_name):
+    if isinstance(raw_name, list):
+        raw_name = raw_name[0] if raw_name else "Unknown Skin"
+
+    skin_name = str(raw_name or "Unknown Skin").strip()
+    level_index = skin_name.find("Level")
+    if level_index >= 0:
+        return skin_name[:level_index - 1].strip()
+
+    variant_index = skin_name.find("Variant")
+    if variant_index >= 0:
+        return skin_name[:variant_index - 2].strip()
+
+    return skin_name
+
+
+class InstantTooltipMixin:
+    _tooltip_popup = None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._instant_tooltip_text = ""
+
+    def set_instant_tooltip(self, text):
+        self._instant_tooltip_text = str(text or "")
+
+    @classmethod
+    def _get_tooltip_popup(cls):
+        if cls._tooltip_popup is None:
+            cls._tooltip_popup = InstantTooltipPopup()
+        return cls._tooltip_popup
+
+    def _show_instant_tooltip(self):
+        if self._instant_tooltip_text:
+            self._get_tooltip_popup().show_text(self._instant_tooltip_text)
+
+    def enterEvent(self, event):
+        self.setCursor(Qt.PointingHandCursor)
+        self._show_instant_tooltip()
+        super().enterEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._instant_tooltip_text:
+            self._show_instant_tooltip()
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event):
+        self._get_tooltip_popup().hide()
+        super().leaveEvent(event)
+
+
+class InstantTooltipButton(InstantTooltipMixin, QPushButton):
+    pass
+
+
+class InstantTooltipFrame(InstantTooltipMixin, QFrame):
+    pass
+
+
+class InstantTooltipProgressBar(InstantTooltipMixin, QProgressBar):
+    pass
+
+
+class InstantTooltipLabel(InstantTooltipMixin, QLabel):
+    pass
+
+
+class InstantTooltipPopup(QLabel):
+    def __init__(self):
+        super().__init__(None, Qt.ToolTip | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setMargin(0)
+        self.setContentsMargins(8, 4, 8, 4)
+        self.setStyleSheet(
+            f"background-color: {THEME_WINDOW};"
+            f"color: {THEME_TEXT};"
+            f"border: 1px solid {THEME_BORDER};"
+            "border-radius: 4px;"
+            "font-size: 12px;"
+        )
+
+    def show_text(self, text):
+        self.setText(str(text))
+        self.adjustSize()
+
+        cursor_pos = QCursor.pos()
+        target_pos = cursor_pos + QPoint(14, 20)
+        screen = QApplication.screenAt(cursor_pos) or QApplication.primaryScreen()
+        if screen is not None:
+            geometry = screen.availableGeometry()
+            x = min(target_pos.x(), geometry.right() - self.width() - 4)
+            y = min(target_pos.y(), geometry.bottom() - self.height() - 4)
+            x = max(geometry.left() + 4, x)
+            y = max(geometry.top() + 4, y)
+            target_pos = QPoint(x, y)
+
+        self.move(target_pos)
+        self.show()
+        self.raise_()
+
 def get_map_sections(map_uuids):
     section_map_uuids = []
     assigned = set()
@@ -263,7 +365,7 @@ class VariantSelectorPopup(QDialog):
         """)
 
     def build_variant_tile(self, variant_id):
-        tile = QPushButton()
+        tile = InstantTooltipButton()
         tile.setObjectName("skinTile")
         tile.setFixedSize(self.tile_width, self.tile_height)
         tile.setCursor(Qt.PointingHandCursor)
@@ -297,7 +399,7 @@ class VariantSelectorPopup(QDialog):
                 except Exception:
                     pass
 
-            tile.setToolTip(str(resolved_name))
+            tile.set_instant_tooltip(str(resolved_name))
 
             skin_label = QLabel(str(resolved_name))
             skin_label.setObjectName("skinLabel")
@@ -440,7 +542,7 @@ class SkinSelectorPopup(QDialog):
         """)
 
     def build_skin_tile(self, clean_id, resolved_name):
-        tile = QPushButton()
+        tile = InstantTooltipButton()
         tile.setObjectName("skinTile")
         tile.setFixedSize(self.tile_width, self.tile_height)
         tile.setCursor(Qt.PointingHandCursor)
@@ -465,7 +567,7 @@ class SkinSelectorPopup(QDialog):
             if hasattr(self, "skin_icons"):
                 pixmap = self.skin_icons.get(str(clean_id).lower()) or self.skin_icons.get(str(clean_id).upper())
 
-            tile.setToolTip(str(resolved_name))
+            tile.set_instant_tooltip(str(resolved_name))
 
             skin_label = QLabel(str(resolved_name))
             skin_label.setObjectName("skinLabel")
@@ -906,7 +1008,7 @@ class LoadoutsPopup(QDialog):
         self.populate_grid()
 
     def build_skin_tile(self, weapon, skin_id):
-        tile = QPushButton()
+        tile = InstantTooltipButton()
         tile.setObjectName("skinTile")
         tile.setFixedSize(self.tile_width, self.tile_height)
         tile.setCursor(Qt.PointingHandCursor)
@@ -944,15 +1046,8 @@ class LoadoutsPopup(QDialog):
                     skin_name = self.uuid_handler.skin_converter(skin_id)
                     if isinstance(skin_name, list):
                         skin_name = str(skin_name[0]) if skin_name else "Unknown Skin"
-                    tile.setToolTip(str(skin_name))
-
-                    index = str(skin_name).find("Level")
-                    if index >= 0:
-                        skin_name = str(skin_name)[0:(index - 1)]
-                    else:
-                        index2 = str(skin_name).find("Variant")
-                        if index2 >= 0:
-                            skin_name = str(skin_name)[0:(index2 - 2)]
+                    tile.set_instant_tooltip(str(skin_name))
+                    skin_name = get_clean_skin_name(skin_name)
 
                     skin_label = QLabel(str(skin_name))
                     skin_label.setObjectName("skinLabel")
@@ -1714,7 +1809,7 @@ class WeaponPopup(QDialog):
         self.resize(1200, 750)
 
     def build_skin_tile(self, weapon, skin_data):
-        tile = QFrame()
+        tile = InstantTooltipFrame()
         tile.setObjectName("skinTile")
         tile.setFixedSize(self.tile_width, self.tile_height)
 
@@ -1743,15 +1838,8 @@ class WeaponPopup(QDialog):
                     skin_name = self.uuid_handler.skin_converter(skin_id)
                     if isinstance(skin_name, list):
                         skin_name = str(skin_name[0]) if skin_name else "Unknown Skin"
-                    tile.setToolTip(str(skin_name))
-
-                    index = str(skin_name).find("Level")
-                    if index >= 0:
-                        skin_name = str(skin_name)[0:(index - 1)]
-                    else:
-                        index2 = str(skin_name).find("Variant")
-                        if index2 >= 0:
-                            skin_name = str(skin_name)[0:(index2 - 2)]
+                    tile.set_instant_tooltip(str(skin_name))
+                    skin_name = get_clean_skin_name(skin_name)
 
                     skin_label = QLabel(str(skin_name))
                     skin_label.setObjectName("skinLabel")
@@ -3123,19 +3211,29 @@ class ValorantStatsWindow(QMainWindow):
         except ValueError:
             rr_val = 0
 
-        rr_bar = QProgressBar()
-        rr_bar.setRange(0, 100)
-        rr_bar.setValue(rr_val)
-        rr_bar.setTextVisible(False)
-        rr_bar.setFixedHeight(7)
-        rr_bar.setFixedWidth(108)
-        rr_bar.setToolTip(f"{rr_value_str} RR")
-        rr_bar.setStyleSheet(
-            f"QProgressBar {{ background-color: {THEME_CARD_ALT}; border-radius: 3px; border: none; }}"
-            f" QProgressBar::chunk {{ background-color: {THEME_ACCENT}; border-radius: 3px; }}"
-        )
+        if rr_val >= 100:
+            rr_widget = InstantTooltipLabel(f"{rr_value_str} RR")
+            rr_widget.setAlignment(Qt.AlignCenter)
+            rr_widget.setCursor(Qt.PointingHandCursor)
+            rr_widget.set_instant_tooltip(f"{rr_value_str} RR")
+            rr_widget.setFixedWidth(108)
+            rr_widget.setStyleSheet(
+                f"color: {THEME_ACCENT}; font-size: 14px; font-weight: 700;"
+            )
+        else:
+            rr_widget = InstantTooltipProgressBar()
+            rr_widget.setRange(0, 100)
+            rr_widget.setValue(max(0, min(rr_val, 100)))
+            rr_widget.setTextVisible(False)
+            rr_widget.setFixedHeight(7)
+            rr_widget.setFixedWidth(108)
+            rr_widget.set_instant_tooltip(f"{rr_value_str} RR")
+            rr_widget.setStyleSheet(
+                f"QProgressBar {{ background-color: {THEME_CARD_ALT}; border-radius: 3px; border: none; }}"
+                f" QProgressBar::chunk {{ background-color: {THEME_ACCENT}; border-radius: 3px; }}"
+            )
 
-        right_rank_col.addWidget(rr_bar, 0, Qt.AlignHCenter | Qt.AlignBottom)
+        right_rank_col.addWidget(rr_widget, 0, Qt.AlignHCenter | Qt.AlignBottom)
 
         rank_area_layout.addLayout(right_rank_col)
 
@@ -3771,6 +3869,8 @@ if __name__ == "__main__":
     window.attach_activation_server(activation_server, APP_INSTANCE_KEY)
     with loop:
         loop.run_forever()
+
+
 
 
 
