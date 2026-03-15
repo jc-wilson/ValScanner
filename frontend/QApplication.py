@@ -3677,8 +3677,8 @@ class ValorantStatsWindow(QMainWindow):
         self.right_players = []
 
         if not players:
-            self.populate_team_layout(self.left_scroll_area, self.left_layout, [], "Waiting for Attacking team...")
-            self.populate_team_layout(self.right_scroll_area, self.right_layout, [], "Waiting for Defending team...")
+            self.populate_team_layout(self.left_scroll_area, self.left_layout, [], "You will start on Defense...")
+            self.populate_team_layout(self.right_scroll_area, self.right_layout, [], "You will start on Attack...")
             self.update_metadata()
             return
 
