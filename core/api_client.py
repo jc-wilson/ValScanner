@@ -1,4 +1,4 @@
-﻿from core.detection import MatchDetectionHandler
+from core.detection import MatchDetectionHandler
 from core.local_api import LockfileHandler
 from core.valorant_uuid import UUIDHandler
 from core.skins import SkinHandler
@@ -243,8 +243,8 @@ class ValoRank:
         if self.handler.player_info_pre:
             self.pip = self.handler.player_info_pre
 
-            if map_instalock and prematch_id:
-                map_instalock_agent(self.pip["MapID"], self.handler)
+            if map_instalock and prematch_id and self.pip.get("MapID"):
+                asyncio.create_task(map_instalock_agent(self.pip["MapID"], self.handler))
 
         if self.handler.player_info:
             if not self.cmp:

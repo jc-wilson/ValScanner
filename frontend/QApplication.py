@@ -1,4 +1,4 @@
-﻿from html import escape
+from html import escape
 from urllib.parse import quote
 import time
 
@@ -25,6 +25,7 @@ import requests
 from core.api_client import ValoRank
 from core.dodge_button import dodge
 from core.instalock_agent import instalock_agent
+from core.map_instalock_agent import map_instalock_agent
 from core.valorant_uuid import UUIDHandler
 from core.local_api import LockfileHandler
 from core.owned_agents import OwnedAgents
@@ -38,6 +39,54 @@ CURRENT_VERSION = "1.7.3"
 UPDATE_CHECK_URL = "https://ValScanner.com/version.json"
 WEBSITE_URL = "https://ValScanner.com/"
 APP_INSTANCE_KEY = "ValScanner.SingleInstance"
+MAP_AGENT_SELECTION_RELATIVE_PATH = os.path.join("agent_selection", "map_agent_selection.json")
+MAP_SPECIFIC_ROLE_TOKENS = {"Random", "Duelist", "Initiator", "Controller", "Sentinel"}
+MAP_DISPLAY_NAMES = {
+    "12452a9d-48c3-0b02-e7eb-0381c3520404": "Kasbah",
+    "1c18ab1f-420d-0d8b-71d0-77ad3c439115": "Corrode",
+    "224b0a95-48b9-f703-1bd8-67aca101a61f": "Abyss",
+    "2bee0dc9-4ffe-519b-1cbd-7fbe763a6047": "Haven",
+    "2c09d728-42d5-30d8-43dc-96a05cc7ee9d": "Drift",
+    "2c9d57ec-4431-9c5e-2939-8f9ef6dd5cba": "Bind",
+    "2fb9a4fd-47b8-4e7d-a969-74b4046ebd53": "Breeze",
+    "2fe4ed3a-450a-948b-6d6b-e89a78e680a9": "Lotus",
+    "690b3ed2-4dff-945b-8223-6da834e30d24": "District",
+    "7eaecc1b-4337-bbf6-6ab9-04b8f06b3319": "Ascent",
+    "92584fbe-486a-b1b2-9faa-39b0f486b498": "Sunset",
+    "b529448b-4d60-346e-e89e-00a4c527a405": "Fracture",
+    "d6336a5a-428f-c591-98db-c8a291159134": "Piazza",
+    "d960549e-485c-e861-8d71-aa9d1aed12a2": "Split",
+    "de28aa9b-4cbe-1003-320e-6cb3ec309557": "Glitch",
+    "e2ad5c54-4114-a870-9641-8ea21279579a": "Icebox",
+    "fd267378-4d1d-484f-ff52-77821ed10dc2": "Pearl",
+}
+# Edit these lists to move maps between popup sections.
+MAP_SECTION_MAPS = {
+    "Competitive": [
+        "1c18ab1f-420d-0d8b-71d0-77ad3c439115",
+        "224b0a95-48b9-f703-1bd8-67aca101a61f",
+        "2bee0dc9-4ffe-519b-1cbd-7fbe763a6047",
+        "2c9d57ec-4431-9c5e-2939-8f9ef6dd5cba",
+        "2fb9a4fd-47b8-4e7d-a969-74b4046ebd53",
+        "d960549e-485c-e861-8d71-aa9d1aed12a2",
+        "fd267378-4d1d-484f-ff52-77821ed10dc2",
+    ],
+    "Standard": [
+        "2fe4ed3a-450a-948b-6d6b-e89a78e680a9",
+        "7eaecc1b-4337-bbf6-6ab9-04b8f06b3319",
+        "92584fbe-486a-b1b2-9faa-39b0f486b498",
+        "b529448b-4d60-346e-e89e-00a4c527a405",
+        "e2ad5c54-4114-a870-9641-8ea21279579a",
+    ],
+    "Team Deathmatch": [
+        "2c09d728-42d5-30d8-43dc-96a05cc7ee9d",
+        "690b3ed2-4dff-945b-8223-6da834e30d24",
+        "12452a9d-48c3-0b02-e7eb-0381c3520404",
+        "d6336a5a-428f-c591-98db-c8a291159134",
+        "de28aa9b-4cbe-1003-320e-6cb3ec309557",
+    ],
+}
+MAP_SECTION_ORDER = ["Competitive", "Standard", "Team Deathmatch"]
 
 THEME_MAIN = "#111823"
 THEME_WINDOW = "#0a1018"
@@ -66,6 +115,76 @@ def resource_path(relative_path):
     else:
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_path, relative_path)
+
+def get_agent_asset_path(agent_name):
+    filename = str(agent_name).replace("/", "_")
+    return resource_path(os.path.join("assets", "agents", f"{filename}.png"))
+
+def discover_map_asset_uuids():
+    maps_dir = resource_path(os.path.join("assets", "maps"))
+    if not os.path.isdir(maps_dir):
+        return []
+
+    map_uuids = []
+    for file_name in os.listdir(maps_dir):
+        stem, ext = os.path.splitext(file_name)
+        if ext.lower() == ".png":
+            map_uuids.append(stem)
+    return sorted(map_uuids)
+
+def get_map_selection_path():
+    return resource_path(MAP_AGENT_SELECTION_RELATIVE_PATH)
+
+def get_map_display_name(map_uuid):
+    return MAP_DISPLAY_NAMES.get(map_uuid, map_uuid)
+
+def get_map_sections(map_uuids):
+    section_map_uuids = []
+    assigned = set()
+    available = set(map_uuids)
+
+    for section_name in MAP_SECTION_ORDER:
+        configured = [map_uuid for map_uuid in MAP_SECTION_MAPS.get(section_name, []) if map_uuid in available]
+        assigned.update(configured)
+        section_map_uuids.append((section_name, configured))
+
+    leftovers = [map_uuid for map_uuid in map_uuids if map_uuid not in assigned]
+    for index, (section_name, configured) in enumerate(section_map_uuids):
+        if section_name == "Standard":
+            section_map_uuids[index] = (section_name, configured + leftovers)
+            leftovers = []
+            break
+
+    if leftovers:
+        section_map_uuids.append(("Unassigned", leftovers))
+
+    return section_map_uuids
+
+def ensure_map_agent_selection_data():
+    map_uuids = discover_map_asset_uuids()
+    selection_path = get_map_selection_path()
+    os.makedirs(os.path.dirname(selection_path), exist_ok=True)
+
+    existing_data = {}
+    if os.path.exists(selection_path):
+        try:
+            with open(selection_path, "r", encoding="utf-8") as file:
+                loaded = json.load(file)
+            if isinstance(loaded, dict):
+                existing_data = loaded
+        except (OSError, json.JSONDecodeError):
+            existing_data = {}
+
+    normalized_data = {
+        map_uuid: str(existing_data.get(map_uuid, "") or "")
+        for map_uuid in map_uuids
+    }
+
+    if normalized_data != existing_data:
+        with open(selection_path, "w", encoding="utf-8") as file:
+            json.dump(normalized_data, file, indent=2)
+
+    return normalized_data
 
 
 class VariantSelectorPopup(QDialog):
@@ -1144,6 +1263,336 @@ class AgentPopup(QDialog):
         self.accept()
 
 
+class MapAgentPopup(QDialog):
+    def __init__(self, agent_options, owned_agents_list, agent_icons, map_icons, uuid_handler, selection_data,
+                 save_callback, parent=None):
+        super().__init__(parent)
+        self.agent_options = agent_options
+        self.owned_agents_list = owned_agents_list or []
+        self.agent_icons = agent_icons or {}
+        self.map_icons = map_icons or {}
+        self.uuid_handler = uuid_handler
+        self.selection_data = dict(selection_data or {})
+        self.save_callback = save_callback
+        self.selection_buttons = {}
+
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+
+        screen = QApplication.primaryScreen()
+        available_geometry = screen.availableGeometry() if screen is not None else None
+        outer_margin = 18
+        popup_width = 1520
+        popup_height = 960
+        if available_geometry is not None:
+            popup_width = min(popup_width, available_geometry.width() - 40)
+            popup_height = min(popup_height, max(720, available_geometry.height() - 60))
+
+        container_width = popup_width - (outer_margin * 2)
+        container_height = popup_height - (outer_margin * 2)
+
+        self.setFixedSize(popup_width, popup_height)
+
+        container = QWidget(self)
+        container.setObjectName("popupCard")
+        container.setFixedSize(container_width, container_height)
+
+        main_layout = QVBoxLayout(container)
+        main_layout.setContentsMargins(30, 30, 30, 24)
+        main_layout.setSpacing(18)
+
+        header = QVBoxLayout()
+        header.setSpacing(6)
+        header.setAlignment(Qt.AlignCenter)
+
+        title = QLabel("Map Specific")
+        title.setObjectName("title")
+        header.addWidget(title, alignment=Qt.AlignCenter)
+
+        subtitle = QLabel("Choose an agent or role for each map")
+        subtitle.setObjectName("subtitle")
+        header.addWidget(subtitle, alignment=Qt.AlignCenter)
+
+        main_layout.addLayout(header)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        scroll_area.setStyleSheet("background: transparent; border: none;")
+
+        scroll_content = QWidget()
+        scroll_content.setStyleSheet("background: transparent;")
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(6, 6, 6, 6)
+        scroll_layout.setSpacing(24)
+
+        all_map_uuids = discover_map_asset_uuids()
+        for section_name, section_maps in get_map_sections(all_map_uuids):
+            scroll_layout.addWidget(self.build_section(section_name, section_maps))
+        scroll_layout.addStretch(1)
+
+        scroll_area.setWidget(scroll_content)
+        main_layout.addWidget(scroll_area, 1)
+
+        close_btn = QPushButton("X")
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setFixedHeight(44)
+        close_btn.clicked.connect(self.close)
+        main_layout.addWidget(close_btn)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(outer_margin, outer_margin, outer_margin, outer_margin)
+        outer.addWidget(container)
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(50)
+        shadow.setOffset(0, 12)
+        shadow.setColor(QColor(0, 0, 0, 180))
+        container.setGraphicsEffect(shadow)
+
+        self.setStyleSheet(f"""
+            #popupCard {{
+                background-color: {THEME_MAIN};
+                border-radius: 22px;
+                border: 1px solid {THEME_BORDER_SOFT};
+            }}
+            #title {{ color: {THEME_TEXT}; font-size: 22px; font-weight: 600; }}
+            #subtitle {{ color: {THEME_MUTED}; font-size: 14px; }}
+            #mapSection {{
+                background-color: {THEME_CARD};
+                border-radius: 20px;
+                border: 1px solid {THEME_BORDER_SOFT};
+            }}
+            #mapSectionTitle {{
+                color: {THEME_TEXT};
+                font-size: 16px;
+                font-weight: 600;
+                letter-spacing: 0.5px;
+            }}
+            #mapCard {{
+                background-color: {THEME_PANEL};
+                border-radius: 18px;
+                border: 1px solid {THEME_BORDER_SOFT};
+            }}
+            #mapPreview {{
+                background-color: {THEME_WINDOW};
+                border-radius: 14px;
+                border: 1px solid {THEME_BORDER};
+            }}
+            #mapName {{
+                color: {THEME_TEXT};
+                font-size: 14px;
+                font-weight: 600;
+                letter-spacing: 0.4px;
+            }}
+            QPushButton#mapSelectionButton {{
+                background-color: {THEME_CARD_ALT};
+                border-radius: 18px;
+                border: 1px solid {THEME_BORDER};
+                padding: 0px;
+            }}
+            QPushButton#mapSelectionButton[selected="true"] {{
+                border: 1px solid {THEME_ACCENT};
+                background-color: {THEME_PANEL};
+            }}
+            QPushButton#mapSelectionButton:hover {{
+                border: 1px solid {THEME_ACCENT};
+                background-color: {THEME_CARD};
+            }}
+            QPushButton {{
+                background-color: {THEME_CARD_ALT};
+                border: none;
+                color: {THEME_TEXT};
+                font-size: 14px;
+                font-weight: 700;
+                border-radius: 14px;
+                padding: 10px 18px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME_ACCENT};
+            }}
+            QScrollBar:vertical {{ background: transparent; width: 14px; margin: 4px 0px 4px 0px; }}
+            QScrollBar::handle:vertical {{ background: {THEME_BORDER}; min-height: 32px; border-radius: 7px; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ background: none; height: 0px; }}
+        """)
+
+    def build_section(self, title_text, map_uuids):
+        section = QFrame()
+        section.setObjectName("mapSection")
+        layout = QVBoxLayout(section)
+        layout.setContentsMargins(20, 18, 20, 20)
+        layout.setSpacing(16)
+
+        title = QLabel(title_text)
+        title.setObjectName("mapSectionTitle")
+        layout.addWidget(title)
+
+        grid = QGridLayout()
+        grid.setSpacing(18)
+        grid.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+
+        columns = 4
+        for index, map_uuid in enumerate(map_uuids):
+            row = index // columns
+            column = index % columns
+            grid.addWidget(self.build_map_card(map_uuid), row, column)
+
+        layout.addLayout(grid)
+        return section
+
+    def build_map_card(self, map_uuid):
+        card = QFrame()
+        card.setObjectName("mapCard")
+        card.setFixedSize(324, 264)
+
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
+
+        preview = QLabel()
+        preview.setObjectName("mapPreview")
+        preview.setFixedSize(292, 132)
+        preview.setAlignment(Qt.AlignCenter)
+
+        pixmap = self.map_icons.get(map_uuid)
+        if pixmap is None or pixmap.isNull():
+            preview_path = resource_path(os.path.join("assets", "maps", f"{map_uuid}.png"))
+            pixmap = QPixmap(preview_path)
+            if not pixmap.isNull():
+                self.map_icons[map_uuid] = pixmap
+
+        if pixmap is not None and not pixmap.isNull():
+            preview.setPixmap(pixmap.scaled(292, 132, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
+
+        name_label = QLabel(get_map_display_name(map_uuid))
+        name_label.setObjectName("mapName")
+        name_label.setAlignment(Qt.AlignCenter)
+
+        button = QPushButton()
+        button.setObjectName("mapSelectionButton")
+        button.setCursor(Qt.PointingHandCursor)
+        button.setFixedSize(72, 72)
+        button.clicked.connect(lambda _, m=map_uuid: self.open_agent_picker(m))
+
+        self.selection_buttons[map_uuid] = button
+        self.refresh_selection_button(map_uuid)
+
+        layout.addWidget(name_label, alignment=Qt.AlignCenter)
+        layout.addWidget(preview, alignment=Qt.AlignCenter)
+        layout.addSpacing(12)
+        layout.addWidget(button, alignment=Qt.AlignCenter)
+        return card
+
+    def refresh_selection_button(self, map_uuid):
+        button = self.selection_buttons.get(map_uuid)
+        if button is None:
+            return
+
+        selection_value = str(self.selection_data.get(map_uuid, "") or "")
+        icon_pixmap, tooltip, is_selected = self.resolve_selection_icon(selection_value)
+
+        button.setProperty("selected", "true" if is_selected else "false")
+        button.setIcon(QIcon(icon_pixmap))
+        button.setIconSize(QSize(48, 48))
+        button.setText("")
+        button.setToolTip(tooltip)
+        button.style().unpolish(button)
+        button.style().polish(button)
+        button.update()
+
+    def resolve_selection_icon(self, selection_value):
+        if not selection_value:
+            return self.build_placeholder_icon(), "Select agent", False
+
+        if selection_value == "Random":
+            return self.build_text_icon("R"), "Random", True
+
+        if selection_value in MAP_SPECIFIC_ROLE_TOKENS:
+            pixmap = self.lookup_agent_pixmap(selection_value)
+            if pixmap is not None:
+                return pixmap, selection_value, True
+            return self.build_text_icon(selection_value[:1]), selection_value, True
+
+        agent_name = self.uuid_handler.agent_converter(selection_value)
+        if isinstance(agent_name, list):
+            agent_name = agent_name[0] if agent_name else ""
+        agent_name = str(agent_name or "")
+        pixmap = self.lookup_agent_pixmap(agent_name)
+        if pixmap is not None:
+            return pixmap, agent_name or "Selected agent", True
+        return self.build_text_icon("?"), agent_name or "Selected agent", True
+
+    def lookup_agent_pixmap(self, agent_name):
+        if not agent_name:
+            return None
+
+        pixmap = self.agent_icons.get(agent_name)
+        if pixmap is not None and not pixmap.isNull():
+            return pixmap
+
+        icon_path = get_agent_asset_path(agent_name)
+        if os.path.exists(icon_path):
+            pixmap = QPixmap(icon_path)
+            if not pixmap.isNull():
+                self.agent_icons[agent_name] = pixmap
+                return pixmap
+        return None
+
+    def build_text_icon(self, text):
+        canvas = QPixmap(56, 56)
+        canvas.fill(Qt.transparent)
+
+        painter = QPainter(canvas)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setBrush(QColor(THEME_CARD_ALT))
+        painter.setPen(QColor(THEME_ACCENT))
+        painter.drawRoundedRect(4, 4, 48, 48, 14, 14)
+        painter.setPen(QColor(THEME_TEXT))
+        font = painter.font()
+        font.setPointSize(18)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.drawText(canvas.rect(), Qt.AlignCenter, text)
+        painter.end()
+        return canvas
+
+    def build_placeholder_icon(self):
+        canvas = QPixmap(56, 56)
+        canvas.fill(Qt.transparent)
+
+        painter = QPainter(canvas)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setBrush(QColor(THEME_WINDOW))
+        painter.setPen(QColor(THEME_BORDER))
+        painter.drawRoundedRect(4, 4, 48, 48, 14, 14)
+        painter.setPen(QColor(THEME_MUTED))
+        painter.drawLine(28, 17, 28, 39)
+        painter.drawLine(17, 28, 39, 28)
+        painter.end()
+        return canvas
+
+    def open_agent_picker(self, map_uuid):
+        popup = AgentPopup(
+            self.agent_options,
+            self.owned_agents_list,
+            self.agent_icons,
+            lambda agent_name, m=map_uuid: self.on_agent_selected(m, agent_name),
+            self,
+        )
+        popup.exec()
+
+    def on_agent_selected(self, map_uuid, agent_name):
+        if agent_name in MAP_SPECIFIC_ROLE_TOKENS:
+            stored_value = agent_name
+        else:
+            stored_value = self.uuid_handler.agent_converter_reversed(agent_name)
+            stored_value = str(stored_value or "")
+
+        self.selection_data[map_uuid] = stored_value
+        self.save_callback(map_uuid, stored_value)
+        self.refresh_selection_button(map_uuid)
+
+
 class WeaponPopup(QDialog):
     WEAPON_ORDER = [
         "Classic", "Bandit", "Shorty", "Frenzy", "Ghost", "Sheriff",
@@ -1447,7 +1896,7 @@ class ValorantStatsWindow(QMainWindow):
         self.agent_select_btn = QPushButton(initial_agent)
         self.agent_select_btn.setObjectName("agentSelectButton")
         self.agent_select_btn.setCursor(Qt.PointingHandCursor)
-        self.agent_select_btn.setMinimumWidth(100)
+        self.agent_select_btn.setMinimumWidth(110)
         self.agent_select_btn.clicked.connect(self.open_agent_popup)
         self.agent = self.uuid_handler.agent_converter_reversed(initial_agent)
 
@@ -1460,6 +1909,14 @@ class ValorantStatsWindow(QMainWindow):
         self.auto_lock_label.setObjectName("sectionLabel")
         self.auto_lock_switch = ToggleSwitch()
         self.auto_lock_switch.setChecked(False)
+        self.auto_lock_switch.toggled.connect(self.on_auto_lock_toggled)
+
+        self.map_lock_label = QLabel("Map Specific")
+        self.map_lock_label.setObjectName("sectionLabel")
+        self.map_lock_switch = ToggleSwitch()
+        self.map_lock_switch.setChecked(False)
+        self.map_lock_switch.setEnabled(False)
+        self.map_lock_switch.toggled.connect(self.on_map_lock_toggled)
 
         self.loadouts_button = QPushButton("Loadouts")
         self.loadouts_button.setCursor(Qt.PointingHandCursor)
@@ -1498,6 +1955,9 @@ class ValorantStatsWindow(QMainWindow):
         self.buddy_icons = None
         self.map_icons = None
         self.skin_icons = {}
+        self.map_agent_selection = ensure_map_agent_selection_data()
+        self.last_standard_agent_text = initial_agent
+        self.last_standard_agent_value = self.agent
 
         header_frame = QFrame()
         header_frame.setObjectName("headerFrame")
@@ -1519,9 +1979,10 @@ class ValorantStatsWindow(QMainWindow):
         agent_layout.addWidget(self.lock_agent_button)
         agent_layout.addWidget(self.auto_lock_label)
         agent_layout.addWidget(self.auto_lock_switch)
+        agent_layout.addWidget(self.map_lock_label)
+        agent_layout.addWidget(self.map_lock_switch)
 
         header_layout.addWidget(agent_block, alignment=Qt.AlignVCenter)
-        header_layout.addWidget(self.status_value, alignment=Qt.AlignVCenter)
 
         header_layout.addStretch(1)
 
@@ -1596,6 +2057,7 @@ class ValorantStatsWindow(QMainWindow):
         self.puuid = None
 
         self._latency_start_time = None
+        self.on_auto_lock_toggled(self.auto_lock_switch.isChecked())
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -1869,6 +2331,7 @@ class ValorantStatsWindow(QMainWindow):
             '_rank_icons_task',
             '_buddy_icons_task',
             '_skin_icons_task',
+            '_map_icons_task',
             '_background_helper_task',
         )
         for task_name in task_names:
@@ -1878,26 +2341,121 @@ class ValorantStatsWindow(QMainWindow):
             task.cancel()
             setattr(self, task_name, None)
 
+    def ensure_local_agent_icons(self, agent_names=None):
+        if self.agent_icons is None:
+            self.agent_icons = {}
+
+        source_names = agent_names or self.owned_agent_handler.agents
+        for item in source_names:
+            if item not in self.agent_icons:
+                icon_path = get_agent_asset_path(item)
+                if os.path.exists(icon_path):
+                    self.agent_icons[item] = QPixmap(icon_path)
+
+    def get_map_specific_agent_options(self):
+        agent_options = list(self.owned_agent_handler.agents)
+        self.ensure_local_agent_icons(agent_options)
+        return agent_options
+
     async def init_agents(self):
         await self.owned_agent_handler.owned_agents_func()
+        self.ensure_local_agent_icons(self.owned_agent_handler.combo or self.owned_agent_handler.agents)
 
         if self.owned_agent_handler.combo:
-            initial_agent = self.owned_agent_handler.combo[-5]
-            self.agent_select_btn.setText(initial_agent)
-            self.agent = self.uuid_handler.agent_converter_reversed(initial_agent)
+            if self.last_standard_agent_text not in self.owned_agent_handler.combo:
+                self.set_standard_agent_selection(self.owned_agent_handler.combo[-5])
 
-            for item in self.owned_agent_handler.combo:
-                if item not in self.agent_icons:
-                    icon_path = resource_path(f"assets/agents/{item}.png")
-                    if os.path.exists(icon_path):
-                        self.agent_icons[item] = QPixmap(icon_path)
+    def set_standard_agent_selection(self, agent_name):
+        self.last_standard_agent_text = agent_name
+        if agent_name in MAP_SPECIFIC_ROLE_TOKENS:
+            self.last_standard_agent_value = agent_name
+        else:
+            self.last_standard_agent_value = self.uuid_handler.agent_converter_reversed(agent_name)
+            self.agent = self.last_standard_agent_value
+
+        if not self.map_lock_switch.isChecked():
+            self.agent_select_btn.setText(agent_name)
+
+    def restore_standard_agent_selection(self):
+        restored_text = self.last_standard_agent_text or "Random"
+        self.agent_select_btn.setText(restored_text)
+        if restored_text not in MAP_SPECIFIC_ROLE_TOKENS:
+            self.agent = self.last_standard_agent_value or self.uuid_handler.agent_converter_reversed(restored_text)
+
+    def on_auto_lock_toggled(self, checked):
+        self.map_lock_switch.setEnabled(bool(checked))
+        if checked:
+            return
+
+        if self.map_lock_switch.isChecked():
+            self.map_lock_switch.blockSignals(True)
+            self.map_lock_switch.setChecked(False)
+            self.map_lock_switch.blockSignals(False)
+        self.restore_standard_agent_selection()
+
+    def on_map_lock_toggled(self, checked):
+        if checked and not self.auto_lock_switch.isChecked():
+            self.map_lock_switch.blockSignals(True)
+            self.map_lock_switch.setChecked(False)
+            self.map_lock_switch.blockSignals(False)
+            return
+
+        if checked:
+            self.agent_select_btn.setText("Map Specific")
+        else:
+            self.restore_standard_agent_selection()
+
+    def save_map_agent_selection(self, map_uuid, selection_value):
+        self.map_agent_selection = ensure_map_agent_selection_data()
+        self.map_agent_selection[map_uuid] = str(selection_value or "")
+        with open(get_map_selection_path(), "w", encoding="utf-8") as file:
+            json.dump(self.map_agent_selection, file, indent=2)
 
     def open_agent_popup(self):
-        asyncio.create_task(self.init_agents())
+        active_popup = getattr(self, "_map_agent_popup_dialog", None) or getattr(self, "_agent_popup_dialog", None)
+        if active_popup is not None:
+            active_popup.raise_()
+            active_popup.activateWindow()
+            return
+
+        if self.map_lock_switch.isChecked():
+            agent_options = self.get_map_specific_agent_options()
+            self.open_map_agent_popup(agent_options, agent_options)
+            return
+
+        asyncio.create_task(self._open_agent_popup_async())
+
+    async def _open_agent_popup_async(self):
+        await self.init_agents()
         combo_list = self.owned_agent_handler.agents if getattr(self.owned_agent_handler, "combo", None) else ["Random"]
-        owned_list = self.owned_agent_handler.combo
-        popup = AgentPopup(combo_list, owned_list, getattr(self, "agent_icons", {}), self.on_agent_selected, self)
-        popup.exec()
+        owned_list = self.owned_agent_handler.combo or ["Random"]
+        QTimer.singleShot(0, lambda cl=combo_list, ol=owned_list: self._show_standard_agent_popup(cl, ol))
+
+    def _show_standard_agent_popup(self, combo_list, owned_list):
+        self._agent_popup_dialog = AgentPopup(
+            combo_list,
+            owned_list,
+            getattr(self, "agent_icons", {}),
+            self.on_agent_selected,
+            self,
+        )
+        self._agent_popup_dialog.finished.connect(lambda *_: setattr(self, "_agent_popup_dialog", None))
+        self._agent_popup_dialog.open()
+
+    def open_map_agent_popup(self, combo_list, owned_list):
+        self.map_agent_selection = ensure_map_agent_selection_data()
+        self._map_agent_popup_dialog = MapAgentPopup(
+            combo_list,
+            owned_list,
+            getattr(self, "agent_icons", {}),
+            getattr(self, "map_icons", {}),
+            self.uuid_handler,
+            self.map_agent_selection,
+            self.save_map_agent_selection,
+            self,
+        )
+        self._map_agent_popup_dialog.finished.connect(lambda *_: setattr(self, "_map_agent_popup_dialog", None))
+        self._map_agent_popup_dialog.open()
 
     def open_user_loadouts(self):
         if self.loadouts_button.isEnabled():
@@ -1920,8 +2478,7 @@ class ValorantStatsWindow(QMainWindow):
             print(e)
 
     def on_agent_selected(self, agent_name):
-        self.agent_select_btn.setText(agent_name)
-        self.agent = self.uuid_handler.agent_converter_reversed(agent_name)
+        self.set_standard_agent_selection(agent_name)
 
     async def websocket_listener(self):
         while True:
@@ -1968,8 +2525,8 @@ class ValorantStatsWindow(QMainWindow):
                                     continue
                                 self.seen_prematch_ids.add(prematch_id)
 
-                                if self.map_lock_switch.isChecked():
-                                    self.run_valo_stats(prematch_id=prematch_id, )
+                                if self.auto_lock_switch.isChecked() and self.map_lock_switch.isChecked():
+                                    self.run_valo_stats(prematch_id=prematch_id, map_instalock=True)
                                     self.last_seen = None
                                 elif self.auto_lock_switch.isChecked():
                                     self.run_valo_stats(prematch_id=prematch_id)
@@ -2912,7 +3469,16 @@ class ValorantStatsWindow(QMainWindow):
 
     async def instalock_agent_async(self):
         try:
+            await self.init_agents()
             current_text = self.agent_select_btn.text()
+            if current_text == "Map Specific":
+                current_map_id = None
+                if isinstance(getattr(self.valo_rank, "pip", None), dict):
+                    current_map_id = self.valo_rank.pip.get("MapID")
+                if current_map_id:
+                    await map_instalock_agent(current_map_id, self.valo_rank.handler, delay_seconds=0)
+                return
+
             if current_text == "Random":
                 rand_agent = random.randint(0, (len(self.owned_agent_handler.all_agents) - 1))
                 agents = self.owned_agent_handler.all_agents
@@ -3205,3 +3771,6 @@ if __name__ == "__main__":
     window.attach_activation_server(activation_server, APP_INSTANCE_KEY)
     with loop:
         loop.run_forever()
+
+
+

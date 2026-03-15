@@ -86,7 +86,7 @@ async def download_and_cache_map_icons(cache_dir=None):
                            "a264de0f-4a04-9c78-c97a-a6b192ce6e86", "a9009649-421f-d5d5-f80c-0cbe02c125bb", "ee613ee9-28b7-4beb-9666-08db13bb2244"]:
             continue
         uuid = map["uuid"]
-        icon_url = map["listViewIcon"]
+        icon_url = map["listViewIconTall"]
         if not icon_url:
             print("failed to retrieve icon url")
             continue
