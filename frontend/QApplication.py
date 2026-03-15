@@ -241,6 +241,38 @@ class InstantTooltipPopup(QLabel):
         self.show()
         self.raise_()
 
+
+class PlayerRowContentFrame(QFrame):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._party_overlay = None
+
+    def set_party_overlay(self, overlay):
+        if self._party_overlay is not None:
+            self._party_overlay.setParent(None)
+            self._party_overlay.deleteLater()
+            self._party_overlay = None
+
+        if overlay is None:
+            return
+
+        overlay.setParent(self)
+        overlay.show()
+        overlay.raise_()
+        self._party_overlay = overlay
+        self._position_party_overlay()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._position_party_overlay()
+
+    def _position_party_overlay(self):
+        if self._party_overlay is None:
+            return
+        x_pos = max(0, self.width() - self._party_overlay.width())
+        self._party_overlay.move(x_pos, 0)
+        self._party_overlay.raise_()
+
 def get_map_sections(map_uuids):
     section_map_uuids = []
     assigned = set()
@@ -3014,7 +3046,7 @@ class ValorantStatsWindow(QMainWindow):
 
     def build_party_overlay(self, player):
         group_index = player.get("party_group_index")
-        if group_index is None or self.party_icon.isNull():
+        if group_index is None:
             return None
 
         border_color, _background_color = self.party_group_colours[group_index % len(self.party_group_colours)]
@@ -3039,17 +3071,25 @@ class ValorantStatsWindow(QMainWindow):
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setGeometry(6, 2, 20, 18)
 
-        tinted = self.party_icon.scaled(14, 14, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        canvas = QPixmap(20, 18)
-        canvas.fill(Qt.transparent)
-        painter = QPainter(canvas)
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setRenderHint(QPainter.SmoothPixmapTransform)
-        painter.drawPixmap((20 - tinted.width()) // 2, (18 - tinted.height()) // 2, tinted)
-        painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
-        painter.fillRect(canvas.rect(), QColor("#071222"))
-        painter.end()
-        icon_label.setPixmap(canvas)
+        if self.party_icon.isNull():
+            icon_label.setText("P")
+            icon_label.setStyleSheet(
+                "color: #071222;"
+                "font-size: 11px;"
+                "font-weight: 900;"
+            )
+        else:
+            tinted = self.party_icon.scaled(14, 14, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            canvas = QPixmap(20, 18)
+            canvas.fill(Qt.transparent)
+            painter = QPainter(canvas)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setRenderHint(QPainter.SmoothPixmapTransform)
+            painter.drawPixmap((20 - tinted.width()) // 2, (18 - tinted.height()) // 2, tinted)
+            painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+            painter.fillRect(canvas.rect(), QColor("#071222"))
+            painter.end()
+            icon_label.setPixmap(canvas)
         icon_label.raise_()
         return overlay
 
@@ -3066,7 +3106,7 @@ class ValorantStatsWindow(QMainWindow):
         outer_layout.setContentsMargins(12, 4, 4, 9)
         outer_layout.setSpacing(0)
 
-        content_frame = QFrame()
+        content_frame = PlayerRowContentFrame()
         content_layout = QGridLayout(content_frame)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
@@ -3385,9 +3425,7 @@ class ValorantStatsWindow(QMainWindow):
         row_layout.addLayout(rank_area_layout)
         content_layout.addLayout(row_layout, 0, 0)
 
-        party_overlay = self.build_party_overlay(player)
-        if party_overlay is not None:
-            content_layout.addWidget(party_overlay, 0, 0, Qt.AlignTop | Qt.AlignRight)
+        content_frame.set_party_overlay(self.build_party_overlay(player))
 
         outer_layout.addWidget(content_frame)
         return row
