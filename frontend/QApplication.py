@@ -3699,10 +3699,10 @@ class ValorantStatsWindow(QMainWindow):
                     self.right_players.append(player)
 
         self.populate_team_layout(
-            self.left_scroll_area, self.left_layout, self.left_players, "Waiting for Attacking team..."
+            self.left_scroll_area, self.left_layout, self.left_players, "You will start on Defense..."
         )
         self.populate_team_layout(
-            self.right_scroll_area, self.right_layout, self.right_players, "Waiting for Defending team..."
+            self.right_scroll_area, self.right_layout, self.right_players, "You will start on Attack..."
         )
         self.update_metadata()
 
