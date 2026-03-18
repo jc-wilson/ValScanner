@@ -22,6 +22,7 @@ import ssl
 import base64
 import json
 import requests
+from core.app_state import load_app_state, save_app_state
 from core.api_client import ValoRank
 from core.dodge_button import dodge
 from core.instalock_agent import instalock_agent
@@ -35,7 +36,7 @@ from core.http_session import SharedSession
 from core.party_tracker import PartyTracker
 from core.startup_coordinator import AppStartupCoordinator
 
-CURRENT_VERSION = "1.8"
+CURRENT_VERSION = "1.8.1"
 UPDATE_CHECK_URL = "https://ValScanner.com/version.json"
 WEBSITE_URL = "https://ValScanner.com/"
 APP_INSTANCE_KEY = "ValScanner.SingleInstance"
@@ -63,8 +64,8 @@ MAP_DISPLAY_NAMES = {
 # Edit these lists to move maps between popup sections.
 MAP_SECTION_MAPS = {
     "Competitive": [
-        "1c18ab1f-420d-0d8b-71d0-77ad3c439115",
-        "224b0a95-48b9-f703-1bd8-67aca101a61f",
+        "b529448b-4d60-346e-e89e-00a4c527a405",
+        "2fe4ed3a-450a-948b-6d6b-e89a78e680a9",
         "2bee0dc9-4ffe-519b-1cbd-7fbe763a6047",
         "2c9d57ec-4431-9c5e-2939-8f9ef6dd5cba",
         "2fb9a4fd-47b8-4e7d-a969-74b4046ebd53",
@@ -72,10 +73,10 @@ MAP_SECTION_MAPS = {
         "fd267378-4d1d-484f-ff52-77821ed10dc2",
     ],
     "Standard": [
-        "2fe4ed3a-450a-948b-6d6b-e89a78e680a9",
+        "224b0a95-48b9-f703-1bd8-67aca101a61f",
         "7eaecc1b-4337-bbf6-6ab9-04b8f06b3319",
         "92584fbe-486a-b1b2-9faa-39b0f486b498",
-        "b529448b-4d60-346e-e89e-00a4c527a405",
+        "1c18ab1f-420d-0d8b-71d0-77ad3c439115",
         "e2ad5c54-4114-a870-9641-8ea21279579a",
     ],
     "Team Deathmatch": [
@@ -297,29 +298,8 @@ def get_map_sections(map_uuids):
 
 def ensure_map_agent_selection_data():
     map_uuids = discover_map_asset_uuids()
-    selection_path = get_map_selection_path()
-    os.makedirs(os.path.dirname(selection_path), exist_ok=True)
-
-    existing_data = {}
-    if os.path.exists(selection_path):
-        try:
-            with open(selection_path, "r", encoding="utf-8") as file:
-                loaded = json.load(file)
-            if isinstance(loaded, dict):
-                existing_data = loaded
-        except (OSError, json.JSONDecodeError):
-            existing_data = {}
-
-    normalized_data = {
-        map_uuid: str(existing_data.get(map_uuid, "") or "")
-        for map_uuid in map_uuids
-    }
-
-    if normalized_data != existing_data:
-        with open(selection_path, "w", encoding="utf-8") as file:
-            json.dump(normalized_data, file, indent=2)
-
-    return normalized_data
+    state_data = load_app_state(map_uuids=map_uuids)
+    return dict(state_data.get("map_agent_selection", {}))
 
 
 class StartupLoadingWindow(QDialog):
@@ -2092,10 +2072,16 @@ class ValorantStatsWindow(QMainWindow):
         self.setMinimumSize(1500, 860)
         self.setWindowIcon(QIcon(resource_path("assets/logoone.png")))
 
+        self.map_asset_uuids = discover_map_asset_uuids()
+        persisted_state = load_app_state(map_uuids=self.map_asset_uuids)
+        initial_agent = str(persisted_state.get("selected_standard_agent", "Random") or "Random")
+        initial_auto_lock_enabled = bool(persisted_state.get("auto_lock_enabled", False))
+        initial_map_lock_enabled = bool(persisted_state.get("map_lock_enabled", False))
+        self._suspend_agent_lock_state_save = True
+
         self.agent_label = QLabel("Agent")
         self.agent_label.setObjectName("sectionLabel")
 
-        initial_agent = "Random"
         self.agent_select_btn = QPushButton(initial_agent)
         self.agent_select_btn.setObjectName("agentSelectButton")
         self.agent_select_btn.setCursor(Qt.PointingHandCursor)
@@ -2111,13 +2097,13 @@ class ValorantStatsWindow(QMainWindow):
         self.auto_lock_label = QLabel("Auto-Lock")
         self.auto_lock_label.setObjectName("sectionLabel")
         self.auto_lock_switch = ToggleSwitch()
-        self.auto_lock_switch.setChecked(False)
+        self.auto_lock_switch.setChecked(initial_auto_lock_enabled)
         self.auto_lock_switch.toggled.connect(self.on_auto_lock_toggled)
 
         self.map_lock_label = QLabel("Map Specific")
         self.map_lock_label.setObjectName("sectionLabel")
         self.map_lock_switch = ToggleSwitch()
-        self.map_lock_switch.setChecked(False)
+        self.map_lock_switch.setChecked(initial_map_lock_enabled)
         self.map_lock_switch.setEnabled(False)
         self.map_lock_switch.toggled.connect(self.on_map_lock_toggled)
 
@@ -2158,9 +2144,9 @@ class ValorantStatsWindow(QMainWindow):
         self.buddy_icons = None
         self.map_icons = None
         self.skin_icons = {}
-        self.map_agent_selection = ensure_map_agent_selection_data()
+        self.map_agent_selection = dict(persisted_state.get("map_agent_selection", {}))
         self.last_standard_agent_text = initial_agent
-        self.last_standard_agent_value = self.agent
+        self.last_standard_agent_value = self.resolve_standard_agent_value(initial_agent)
 
         header_frame = QFrame()
         header_frame.setObjectName("headerFrame")
@@ -2264,7 +2250,8 @@ class ValorantStatsWindow(QMainWindow):
         self.puuid = None
 
         self._latency_start_time = None
-        self.on_auto_lock_toggled(self.auto_lock_switch.isChecked())
+        self.apply_restored_agent_lock_state(initial_auto_lock_enabled, initial_map_lock_enabled)
+        self._suspend_agent_lock_state_save = False
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -2617,20 +2604,56 @@ class ValorantStatsWindow(QMainWindow):
         await self.owned_agent_handler.owned_agents_func()
         self.ensure_local_agent_icons(self.owned_agent_handler.combo or self.owned_agent_handler.agents)
 
-        if self.owned_agent_handler.combo:
-            if self.last_standard_agent_text not in self.owned_agent_handler.combo:
-                self.set_standard_agent_selection(self.owned_agent_handler.combo[-5])
+    def resolve_standard_agent_value(self, agent_name):
+        if agent_name in MAP_SPECIFIC_ROLE_TOKENS:
+            return agent_name
+        return self.uuid_handler.agent_converter_reversed(agent_name)
+
+    def build_agent_lock_state_payload(self):
+        return {
+            "version": 1,
+            "selected_standard_agent": self.last_standard_agent_text or "Random",
+            "auto_lock_enabled": self.auto_lock_switch.isChecked(),
+            "map_lock_enabled": self.map_lock_switch.isChecked(),
+            "map_agent_selection": dict(self.map_agent_selection or {}),
+        }
+
+    def persist_agent_lock_state(self):
+        if getattr(self, "_suspend_agent_lock_state_save", False):
+            return
+
+        normalized_state = save_app_state(
+            self.build_agent_lock_state_payload(),
+            map_uuids=self.map_asset_uuids,
+        )
+        self.map_agent_selection = dict(normalized_state.get("map_agent_selection", {}))
+
+    def apply_restored_agent_lock_state(self, auto_lock_enabled, map_lock_enabled):
+        self.auto_lock_switch.blockSignals(True)
+        self.auto_lock_switch.setChecked(bool(auto_lock_enabled))
+        self.auto_lock_switch.blockSignals(False)
+
+        self.map_lock_switch.blockSignals(True)
+        self.map_lock_switch.setChecked(bool(map_lock_enabled))
+        self.map_lock_switch.blockSignals(False)
+
+        if self.map_lock_switch.isChecked():
+            self.agent_select_btn.setText("Map Specific")
+        else:
+            self.restore_standard_agent_selection()
+
+        self.on_auto_lock_toggled(self.auto_lock_switch.isChecked())
+        self.on_map_lock_toggled(self.map_lock_switch.isChecked())
 
     def set_standard_agent_selection(self, agent_name):
         self.last_standard_agent_text = agent_name
-        if agent_name in MAP_SPECIFIC_ROLE_TOKENS:
-            self.last_standard_agent_value = agent_name
-        else:
-            self.last_standard_agent_value = self.uuid_handler.agent_converter_reversed(agent_name)
+        self.last_standard_agent_value = self.resolve_standard_agent_value(agent_name)
+        if agent_name not in MAP_SPECIFIC_ROLE_TOKENS:
             self.agent = self.last_standard_agent_value
 
         if not self.map_lock_switch.isChecked():
             self.agent_select_btn.setText(agent_name)
+        self.persist_agent_lock_state()
 
     def restore_standard_agent_selection(self):
         restored_text = self.last_standard_agent_text or "Random"
@@ -2641,6 +2664,7 @@ class ValorantStatsWindow(QMainWindow):
     def on_auto_lock_toggled(self, checked):
         self.map_lock_switch.setEnabled(bool(checked))
         if checked:
+            self.persist_agent_lock_state()
             return
 
         if self.map_lock_switch.isChecked():
@@ -2648,24 +2672,25 @@ class ValorantStatsWindow(QMainWindow):
             self.map_lock_switch.setChecked(False)
             self.map_lock_switch.blockSignals(False)
         self.restore_standard_agent_selection()
+        self.persist_agent_lock_state()
 
     def on_map_lock_toggled(self, checked):
         if checked and not self.auto_lock_switch.isChecked():
             self.map_lock_switch.blockSignals(True)
             self.map_lock_switch.setChecked(False)
             self.map_lock_switch.blockSignals(False)
+            self.persist_agent_lock_state()
             return
 
         if checked:
             self.agent_select_btn.setText("Map Specific")
         else:
             self.restore_standard_agent_selection()
+        self.persist_agent_lock_state()
 
     def save_map_agent_selection(self, map_uuid, selection_value):
-        self.map_agent_selection = ensure_map_agent_selection_data()
         self.map_agent_selection[map_uuid] = str(selection_value or "")
-        with open(get_map_selection_path(), "w", encoding="utf-8") as file:
-            json.dump(self.map_agent_selection, file, indent=2)
+        self.persist_agent_lock_state()
 
     def open_agent_popup(self):
         active_popup = getattr(self, "_map_agent_popup_dialog", None) or getattr(self, "_agent_popup_dialog", None)

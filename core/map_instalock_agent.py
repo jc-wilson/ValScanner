@@ -1,41 +1,12 @@
-﻿import asyncio
-import json
-import os
+import asyncio
 import random
-import sys
 
+from core.app_state import load_map_agent_selection
 from core.http_session import SharedSession
 from core.owned_agents import OwnedAgents
 from core.valorant_uuid import UUIDHandler
 
-MAP_AGENT_SELECTION_RELATIVE_PATH = os.path.join("agent_selection", "map_agent_selection.json")
 MAP_SELECTION_TOKENS = {"Random", "Duelist", "Initiator", "Controller", "Sentinel"}
-
-
-def get_external_path(relative_path):
-    if getattr(sys, "frozen", False):
-        base_path = os.path.dirname(sys.executable)
-    else:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        base_path = os.path.abspath(os.path.join(current_dir, ".."))
-
-    return os.path.join(base_path, relative_path)
-
-
-def load_map_agent_selection():
-    selection_path = get_external_path(MAP_AGENT_SELECTION_RELATIVE_PATH)
-    if not os.path.exists(selection_path):
-        print(f"Map-specific auto-lock: selection file missing at {selection_path}")
-        return {}
-
-    try:
-        with open(selection_path, "r", encoding="utf-8") as file:
-            loaded = json.load(file)
-    except (OSError, json.JSONDecodeError) as exc:
-        print(f"Map-specific auto-lock: failed to load selection file: {exc}")
-        return {}
-
-    return loaded if isinstance(loaded, dict) else {}
 
 
 async def normalize_map_identifier(map_identifier):
