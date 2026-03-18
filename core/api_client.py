@@ -155,7 +155,7 @@ class ValoRank:
         if os.path.exists(log_path):
             with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
                 for line in f:
-                    match = re.search(r"(release-\d+\.\d+)-(\d+-\d+)", line)
+                    match = re.search(r"(release-\d+\.\d+)(?:-shipping)?-(\d+-\d+)", line)
                     if match:
                         print("found version data")
                         return f"{match.group(1)}-shipping-{match.group(2)}"
@@ -329,7 +329,8 @@ class ValoRank:
         self.modified_header = dict(self.handler.match_id_header or {})
         if not self.modified_header:
             return False
-        self.modified_header["X-Riot-ClientVersion"] = self.version_data
+        if self.version_data:
+            self.modified_header["X-Riot-ClientVersion"] = self.version_data
 
         async def stat_collector(puuid, session):
             if puuid in self.used_puuids:
