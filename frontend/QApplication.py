@@ -88,27 +88,262 @@ MAP_SECTION_MAPS = {
     ],
 }
 MAP_SECTION_ORDER = ["Competitive", "Standard", "Team Deathmatch"]
-
-THEME_MAIN = "#111823"
-THEME_WINDOW = "#0a1018"
-THEME_PANEL = "#0f1722"
-THEME_CARD = "#131d2a"
-THEME_CARD_ALT = "#182536"
-THEME_BORDER = "#27384d"
-THEME_BORDER_SOFT = "#203043"
-THEME_TEXT = "#eef4ff"
-THEME_MUTED = "#93a4bb"
-THEME_ACCENT = "#4da3ff"
-THEME_ACCENT_HOVER = "#6ab4ff"
-THEME_ACCENT_PRESSED = "#347fda"
-THEME_TEAL = "#46d7b0"
-THEME_TEAL_HOVER = "#63e4c0"
-THEME_RED = "#c65a61"
-THEME_RED_HOVER = "#d87077"
-THEME_RED_PRESSED = "#ad4951"
-THEME_GOLD = "#f0b35a"
-THEME_CYAN = "#7ae6ff"
+DEFAULT_THEME_NAME = "midnight"
+THEME_COLOR_KEYS = (
+    "main",
+    "window",
+    "panel",
+    "card",
+    "card_alt",
+    "border",
+    "border_soft",
+    "text",
+    "muted",
+    "accent",
+    "accent_hover",
+    "accent_pressed",
+    "teal",
+    "teal_hover",
+    "red",
+    "red_hover",
+    "red_pressed",
+    "gold",
+    "cyan",
+)
+THEME_DEFINITIONS = {
+    "midnight": {
+        "label": "Midnight",
+        "swatch_a": "#e5d989",
+        "swatch_b": "#517f95",
+        "main": "#111823",
+        "window": "#0a1018",
+        "panel": "#0f1722",
+        "card": "#131d2a",
+        "card_alt": "#182536",
+        "border": "#27384d",
+        "border_soft": "#203043",
+        "text": "#eef4ff",
+        "muted": "#93a4bb",
+        "accent": "#4da3ff",
+        "accent_hover": "#6ab4ff",
+        "accent_pressed": "#347fda",
+        "teal": "#46d7b0",
+        "teal_hover": "#63e4c0",
+        "red": "#c65a61",
+        "red_hover": "#d87077",
+        "red_pressed": "#ad4951",
+        "gold": "#f0b35a",
+        "cyan": "#7ae6ff",
+    },
+    "sandstorm": {
+        "label": "Sandstorm",
+        "swatch_a": "#c8b790",
+        "swatch_b": "#596b84",
+        "main": "#181513",
+        "window": "#100d0c",
+        "panel": "#211b18",
+        "card": "#261f1c",
+        "card_alt": "#312925",
+        "border": "#5b4b3e",
+        "border_soft": "#43372d",
+        "text": "#f7efe7",
+        "muted": "#c9b6a6",
+        "accent": "#66b7ff",
+        "accent_hover": "#86c7ff",
+        "accent_pressed": "#4699e2",
+        "teal": "#8ad0ad",
+        "teal_hover": "#a2debd",
+        "red": "#c76b5d",
+        "red_hover": "#d98374",
+        "red_pressed": "#aa5648",
+        "gold": "#f2c078",
+        "cyan": "#9fd5e8",
+    },
+    "amethyst": {
+        "label": "Amethyst",
+        "swatch_a": "#c6b4ff",
+        "swatch_b": "#5d7093",
+        "main": "#181423",
+        "window": "#100d18",
+        "panel": "#1f1930",
+        "card": "#241d38",
+        "card_alt": "#30264a",
+        "border": "#55456b",
+        "border_soft": "#403454",
+        "text": "#f5eeff",
+        "muted": "#b8a9cf",
+        "accent": "#ffd166",
+        "accent_hover": "#ffdc8a",
+        "accent_pressed": "#e2b24c",
+        "teal": "#83e0cf",
+        "teal_hover": "#9beddb",
+        "red": "#cf728e",
+        "red_hover": "#de89a1",
+        "red_pressed": "#b55774",
+        "gold": "#eac58b",
+        "cyan": "#94dcff",
+    },
+    "emberglass": {
+        "label": "Emberglass",
+        "swatch_a": "#e0ab8f",
+        "swatch_b": "#607a96",
+        "main": "#201615",
+        "window": "#140d0c",
+        "panel": "#281a18",
+        "card": "#2f1f1d",
+        "card_alt": "#3a2723",
+        "border": "#6a473b",
+        "border_soft": "#4e342d",
+        "text": "#fff0ea",
+        "muted": "#cfada1",
+        "accent": "#64d9ff",
+        "accent_hover": "#83e4ff",
+        "accent_pressed": "#3eb8de",
+        "teal": "#78d4b3",
+        "teal_hover": "#93e3c5",
+        "red": "#d56d69",
+        "red_hover": "#e68782",
+        "red_pressed": "#b55450",
+        "gold": "#f1c16d",
+        "cyan": "#91d3ff",
+    },
+    "sage": {
+        "label": "Sage",
+        "swatch_a": "#b5d58e",
+        "swatch_b": "#6f586e",
+        "main": "#162019",
+        "window": "#0f1510",
+        "panel": "#1a271d",
+        "card": "#203024",
+        "card_alt": "#29402f",
+        "border": "#476353",
+        "border_soft": "#34493d",
+        "text": "#eefaf1",
+        "muted": "#abc3b1",
+        "accent": "#f7b267",
+        "accent_hover": "#ffc485",
+        "accent_pressed": "#dd9448",
+        "teal": "#77deb1",
+        "teal_hover": "#92ebc1",
+        "red": "#c86a64",
+        "red_hover": "#d98179",
+        "red_pressed": "#ac5551",
+        "gold": "#e6c271",
+        "cyan": "#93dfd2",
+    },
+    "glacier": {
+        "label": "Glacier",
+        "swatch_a": "#b8dbff",
+        "swatch_b": "#8fa9c2",
+        "main": "#131c23",
+        "window": "#0d1318",
+        "panel": "#172631",
+        "card": "#1b2e3b",
+        "card_alt": "#254053",
+        "border": "#4c6578",
+        "border_soft": "#334655",
+        "text": "#eef7ff",
+        "muted": "#a7bfd1",
+        "accent": "#ffb35c",
+        "accent_hover": "#ffc57b",
+        "accent_pressed": "#e08f3d",
+        "teal": "#7adbc8",
+        "teal_hover": "#95e7d6",
+        "red": "#c86a74",
+        "red_hover": "#da8089",
+        "red_pressed": "#ae5661",
+        "gold": "#ebc37f",
+        "cyan": "#9fe8ff",
+    },
+    "rosewood": {
+        "label": "Rosewood",
+        "swatch_a": "#c4817d",
+        "swatch_b": "#7ea7d1",
+        "main": "#1e1419",
+        "window": "#120c10",
+        "panel": "#291920",
+        "card": "#321f28",
+        "card_alt": "#422736",
+        "border": "#6f4659",
+        "border_soft": "#523445",
+        "text": "#fff0f5",
+        "muted": "#d1aab8",
+        "accent": "#68e0cf",
+        "accent_hover": "#87eadb",
+        "accent_pressed": "#45bcae",
+        "teal": "#7ad1bf",
+        "teal_hover": "#92dfcd",
+        "red": "#c95d6e",
+        "red_hover": "#dc7384",
+        "red_pressed": "#ac4959",
+        "gold": "#f1c47a",
+        "cyan": "#9cd7ff",
+    },
+    "horizon": {
+        "label": "Horizon",
+        "swatch_a": "#f1a867",
+        "swatch_b": "#77b7ea",
+        "main": "#162029",
+        "window": "#0d141c",
+        "panel": "#1a2735",
+        "card": "#203142",
+        "card_alt": "#2a4258",
+        "border": "#4b6b83",
+        "border_soft": "#355166",
+        "text": "#f1f7ff",
+        "muted": "#acc0d6",
+        "accent": "#ff8fb1",
+        "accent_hover": "#ffabc3",
+        "accent_pressed": "#e46d90",
+        "teal": "#74d9c5",
+        "teal_hover": "#8de6d2",
+        "red": "#d87063",
+        "red_hover": "#eb8778",
+        "red_pressed": "#bc5c50",
+        "gold": "#f4cd75",
+        "cyan": "#8fd5ff",
+    },
+}
+THEME_ORDER = tuple(THEME_DEFINITIONS.keys())
+THEME_MAIN = ""
+THEME_WINDOW = ""
+THEME_PANEL = ""
+THEME_CARD = ""
+THEME_CARD_ALT = ""
+THEME_BORDER = ""
+THEME_BORDER_SOFT = ""
+THEME_TEXT = ""
+THEME_MUTED = ""
+THEME_ACCENT = ""
+THEME_ACCENT_HOVER = ""
+THEME_ACCENT_PRESSED = ""
+THEME_TEAL = ""
+THEME_TEAL_HOVER = ""
+THEME_RED = ""
+THEME_RED_HOVER = ""
+THEME_RED_PRESSED = ""
+THEME_GOLD = ""
+THEME_CYAN = ""
 INITIAL_ASSET_GROUPS = ("agents", "ranks", "buddies", "maps", "skins")
+
+
+def normalize_theme_name(theme_name):
+    normalized = str(theme_name or DEFAULT_THEME_NAME).strip().lower()
+    return normalized if normalized in THEME_DEFINITIONS else DEFAULT_THEME_NAME
+
+
+def get_theme_definition(theme_name=None):
+    return THEME_DEFINITIONS[normalize_theme_name(theme_name)]
+
+
+def apply_theme_palette(theme_name=None):
+    palette = get_theme_definition(theme_name)
+    for color_key in THEME_COLOR_KEYS:
+        globals()[f"THEME_{color_key.upper()}"] = palette[color_key]
+    return normalize_theme_name(theme_name)
+
+
+apply_theme_palette(DEFAULT_THEME_NAME)
 
 
 def resource_path(relative_path):
@@ -215,6 +450,9 @@ class InstantTooltipPopup(QLabel):
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
         self.setMargin(0)
         self.setContentsMargins(8, 4, 8, 4)
+        self.apply_theme_styles()
+
+    def apply_theme_styles(self):
         self.setStyleSheet(
             f"background-color: {THEME_WINDOW};"
             f"color: {THEME_TEXT};"
@@ -348,6 +586,9 @@ class StartupLoadingWindow(QDialog):
 
         outer_layout.addWidget(card)
 
+        self.apply_theme_styles()
+
+    def apply_theme_styles(self):
         self.setStyleSheet(
             f"""
             QDialog {{
@@ -1783,6 +2024,183 @@ class MapAgentPopup(QDialog):
         self.refresh_selection_button(map_uuid)
 
 
+class ThemePopup(QDialog):
+    def __init__(self, current_theme_name, callback, parent=None):
+        super().__init__(parent)
+        self.callback = callback
+        self.current_theme_name = normalize_theme_name(current_theme_name)
+        self.theme_buttons = {}
+
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+
+        container = QWidget()
+        container.setObjectName("popupCard")
+
+        main_layout = QVBoxLayout(container)
+        main_layout.setContentsMargins(30, 30, 30, 26)
+        main_layout.setSpacing(18)
+
+        header = QVBoxLayout()
+        header.setSpacing(6)
+        header.setAlignment(Qt.AlignCenter)
+
+        title = QLabel("Themes")
+        title.setObjectName("title")
+        header.addWidget(title, alignment=Qt.AlignCenter)
+
+        main_layout.addLayout(header)
+
+        grid = QGridLayout()
+        grid.setSpacing(16)
+        grid.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+
+        columns = 4
+        for index, theme_name in enumerate(THEME_ORDER):
+            row = index // columns
+            column = index % columns
+            grid.addWidget(self.build_theme_tile(theme_name), row, column)
+
+        main_layout.addLayout(grid)
+
+        close_btn = QPushButton("Close")
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.clicked.connect(self.close)
+        main_layout.addWidget(close_btn, alignment=Qt.AlignRight)
+
+        outer = QVBoxLayout(self)
+        outer.addWidget(container)
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(50)
+        shadow.setOffset(0, 12)
+        shadow.setColor(QColor(0, 0, 0, 180))
+        container.setGraphicsEffect(shadow)
+
+        self.apply_theme_styles()
+        self.resize(760, 420)
+
+    def build_theme_tile(self, theme_name):
+        theme_definition = get_theme_definition(theme_name)
+
+        tile = QPushButton()
+        tile.setObjectName("themeTile")
+        tile.setCursor(Qt.PointingHandCursor)
+        tile.setFixedSize(156, 126)
+        tile.clicked.connect(lambda _, t=theme_name: self.select_theme(t))
+
+        layout = QVBoxLayout(tile)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(10)
+        layout.setAlignment(Qt.AlignCenter)
+
+        swatch = QLabel()
+        swatch.setFixedSize(54, 54)
+        swatch.setAttribute(Qt.WA_TransparentForMouseEvents)
+        swatch.setStyleSheet(
+            f"""
+            background: qlineargradient(
+                x1: 0, y1: 1, x2: 1, y2: 0,
+                stop: 0 {theme_definition["swatch_a"]},
+                stop: 0.49 {theme_definition["swatch_a"]},
+                stop: 0.5 {theme_definition["swatch_b"]},
+                stop: 1 {theme_definition["swatch_b"]}
+            );
+            border-radius: 27px;
+            border: 2px solid rgba(255, 255, 255, 0.18);
+            """
+        )
+
+        accent_dot = QLabel(swatch)
+        accent_dot.setFixedSize(16, 16)
+        accent_dot.move(34, 34)
+        accent_dot.setStyleSheet(
+            f"background-color: {theme_definition['accent']};"
+            "border-radius: 8px;"
+            "border: 2px solid rgba(7, 16, 24, 0.28);"
+        )
+
+        name_label = QLabel(theme_definition["label"])
+        name_label.setObjectName("themeName")
+        name_label.setAlignment(Qt.AlignCenter)
+        name_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+
+        palette_label = QLabel(theme_definition["accent"].upper())
+        palette_label.setObjectName("themeMeta")
+        palette_label.setAlignment(Qt.AlignCenter)
+        palette_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+
+        layout.addWidget(swatch, alignment=Qt.AlignCenter)
+        layout.addWidget(name_label, alignment=Qt.AlignCenter)
+        layout.addWidget(palette_label, alignment=Qt.AlignCenter)
+
+        self.theme_buttons[theme_name] = tile
+        return tile
+
+    def apply_theme_styles(self):
+        self.setStyleSheet(f"""
+            #popupCard {{
+                background-color: {THEME_MAIN};
+                border-radius: 22px;
+                border: 1px solid {THEME_BORDER_SOFT};
+            }}
+            #title {{ color: {THEME_TEXT}; font-size: 22px; font-weight: 600; }}
+            #subtitle {{ color: {THEME_MUTED}; font-size: 14px; }}
+            QPushButton#themeTile {{
+                background-color: {THEME_CARD};
+                border-radius: 18px;
+                border: 1px solid {THEME_BORDER_SOFT};
+                padding: 0px;
+            }}
+            QPushButton#themeTile:hover {{
+                border: 1px solid {THEME_ACCENT};
+                background-color: {THEME_CARD_ALT};
+            }}
+            QPushButton#themeTile[selected="true"] {{
+                border: 1px solid {THEME_ACCENT};
+                background-color: {THEME_PANEL};
+            }}
+            #themeName {{
+                color: {THEME_TEXT};
+                font-size: 13px;
+                font-weight: 700;
+                letter-spacing: 0.4px;
+            }}
+            #themeMeta {{
+                color: {THEME_MUTED};
+                font-size: 11px;
+                letter-spacing: 1.2px;
+                text-transform: uppercase;
+            }}
+            QPushButton {{
+                background-color: {THEME_CARD_ALT};
+                border: none;
+                color: {THEME_TEXT};
+                font-size: 14px;
+                font-weight: 700;
+                border-radius: 14px;
+                padding: 10px 18px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME_ACCENT};
+            }}
+        """)
+        self.refresh_selection_styles()
+
+    def refresh_selection_styles(self):
+        for theme_name, button in self.theme_buttons.items():
+            button.setProperty("selected", "true" if theme_name == self.current_theme_name else "false")
+            button.style().unpolish(button)
+            button.style().polish(button)
+            button.update()
+
+    def select_theme(self, theme_name):
+        normalized_theme_name = normalize_theme_name(theme_name)
+        self.current_theme_name = normalized_theme_name
+        self.callback(normalized_theme_name)
+        self.refresh_selection_styles()
+
+
 class WeaponPopup(QDialog):
     WEAPON_ORDER = [
         "Classic", "Bandit", "Shorty", "Frenzy", "Ghost", "Sheriff",
@@ -2074,6 +2492,8 @@ class ValorantStatsWindow(QMainWindow):
 
         self.map_asset_uuids = discover_map_asset_uuids()
         persisted_state = load_app_state(map_uuids=self.map_asset_uuids)
+        initial_theme_name = normalize_theme_name(persisted_state.get("selected_theme"))
+        self.current_theme_name = apply_theme_palette(initial_theme_name)
         initial_agent = str(persisted_state.get("selected_standard_agent", "Random") or "Random")
         initial_auto_lock_enabled = bool(persisted_state.get("auto_lock_enabled", False))
         initial_map_lock_enabled = bool(persisted_state.get("map_lock_enabled", False))
@@ -2111,6 +2531,11 @@ class ValorantStatsWindow(QMainWindow):
         self.loadouts_button.setCursor(Qt.PointingHandCursor)
         self.loadouts_button.clicked.connect(self.open_user_loadouts)
         self.loadouts_button.setObjectName("secondaryButton")
+
+        self.themes_button = QPushButton("Themes")
+        self.themes_button.setCursor(Qt.PointingHandCursor)
+        self.themes_button.clicked.connect(self.open_theme_popup)
+        self.themes_button.setObjectName("secondaryButton")
 
         self.load_more_matches_button = QPushButton("Load More Games (5)")
         self.load_more_matches_button.setCursor(Qt.PointingHandCursor)
@@ -2175,6 +2600,7 @@ class ValorantStatsWindow(QMainWindow):
 
         header_layout.addStretch(1)
 
+        header_layout.addWidget(self.themes_button, alignment=Qt.AlignVCenter)
         header_layout.addWidget(self.loadouts_button, alignment=Qt.AlignVCenter)
         header_layout.addWidget(self.dodge_button, alignment=Qt.AlignVCenter)
         header_layout.addWidget(self.load_more_matches_button, alignment=Qt.AlignVCenter)
@@ -2611,7 +3037,8 @@ class ValorantStatsWindow(QMainWindow):
 
     def build_agent_lock_state_payload(self):
         return {
-            "version": 1,
+            "version": 2,
+            "selected_theme": self.current_theme_name,
             "selected_standard_agent": self.last_standard_agent_text or "Random",
             "auto_lock_enabled": self.auto_lock_switch.isChecked(),
             "map_lock_enabled": self.map_lock_switch.isChecked(),
@@ -2626,6 +3053,7 @@ class ValorantStatsWindow(QMainWindow):
             self.build_agent_lock_state_payload(),
             map_uuids=self.map_asset_uuids,
         )
+        self.current_theme_name = normalize_theme_name(normalized_state.get("selected_theme"))
         self.map_agent_selection = dict(normalized_state.get("map_agent_selection", {}))
 
     def apply_restored_agent_lock_state(self, auto_lock_enabled, map_lock_enabled):
@@ -2742,6 +3170,48 @@ class ValorantStatsWindow(QMainWindow):
         if self.loadouts_button.isEnabled():
             self.loadouts_button.setEnabled(False)
             asyncio.create_task(self._open_user_loadouts_async())
+
+    def open_theme_popup(self):
+        active_popup = getattr(self, "_theme_popup_dialog", None)
+        if active_popup is not None:
+            active_popup.raise_()
+            active_popup.activateWindow()
+            return
+
+        self._theme_popup_dialog = ThemePopup(self.current_theme_name, self.on_theme_selected, self)
+        self._theme_popup_dialog.finished.connect(lambda *_: setattr(self, "_theme_popup_dialog", None))
+        self._theme_popup_dialog.open()
+
+    def on_theme_selected(self, theme_name):
+        self.apply_selected_theme(theme_name)
+
+    def apply_selected_theme(self, theme_name, persist=True):
+        normalized_theme_name = normalize_theme_name(theme_name)
+        self.current_theme_name = apply_theme_palette(normalized_theme_name)
+        self.apply_theme()
+
+        tooltip_popup = InstantTooltipMixin._tooltip_popup
+        if tooltip_popup is not None:
+            tooltip_popup.apply_theme_styles()
+
+        loading_window = getattr(self, "_loading_window", None)
+        if loading_window is not None:
+            loading_window.apply_theme_styles()
+
+        if hasattr(self, "auto_lock_switch"):
+            self.auto_lock_switch.update()
+        if hasattr(self, "map_lock_switch"):
+            self.map_lock_switch.update()
+
+        if persist:
+            self.persist_agent_lock_state()
+
+        current_popup = getattr(self, "_theme_popup_dialog", None)
+        if current_popup is not None:
+            current_popup.current_theme_name = self.current_theme_name
+            current_popup.apply_theme_styles()
+
+        self.load_players(getattr(self.valo_rank, "frontend_data", None) or {})
 
     async def _open_user_loadouts_async(self):
         try:

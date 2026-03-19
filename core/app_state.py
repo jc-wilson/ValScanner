@@ -4,9 +4,20 @@ import sys
 import tempfile
 
 
-APP_STATE_VERSION = 1
+APP_STATE_VERSION = 2
 APP_STATE_RELATIVE_PATH = os.path.join("agent_selection", "app_state.json")
 LEGACY_MAP_SELECTION_RELATIVE_PATH = os.path.join("agent_selection", "map_agent_selection.json")
+DEFAULT_THEME_NAME = "midnight"
+VALID_THEME_NAMES = {
+    "midnight",
+    "sandstorm",
+    "amethyst",
+    "emberglass",
+    "sage",
+    "glacier",
+    "rosewood",
+    "horizon",
+}
 
 
 def get_external_path(relative_path, base_path=None):
@@ -47,6 +58,7 @@ def default_app_state(map_uuids=None, base_path=None):
     normalized_map_uuids = list(map_uuids) if map_uuids is not None else discover_map_asset_uuids(base_path=base_path)
     return {
         "version": APP_STATE_VERSION,
+        "selected_theme": DEFAULT_THEME_NAME,
         "selected_standard_agent": "Random",
         "auto_lock_enabled": False,
         "map_lock_enabled": False,
@@ -76,6 +88,13 @@ def _normalize_map_agent_selection(selection_data, map_uuids):
     return normalized
 
 
+def _normalize_selected_theme(theme_name):
+    normalized_theme = str(theme_name or DEFAULT_THEME_NAME).strip().lower()
+    if normalized_theme in VALID_THEME_NAMES:
+        return normalized_theme
+    return DEFAULT_THEME_NAME
+
+
 def normalize_app_state(state_data, map_uuids=None, base_path=None):
     raw_state = state_data if isinstance(state_data, dict) else {}
     normalized_map_uuids = _coerce_map_uuids(
@@ -85,6 +104,7 @@ def normalize_app_state(state_data, map_uuids=None, base_path=None):
     )
     normalized_state = {
         "version": APP_STATE_VERSION,
+        "selected_theme": _normalize_selected_theme(raw_state.get("selected_theme")),
         "selected_standard_agent": str(raw_state.get("selected_standard_agent", "Random") or "Random"),
         "auto_lock_enabled": bool(raw_state.get("auto_lock_enabled", False)),
         "map_lock_enabled": bool(raw_state.get("map_lock_enabled", False)),
