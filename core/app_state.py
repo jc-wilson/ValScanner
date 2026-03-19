@@ -13,7 +13,7 @@ VALID_THEME_NAMES = {
     "sandstorm",
     "amethyst",
     "emberglass",
-    "sage",
+    "bailey",
     "glacier",
     "rosewood",
     "horizon",

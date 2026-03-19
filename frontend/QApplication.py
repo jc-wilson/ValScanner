@@ -137,171 +137,171 @@ THEME_DEFINITIONS = {
     },
     "sandstorm": {
         "label": "Sandstorm",
-        "swatch_a": "#c8b790",
-        "swatch_b": "#596b84",
-        "main": "#181513",
-        "window": "#100d0c",
-        "panel": "#211b18",
-        "card": "#261f1c",
-        "card_alt": "#312925",
-        "border": "#5b4b3e",
-        "border_soft": "#43372d",
-        "text": "#f7efe7",
-        "muted": "#c9b6a6",
-        "accent": "#66b7ff",
-        "accent_hover": "#86c7ff",
-        "accent_pressed": "#4699e2",
-        "teal": "#8ad0ad",
-        "teal_hover": "#a2debd",
-        "red": "#c76b5d",
-        "red_hover": "#d98374",
-        "red_pressed": "#aa5648",
-        "gold": "#f2c078",
-        "cyan": "#9fd5e8",
+        "swatch_a": "#d6b06a",
+        "swatch_b": "#4f7fb8",
+        "main": "#16110d",
+        "window": "#0d0907",
+        "panel": "#221710",
+        "card": "#2b1d14",
+        "card_alt": "#38261b",
+        "border": "#7a5a3e",
+        "border_soft": "#583f2a",
+        "text": "#fff4ea",
+        "muted": "#d7b99c",
+        "accent": "#54beff",
+        "accent_hover": "#79cfff",
+        "accent_pressed": "#2f9be2",
+        "teal": "#64dcb5",
+        "teal_hover": "#81e7c4",
+        "red": "#d96a58",
+        "red_hover": "#ea7f6e",
+        "red_pressed": "#bb5140",
+        "gold": "#f6c168",
+        "cyan": "#86def7",
     },
     "amethyst": {
         "label": "Amethyst",
-        "swatch_a": "#c6b4ff",
-        "swatch_b": "#5d7093",
-        "main": "#181423",
-        "window": "#100d18",
-        "panel": "#1f1930",
-        "card": "#241d38",
-        "card_alt": "#30264a",
-        "border": "#55456b",
-        "border_soft": "#403454",
-        "text": "#f5eeff",
-        "muted": "#b8a9cf",
-        "accent": "#ffd166",
-        "accent_hover": "#ffdc8a",
-        "accent_pressed": "#e2b24c",
-        "teal": "#83e0cf",
-        "teal_hover": "#9beddb",
-        "red": "#cf728e",
-        "red_hover": "#de89a1",
-        "red_pressed": "#b55774",
-        "gold": "#eac58b",
-        "cyan": "#94dcff",
+        "swatch_a": "#b48cff",
+        "swatch_b": "#4f7dca",
+        "main": "#150f24",
+        "window": "#0d0818",
+        "panel": "#1d1533",
+        "card": "#261b40",
+        "card_alt": "#342457",
+        "border": "#63498b",
+        "border_soft": "#492f6a",
+        "text": "#f8f0ff",
+        "muted": "#c7b2e6",
+        "accent": "#ffc14d",
+        "accent_hover": "#ffd16e",
+        "accent_pressed": "#e09c24",
+        "teal": "#63e6d0",
+        "teal_hover": "#82efdd",
+        "red": "#d86c96",
+        "red_hover": "#ea84ab",
+        "red_pressed": "#ba4f79",
+        "gold": "#efc16f",
+        "cyan": "#7fd7ff",
     },
     "emberglass": {
         "label": "Emberglass",
-        "swatch_a": "#e0ab8f",
-        "swatch_b": "#607a96",
-        "main": "#201615",
-        "window": "#140d0c",
-        "panel": "#281a18",
-        "card": "#2f1f1d",
-        "card_alt": "#3a2723",
-        "border": "#6a473b",
-        "border_soft": "#4e342d",
-        "text": "#fff0ea",
-        "muted": "#cfada1",
-        "accent": "#64d9ff",
-        "accent_hover": "#83e4ff",
-        "accent_pressed": "#3eb8de",
-        "teal": "#78d4b3",
-        "teal_hover": "#93e3c5",
-        "red": "#d56d69",
-        "red_hover": "#e68782",
-        "red_pressed": "#b55450",
-        "gold": "#f1c16d",
-        "cyan": "#91d3ff",
+        "swatch_a": "#f0946c",
+        "swatch_b": "#4d88c8",
+        "main": "#1c100d",
+        "window": "#100806",
+        "panel": "#27150f",
+        "card": "#321a13",
+        "card_alt": "#412219",
+        "border": "#88503b",
+        "border_soft": "#663826",
+        "text": "#fff1e8",
+        "muted": "#dfb29e",
+        "accent": "#53d8ff",
+        "accent_hover": "#79e4ff",
+        "accent_pressed": "#27b5df",
+        "teal": "#59dfb5",
+        "teal_hover": "#78ebc6",
+        "red": "#e16256",
+        "red_hover": "#f2796d",
+        "red_pressed": "#c74a40",
+        "gold": "#ffb95e",
+        "cyan": "#7fdcff",
     },
-    "sage": {
-        "label": "Sage",
-        "swatch_a": "#b5d58e",
-        "swatch_b": "#6f586e",
-        "main": "#162019",
-        "window": "#0f1510",
-        "panel": "#1a271d",
-        "card": "#203024",
-        "card_alt": "#29402f",
-        "border": "#476353",
-        "border_soft": "#34493d",
-        "text": "#eefaf1",
-        "muted": "#abc3b1",
-        "accent": "#f7b267",
-        "accent_hover": "#ffc485",
-        "accent_pressed": "#dd9448",
-        "teal": "#77deb1",
-        "teal_hover": "#92ebc1",
-        "red": "#c86a64",
-        "red_hover": "#d98179",
-        "red_pressed": "#ac5551",
-        "gold": "#e6c271",
-        "cyan": "#93dfd2",
+    "bailey": {
+        "label": "Bailey",
+        "swatch_a": "#7ea67f",
+        "swatch_b": "#c79a4b",
+        "main": "#507153",
+        "window": "#243326",
+        "panel": "#344c37",
+        "card": "#3f5a42",
+        "card_alt": "#49694c",
+        "border": "#79977b",
+        "border_soft": "#5d775f",
+        "text": "#f6fbf3",
+        "muted": "#c4d3c2",
+        "accent": "#c79a4b",
+        "accent_hover": "#d7ac61",
+        "accent_pressed": "#a97e37",
+        "teal": "#68c39a",
+        "teal_hover": "#7dd3aa",
+        "red": "#be6b61",
+        "red_hover": "#cf8075",
+        "red_pressed": "#9f544c",
+        "gold": "#d6ae5d",
+        "cyan": "#86c8be",
     },
     "glacier": {
         "label": "Glacier",
-        "swatch_a": "#b8dbff",
-        "swatch_b": "#8fa9c2",
-        "main": "#131c23",
-        "window": "#0d1318",
-        "panel": "#172631",
-        "card": "#1b2e3b",
-        "card_alt": "#254053",
-        "border": "#4c6578",
-        "border_soft": "#334655",
-        "text": "#eef7ff",
-        "muted": "#a7bfd1",
-        "accent": "#ffb35c",
-        "accent_hover": "#ffc57b",
-        "accent_pressed": "#e08f3d",
-        "teal": "#7adbc8",
-        "teal_hover": "#95e7d6",
-        "red": "#c86a74",
-        "red_hover": "#da8089",
-        "red_pressed": "#ae5661",
-        "gold": "#ebc37f",
-        "cyan": "#9fe8ff",
+        "swatch_a": "#9fd7ff",
+        "swatch_b": "#5d96cf",
+        "main": "#0e1820",
+        "window": "#091118",
+        "panel": "#132432",
+        "card": "#163043",
+        "card_alt": "#20445d",
+        "border": "#4d6f8e",
+        "border_soft": "#35506a",
+        "text": "#eef8ff",
+        "muted": "#aec7da",
+        "accent": "#ffac45",
+        "accent_hover": "#ffc167",
+        "accent_pressed": "#e1871f",
+        "teal": "#66ead4",
+        "teal_hover": "#83f2df",
+        "red": "#d7687c",
+        "red_hover": "#e97e92",
+        "red_pressed": "#bb4f63",
+        "gold": "#f2c36b",
+        "cyan": "#79e4ff",
     },
     "rosewood": {
         "label": "Rosewood",
-        "swatch_a": "#c4817d",
-        "swatch_b": "#7ea7d1",
-        "main": "#1e1419",
-        "window": "#120c10",
-        "panel": "#291920",
-        "card": "#321f28",
-        "card_alt": "#422736",
-        "border": "#6f4659",
-        "border_soft": "#523445",
+        "swatch_a": "#d56f7d",
+        "swatch_b": "#5f8fd0",
+        "main": "#190d12",
+        "window": "#0e070b",
+        "panel": "#26131b",
+        "card": "#321823",
+        "card_alt": "#431f31",
+        "border": "#85415b",
+        "border_soft": "#612d43",
         "text": "#fff0f5",
-        "muted": "#d1aab8",
-        "accent": "#68e0cf",
-        "accent_hover": "#87eadb",
-        "accent_pressed": "#45bcae",
-        "teal": "#7ad1bf",
-        "teal_hover": "#92dfcd",
-        "red": "#c95d6e",
-        "red_hover": "#dc7384",
-        "red_pressed": "#ac4959",
-        "gold": "#f1c47a",
-        "cyan": "#9cd7ff",
+        "muted": "#e0aabf",
+        "accent": "#52e0cf",
+        "accent_hover": "#77ebe0",
+        "accent_pressed": "#2db7a7",
+        "teal": "#64dbca",
+        "teal_hover": "#84e7d9",
+        "red": "#dd5066",
+        "red_hover": "#ee6a7f",
+        "red_pressed": "#bf3950",
+        "gold": "#f4bf69",
+        "cyan": "#83d0ff",
     },
     "horizon": {
         "label": "Horizon",
-        "swatch_a": "#f1a867",
-        "swatch_b": "#77b7ea",
-        "main": "#162029",
-        "window": "#0d141c",
-        "panel": "#1a2735",
-        "card": "#203142",
-        "card_alt": "#2a4258",
-        "border": "#4b6b83",
-        "border_soft": "#355166",
-        "text": "#f1f7ff",
-        "muted": "#acc0d6",
-        "accent": "#ff8fb1",
-        "accent_hover": "#ffabc3",
-        "accent_pressed": "#e46d90",
-        "teal": "#74d9c5",
-        "teal_hover": "#8de6d2",
-        "red": "#d87063",
-        "red_hover": "#eb8778",
-        "red_pressed": "#bc5c50",
-        "gold": "#f4cd75",
-        "cyan": "#8fd5ff",
+        "swatch_a": "#ff9a4c",
+        "swatch_b": "#4aa8ff",
+        "main": "#111b26",
+        "window": "#09121a",
+        "panel": "#162638",
+        "card": "#1b3147",
+        "card_alt": "#244561",
+        "border": "#4b7498",
+        "border_soft": "#315675",
+        "text": "#f2f8ff",
+        "muted": "#b5c8db",
+        "accent": "#ff749f",
+        "accent_hover": "#ff95b6",
+        "accent_pressed": "#e14f7f",
+        "teal": "#57e0c9",
+        "teal_hover": "#7aead8",
+        "red": "#e26852",
+        "red_hover": "#f37f67",
+        "red_pressed": "#c84c39",
+        "gold": "#f6c55d",
+        "cyan": "#74d8ff",
     },
 }
 THEME_ORDER = tuple(THEME_DEFINITIONS.keys())
@@ -2063,10 +2063,12 @@ class ThemePopup(QDialog):
 
         main_layout.addLayout(grid)
 
-        close_btn = QPushButton("Close")
+        close_btn = QPushButton("X")
+        close_btn.setObjectName("exitTile")
         close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setFixedHeight(52)
         close_btn.clicked.connect(self.close)
-        main_layout.addWidget(close_btn, alignment=Qt.AlignRight)
+        main_layout.addWidget(close_btn)
 
         outer = QVBoxLayout(self)
         outer.addWidget(container)
@@ -2171,6 +2173,18 @@ class ThemePopup(QDialog):
                 font-size: 11px;
                 letter-spacing: 1.2px;
                 text-transform: uppercase;
+            }}
+            QPushButton#exitTile {{
+                background-color: {THEME_CARD_ALT};
+                border: 1px solid {THEME_BORDER_SOFT};
+                color: {THEME_TEXT};
+                font-size: 24px;
+                font-weight: 700;
+                border-radius: 16px;
+                padding: 0px;
+            }}
+            QPushButton#exitTile:hover {{
+                background-color: {THEME_RED};
             }}
             QPushButton {{
                 background-color: {THEME_CARD_ALT};
@@ -2555,14 +2569,27 @@ class ValorantStatsWindow(QMainWindow):
         self.refresh_button.setIcon(QIcon(resource_path("assets/refresh.png")))
         self.refresh_button.setCursor(Qt.PointingHandCursor)
         self.refresh_button.setObjectName("refreshButton")
-        self.refresh_button.setIconSize(QSize(52, 52))
-        self.refresh_button.setFixedSize(52, 52)
         self.refresh_button.clicked.connect(self.run_valo_stats)
 
         self.gamemode_chip, self.gamemode_value = self.build_meta_chip("Gamemode")
         self.server_chip, self.server_value = self.build_meta_chip("Server")
         self.status_value = QLabel("Initializing...")
         self.status_value.setObjectName("sectionLabel")
+        header_button_height = 38
+        refresh_button_size = 40
+        header_chip_height = 58
+        agent_block_height = 54
+
+        self.gamemode_chip.setFixedHeight(header_chip_height)
+        self.server_chip.setFixedHeight(header_chip_height)
+        self.agent_select_btn.setFixedHeight(header_button_height)
+        self.lock_agent_button.setFixedHeight(header_button_height)
+        self.themes_button.setFixedHeight(header_button_height)
+        self.loadouts_button.setFixedHeight(header_button_height)
+        self.dodge_button.setFixedHeight(header_button_height)
+        self.load_more_matches_button.setFixedHeight(header_button_height)
+        self.refresh_button.setIconSize(QSize(28, 28))
+        self.refresh_button.setFixedSize(refresh_button_size, refresh_button_size)
 
         self.agent_icons = None
         self.rank_icons = None
@@ -2575,6 +2602,7 @@ class ValorantStatsWindow(QMainWindow):
 
         header_frame = QFrame()
         header_frame.setObjectName("headerFrame")
+        self.header_frame = header_frame
 
         header_layout = QHBoxLayout(header_frame)
         header_layout.setContentsMargins(18, 15, 18, 14)
@@ -2585,6 +2613,7 @@ class ValorantStatsWindow(QMainWindow):
 
         agent_block = QFrame()
         agent_block.setObjectName("agentBlock")
+        agent_block.setFixedHeight(agent_block_height)
         agent_layout = QHBoxLayout(agent_block)
         agent_layout.setContentsMargins(11, 8, 11, 8)
         agent_layout.setSpacing(10)
@@ -2628,7 +2657,10 @@ class ValorantStatsWindow(QMainWindow):
         self.setCentralWidget(container)
 
         self.apply_theme()
+        self.finalize_initial_header_metrics()
+        self.lock_header_height()
         self.load_players(players or [])
+        QTimer.singleShot(0, self.sync_startup_theme_metrics)
         QTimer.singleShot(0, self.refresh_player_row_heights)
 
         self.startup_coordinator = AppStartupCoordinator(self.set_status_message)
@@ -2681,6 +2713,35 @@ class ValorantStatsWindow(QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self.refresh_player_row_heights()
+
+    def finalize_initial_header_metrics(self):
+        self.ensurePolished()
+        central_widget = self.centralWidget()
+        if central_widget is not None:
+            central_widget.ensurePolished()
+            if central_widget.layout() is not None:
+                central_widget.layout().activate()
+
+        if hasattr(self, "header_frame") and self.header_frame is not None:
+            self.header_frame.ensurePolished()
+            if self.header_frame.layout() is not None:
+                self.header_frame.layout().activate()
+            self.header_frame.adjustSize()
+
+    def lock_header_height(self):
+        if not hasattr(self, "header_frame") or self.header_frame is None:
+            return
+        stable_height = max(
+            self.header_frame.sizeHint().height(),
+            self.header_frame.minimumSizeHint().height(),
+        )
+        self.header_frame.setFixedHeight(stable_height)
+
+    def sync_startup_theme_metrics(self):
+        self.apply_selected_theme(self.current_theme_name, persist=False, refresh_players=False)
+        self.finalize_initial_header_metrics()
+        self.lock_header_height()
         self.refresh_player_row_heights()
 
     def set_status_message(self, message):
@@ -3185,7 +3246,7 @@ class ValorantStatsWindow(QMainWindow):
     def on_theme_selected(self, theme_name):
         self.apply_selected_theme(theme_name)
 
-    def apply_selected_theme(self, theme_name, persist=True):
+    def apply_selected_theme(self, theme_name, persist=True, refresh_players=True):
         normalized_theme_name = normalize_theme_name(theme_name)
         self.current_theme_name = apply_theme_palette(normalized_theme_name)
         self.apply_theme()
@@ -3211,7 +3272,8 @@ class ValorantStatsWindow(QMainWindow):
             current_popup.current_theme_name = self.current_theme_name
             current_popup.apply_theme_styles()
 
-        self.load_players(getattr(self.valo_rank, "frontend_data", None) or {})
+        if refresh_players:
+            self.load_players(getattr(self.valo_rank, "frontend_data", None) or {})
 
     async def _open_user_loadouts_async(self):
         try:
@@ -3401,7 +3463,6 @@ class ValorantStatsWindow(QMainWindow):
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(10)
-        content_layout.setAlignment(Qt.AlignTop)
 
         scroll_area.setWidget(content)
         panel_layout.addWidget(scroll_area)
@@ -4157,9 +4218,9 @@ class ValorantStatsWindow(QMainWindow):
             f"}}"
             f"QPushButton#refreshButton {{"
             f" background-color: {THEME_CARD};"
-            f" border-radius: 26px;"
+            f" border-radius: 20px;"
             f" border: 1px solid {THEME_BORDER};"
-            f" padding: 9px;"
+            f" padding: 5px;"
             f"}}"
             f"QPushButton#refreshButton:hover {{"
             f" background-color: {THEME_CARD_ALT};"
@@ -4383,18 +4444,23 @@ class ValorantStatsWindow(QMainWindow):
             self.right_scroll_area, self.right_layout, self.right_players, "You will start on Attack..."
         )
         self.update_metadata()
+        QTimer.singleShot(0, self.refresh_player_row_heights)
 
     def populate_team_layout(self, scroll_area, layout, players, empty_message):
         self.clear_layout(layout)
         if not players:
+            layout.addStretch(1)
             placeholder = QLabel(empty_message)
             placeholder.setObjectName("emptyState")
             placeholder.setAlignment(Qt.AlignCenter)
+            placeholder.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             layout.addWidget(placeholder)
+            layout.addStretch(1)
             return
 
         for player in players:
             layout.addWidget(self.create_player_row(player))
+        layout.addStretch(1)
         self.update_team_row_heights(scroll_area, layout)
 
     def update_metadata(self):
