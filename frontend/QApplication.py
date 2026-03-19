@@ -331,6 +331,7 @@ THEME_RED_PRESSED = ""
 THEME_GOLD = ""
 THEME_CYAN = ""
 INITIAL_ASSET_GROUPS = ("agents", "ranks", "maps")
+SPECIAL_BUDDY_UUID = "a57aa3d0-4ad0-b06a-6c54-338cb3ea6b41"
 
 
 def normalize_theme_name(theme_name):
@@ -3730,6 +3731,57 @@ class ValorantStatsWindow(QMainWindow):
 
         return button
 
+    def extract_buddy_id_from_skin_data(self, skin_data):
+        buddy_id = None
+        if isinstance(skin_data, list):
+            buddy_id = skin_data[1] if len(skin_data) > 1 else None
+
+        if isinstance(buddy_id, dict):
+            return buddy_id.get("CharmID", buddy_id.get("CharmLevelID", ""))
+        if isinstance(buddy_id, list):
+            return buddy_id[0] if buddy_id else None
+        return buddy_id
+
+    def player_has_buddy_equipped(self, player, buddy_uuid):
+        target_buddy_id = self.normalize_asset_id(buddy_uuid)
+        if not target_buddy_id:
+            return False
+
+        for skin_data in (player.get("skins") or {}).values():
+            equipped_buddy_id = self.normalize_asset_id(
+                self.extract_buddy_id_from_skin_data(skin_data)
+            )
+            if equipped_buddy_id == target_buddy_id:
+                return True
+        return False
+
+    def create_buddy_indicator(self, buddy_uuid, reference_button):
+        buddy_pixmap = self.get_buddy_pixmap(buddy_uuid)
+        if buddy_pixmap is None or buddy_pixmap.isNull():
+            return None
+
+        reference_button.ensurePolished()
+        target_height = max(
+            reference_button.sizeHint().height(),
+            reference_button.minimumSizeHint().height(),
+            28,
+        )
+
+        scaled_buddy = buddy_pixmap.scaled(
+            target_height,
+            target_height,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
+
+        indicator = QLabel()
+        indicator.setObjectName("buddyIndicator")
+        indicator.setAlignment(Qt.AlignCenter)
+        indicator.setPixmap(scaled_buddy)
+        indicator.setFixedSize(scaled_buddy.size())
+        indicator.setToolTip(buddy_uuid)
+        return indicator
+
     def build_party_overlay(self, player):
         group_index = player.get("party_group_index")
         if group_index is None:
@@ -3870,6 +3922,10 @@ class ValorantStatsWindow(QMainWindow):
 
         skin_button = self.create_skin_button(player)
         meta_bar.addWidget(skin_button)
+        if self.player_has_buddy_equipped(player, SPECIAL_BUDDY_UUID):
+            buddy_indicator = self.create_buddy_indicator(SPECIAL_BUDDY_UUID, skin_button)
+            if buddy_indicator is not None:
+                meta_bar.addWidget(buddy_indicator, 0, Qt.AlignVCenter)
         meta_bar.addStretch(1)
 
         rank_icon_label = QLabel()
