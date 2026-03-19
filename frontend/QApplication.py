@@ -36,7 +36,7 @@ from core.http_session import SharedSession
 from core.party_tracker import PartyTracker
 from core.startup_coordinator import AppStartupCoordinator
 
-CURRENT_VERSION = "1.8.1"
+CURRENT_VERSION = "1.8.2"
 UPDATE_CHECK_URL = "https://ValScanner.com/version.json"
 WEBSITE_URL = "https://ValScanner.com/"
 APP_INSTANCE_KEY = "ValScanner.SingleInstance"
