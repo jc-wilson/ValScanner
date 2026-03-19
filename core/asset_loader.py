@@ -1,6 +1,7 @@
 import os
 import sys
 import re
+import json
 import requests
 import asyncio
 import aiohttp
@@ -8,6 +9,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
 from core.http_session import SharedSession
+
+_SKIN_ASSET_INDEX = None
+_BUDDY_ASSET_INDEX = None
 
 def get_external_path(relative_path):
     """Always points to the folder NEXT to the .exe, or the Project Root in dev."""
@@ -20,6 +24,170 @@ def get_external_path(relative_path):
         base_path = os.path.abspath(os.path.join(current_dir, ".."))
 
     return os.path.join(base_path, relative_path)
+
+
+def _normalize_asset_id(asset_id):
+    return str(asset_id or "").strip().lower()
+
+
+def _load_metadata_json(path, url):
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except FileNotFoundError:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        payload = response.json()
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+        return payload
+
+
+def _get_skin_asset_index():
+    global _SKIN_ASSET_INDEX
+    if _SKIN_ASSET_INDEX is not None:
+        return _SKIN_ASSET_INDEX
+
+    payload = _load_metadata_json(
+        get_external_path("core/skin_uuids.json"),
+        "https://valorant-api.com/v1/weapons/skins",
+    )
+    index = {}
+    for skin in payload.get("data", []):
+        skin_uuid = _normalize_asset_id(skin.get("uuid"))
+        skin_icon = skin.get("displayIcon") or skin.get("fullRender")
+        if skin_uuid and skin_icon:
+            index[skin_uuid] = skin_icon
+
+        for chroma in skin.get("chromas", []):
+            chroma_uuid = _normalize_asset_id(chroma.get("uuid"))
+            chroma_icon = chroma.get("displayIcon") or chroma.get("fullRender") or skin_icon
+            if chroma_uuid and chroma_icon:
+                index[chroma_uuid] = chroma_icon
+
+        for level in skin.get("levels", []):
+            level_uuid = _normalize_asset_id(level.get("uuid"))
+            if level_uuid and skin_icon:
+                index[level_uuid] = skin_icon
+
+    _SKIN_ASSET_INDEX = index
+    return _SKIN_ASSET_INDEX
+
+
+def _get_buddy_asset_index():
+    global _BUDDY_ASSET_INDEX
+    if _BUDDY_ASSET_INDEX is not None:
+        return _BUDDY_ASSET_INDEX
+
+    payload = _load_metadata_json(
+        get_external_path("core/buddy_uuids.json"),
+        "https://valorant-api.com/v1/buddies",
+    )
+    index = {}
+    for buddy in payload.get("data", []):
+        buddy_icon = buddy.get("displayIcon")
+        for level in buddy.get("levels", []):
+            buddy_uuid = _normalize_asset_id(level.get("uuid"))
+            if buddy_uuid and buddy_icon:
+                index[buddy_uuid] = buddy_icon
+
+    _BUDDY_ASSET_INDEX = index
+    return _BUDDY_ASSET_INDEX
+
+
+def skin_asset_path(asset_id, cache_dir=None):
+    if cache_dir is None:
+        cache_dir = get_external_path("assets/skins")
+    return os.path.join(cache_dir, f"{_normalize_asset_id(asset_id)}.png")
+
+
+def buddy_asset_path(asset_id, cache_dir=None):
+    if cache_dir is None:
+        cache_dir = get_external_path("assets/buddies")
+    return os.path.join(cache_dir, f"{_normalize_asset_id(asset_id)}.png")
+
+
+def _download_asset_file(url, path):
+    try:
+        data = requests.get(url, timeout=8).content
+        with open(path, "wb") as handle:
+            handle.write(data)
+        return True
+    except Exception:
+        return False
+
+
+def _download_asset_jobs(download_jobs, threads):
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        futures = [executor.submit(_download_asset_file, url, path) for url, path in download_jobs]
+        for _ in as_completed(futures):
+            pass
+
+
+async def _ensure_asset_files(asset_ids, index_loader, path_builder, label, threads=12):
+    normalized_ids = [_normalize_asset_id(asset_id) for asset_id in asset_ids if _normalize_asset_id(asset_id)]
+    if not normalized_ids:
+        return {}
+
+    index = index_loader()
+    os.makedirs(os.path.dirname(path_builder(normalized_ids[0])), exist_ok=True)
+
+    file_map = {}
+    download_jobs = []
+    for asset_id in dict.fromkeys(normalized_ids):
+        path = path_builder(asset_id)
+        file_map[asset_id] = path
+        if os.path.exists(path):
+            continue
+        url = index.get(asset_id)
+        if url:
+            download_jobs.append((url, path))
+
+    if download_jobs:
+        print(f"Downloading {len(download_jobs)} uncached {label} assets...")
+        await asyncio.to_thread(_download_asset_jobs, download_jobs, threads)
+
+    return file_map
+
+
+async def ensure_skin_asset_files(asset_ids, cache_dir=None, threads=12):
+    return await _ensure_asset_files(
+        asset_ids,
+        _get_skin_asset_index,
+        lambda asset_id: skin_asset_path(asset_id, cache_dir),
+        "skin",
+        threads=threads,
+    )
+
+
+async def ensure_buddy_asset_files(asset_ids, cache_dir=None, threads=12):
+    return await _ensure_asset_files(
+        asset_ids,
+        _get_buddy_asset_index,
+        lambda asset_id: buddy_asset_path(asset_id, cache_dir),
+        "buddy",
+        threads=threads,
+    )
+
+
+def load_skin_pixmap(asset_id, cache_dir=None):
+    path = skin_asset_path(asset_id, cache_dir)
+    if not os.path.exists(path):
+        return None
+    pixmap = QPixmap(path)
+    if pixmap.isNull():
+        return None
+    return pixmap
+
+
+def load_buddy_pixmap(asset_id, cache_dir=None):
+    path = buddy_asset_path(asset_id, cache_dir)
+    if not os.path.exists(path):
+        return None
+    pixmap = QPixmap(path)
+    if pixmap.isNull():
+        return None
+    return pixmap
 
 
 async def download_and_cache_agent_icons(cache_dir=None):

@@ -35,8 +35,14 @@ from core.player_loadout import PlayerLoadout
 from core.http_session import SharedSession
 from core.party_tracker import PartyTracker
 from core.startup_coordinator import AppStartupCoordinator
+from core.asset_loader import (
+    ensure_skin_asset_files,
+    ensure_buddy_asset_files,
+    load_skin_pixmap,
+    load_buddy_pixmap,
+)
 
-CURRENT_VERSION = "1.8.2"
+CURRENT_VERSION = "1.9"
 UPDATE_CHECK_URL = "https://ValScanner.com/version.json"
 WEBSITE_URL = "https://ValScanner.com/"
 APP_INSTANCE_KEY = "ValScanner.SingleInstance"
@@ -324,7 +330,7 @@ THEME_RED_HOVER = ""
 THEME_RED_PRESSED = ""
 THEME_GOLD = ""
 THEME_CYAN = ""
-INITIAL_ASSET_GROUPS = ("agents", "ranks", "buddies", "maps", "skins")
+INITIAL_ASSET_GROUPS = ("agents", "ranks", "maps")
 
 
 def normalize_theme_name(theme_name):
@@ -626,11 +632,11 @@ class StartupLoadingWindow(QDialog):
 
 
 class VariantSelectorPopup(QDialog):
-    def __init__(self, weapon, variants_list, skin_icons, uuid_handler, callback, parent=None):
+    def __init__(self, weapon, variants_list, skin_pixmap_resolver, uuid_handler, callback, parent=None):
         super().__init__(parent)
         self.weapon = weapon
         self.variants_list = variants_list
-        self.skin_icons = skin_icons
+        self.skin_pixmap_resolver = skin_pixmap_resolver
         self.uuid_handler = uuid_handler
         self.callback = callback
 
@@ -725,8 +731,8 @@ class VariantSelectorPopup(QDialog):
         resolved_name = "Unknown Variant"
 
         if clean_id:
-            if hasattr(self, "skin_icons"):
-                pixmap = self.skin_icons.get(clean_id.lower()) or self.skin_icons.get(clean_id.upper())
+            if callable(self.skin_pixmap_resolver):
+                pixmap = self.skin_pixmap_resolver(clean_id)
 
             if self.uuid_handler:
                 try:
@@ -762,10 +768,10 @@ class VariantSelectorPopup(QDialog):
 
 
 class SkinSelectorPopup(QDialog):
-    def __init__(self, weapon, owned_skins_list, owned_variants_list, skin_icons, uuid_handler, callback, parent=None):
+    def __init__(self, weapon, owned_skins_list, owned_variants_list, skin_pixmap_resolver, uuid_handler, callback, parent=None):
         super().__init__(parent)
         self.weapon = weapon
-        self.skin_icons = skin_icons
+        self.skin_pixmap_resolver = skin_pixmap_resolver
         self.uuid_handler = uuid_handler
         self.callback = callback
 
@@ -900,8 +906,8 @@ class SkinSelectorPopup(QDialog):
         pixmap = None
 
         if clean_id:
-            if hasattr(self, "skin_icons"):
-                pixmap = self.skin_icons.get(str(clean_id).lower()) or self.skin_icons.get(str(clean_id).upper())
+            if callable(self.skin_pixmap_resolver):
+                pixmap = self.skin_pixmap_resolver(clean_id)
 
             tile.set_instant_tooltip(str(resolved_name))
 
@@ -928,7 +934,7 @@ class SkinSelectorPopup(QDialog):
         variants = self.uuid_handler.variant_finder(clean_id, self.owned_variants)
 
         if variants:
-            popup = VariantSelectorPopup(self.weapon, variants, self.skin_icons, self.uuid_handler,
+            popup = VariantSelectorPopup(self.weapon, variants, self.skin_pixmap_resolver, self.uuid_handler,
                                          self.on_variant_selected, self)
             popup.exec()
         else:
@@ -951,13 +957,13 @@ class LoadoutsPopup(QDialog):
         "Knife",
     ]
 
-    def __init__(self, skins, all_skins, skin_icons, buddy_icons, uuid_handler, parent=None):
+    def __init__(self, skins, all_skins, skin_pixmap_resolver, buddy_pixmap_resolver, uuid_handler, parent=None):
         super().__init__(parent)
         self.skins = skins.get("Skins", {})
         self.buddies = skins.get("Buddies", {})
         self.owned_skins = all_skins
-        self.skin_icons = skin_icons or {}
-        self.buddy_icons = buddy_icons or {}
+        self.skin_pixmap_resolver = skin_pixmap_resolver
+        self.buddy_pixmap_resolver = buddy_pixmap_resolver
         self.uuid_handler = uuid_handler
 
         self.current_preset = None
@@ -1374,8 +1380,8 @@ class LoadoutsPopup(QDialog):
             if isinstance(skin_id, list):
                 skin_id = skin_id[0]
 
-            if hasattr(self, "skin_icons"):
-                pixmap = self.skin_icons.get(str(skin_id).lower())
+            if callable(self.skin_pixmap_resolver):
+                pixmap = self.skin_pixmap_resolver(skin_id)
 
             if self.uuid_handler:
                 try:
@@ -1408,13 +1414,13 @@ class LoadoutsPopup(QDialog):
             preview.setProperty("empty", "true")
 
         buddy_id = self.buddies.get(weapon)
-        if buddy_id and hasattr(self, "buddy_icons"):
+        if buddy_id and callable(self.buddy_pixmap_resolver):
             if isinstance(buddy_id, list):
                 buddy_id = buddy_id[0]
             elif isinstance(buddy_id, dict):
                 buddy_id = buddy_id.get("CharmID", buddy_id.get("CharmLevelID", ""))
 
-            buddy_pixmap = self.buddy_icons.get(str(buddy_id).lower())
+            buddy_pixmap = self.buddy_pixmap_resolver(buddy_id)
 
             if buddy_pixmap:
                 scaled_buddy = buddy_pixmap.scaled(36, 36, Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -1436,7 +1442,7 @@ class LoadoutsPopup(QDialog):
         weapon_skins = owned_skins_dict.get(weapon, [])
         owned_variants_list = self.owned_skins.get("Variants", [])
 
-        popup = SkinSelectorPopup(weapon, weapon_skins, owned_variants_list, self.skin_icons, self.uuid_handler,
+        popup = SkinSelectorPopup(weapon, weapon_skins, owned_variants_list, self.skin_pixmap_resolver, self.uuid_handler,
                                   self.update_equipped_skin, self)
         popup.exec()
 
@@ -2226,12 +2232,12 @@ class WeaponPopup(QDialog):
         "Knife",
     ]
 
-    def __init__(self, player_name, skins, skin_icons, buddy_icons, uuid_handler, parent=None):
+    def __init__(self, player_name, skins, skin_pixmap_resolver, buddy_pixmap_resolver, uuid_handler, parent=None):
         super().__init__(parent)
 
         self.skins = skins or {}
-        self.skin_icons = skin_icons or {}
-        self.buddy_icons = buddy_icons or {}
+        self.skin_pixmap_resolver = skin_pixmap_resolver
+        self.buddy_pixmap_resolver = buddy_pixmap_resolver
         self.uuid_handler = uuid_handler
         player_display = player_name or "Unknown"
 
@@ -2357,7 +2363,7 @@ class WeaponPopup(QDialog):
             skin_id = skin_data[0] if len(skin_data) > 0 else None
             buddy_id = skin_data[1] if len(skin_data) > 1 else None
 
-        pixmap = self.skin_icons.get(str(skin_id)) if skin_id else None
+        pixmap = self.skin_pixmap_resolver(skin_id) if skin_id and callable(self.skin_pixmap_resolver) else None
 
         if skin_id:
             if self.uuid_handler:
@@ -2387,7 +2393,7 @@ class WeaponPopup(QDialog):
                     y_skin = (120 - scaled_skin.height()) // 2
                     painter.drawPixmap(x_skin, y_skin, scaled_skin)
 
-                    buddy_pixmap = self.buddy_icons.get(str(buddy_id).lower()) if buddy_id else None
+                    buddy_pixmap = self.buddy_pixmap_resolver(buddy_id) if buddy_id and callable(self.buddy_pixmap_resolver) else None
                     if buddy_pixmap:
                         scaled_buddy = buddy_pixmap.scaled(44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                         x_buddy = 5
@@ -2593,9 +2599,13 @@ class ValorantStatsWindow(QMainWindow):
 
         self.agent_icons = None
         self.rank_icons = None
-        self.buddy_icons = None
+        self.buddy_icons = {}
         self.map_icons = None
         self.skin_icons = {}
+        self._current_player_skin_ids = set()
+        self._current_player_buddy_ids = set()
+        self._player_cosmetic_prefetch_generation = 0
+        self._player_cosmetic_prefetch_task = None
         self.map_agent_selection = dict(persisted_state.get("map_agent_selection", {}))
         self.last_standard_agent_text = initial_agent
         self.last_standard_agent_value = self.resolve_standard_agent_value(initial_agent)
@@ -2681,8 +2691,6 @@ class ValorantStatsWindow(QMainWindow):
         self.ws_task = None
         self._agent_icons_task = None
         self._rank_icons_task = None
-        self._buddy_icons_task = None
-        self._skin_icons_task = None
         self._map_icons_task = None
         self._close_requested = False
         self._allow_native_close = False
@@ -2854,28 +2862,12 @@ class ValorantStatsWindow(QMainWindow):
                 lambda task: QTimer.singleShot(0, lambda: self._on_ranks_loaded(task))
             )
 
-        if self._buddy_icons_task is None:
-            from core.asset_loader import download_and_cache_buddies
-
-            self._buddy_icons_task = loop.create_task(download_and_cache_buddies())
-            self._buddy_icons_task.add_done_callback(
-                lambda task: QTimer.singleShot(0, lambda: self._on_buddies_loaded(task))
-            )
-
         if self._map_icons_task is None:
             from core.asset_loader import download_and_cache_map_icons
 
             self._map_icons_task = loop.create_task(download_and_cache_map_icons())
             self._map_icons_task.add_done_callback(
                 lambda task: QTimer.singleShot(0, lambda: self._on_maps_loaded(task))
-            )
-
-        if self._skin_icons_task is None:
-            from core.asset_loader import download_and_cache_skins
-
-            self._skin_icons_task = loop.create_task(download_and_cache_skins())
-            self._skin_icons_task.add_done_callback(
-                lambda task: QTimer.singleShot(0, lambda: self._on_skins_loaded(task))
             )
 
     def start_websocket_listener(self):
@@ -2993,17 +2985,13 @@ class ValorantStatsWindow(QMainWindow):
             self._rank_icons_task.cancel()
         self._rank_icons_task = None
 
-        if self._buddy_icons_task and not self._buddy_icons_task.done():
-            self._buddy_icons_task.cancel()
-        self._buddy_icons_task = None
-
         if self._map_icons_task and not self._map_icons_task.done():
             self._map_icons_task.cancel()
         self._map_icons_task = None
 
-        if self._skin_icons_task and not self._skin_icons_task.done():
-            self._skin_icons_task.cancel()
-        self._skin_icons_task = None
+        if self._player_cosmetic_prefetch_task and not self._player_cosmetic_prefetch_task.done():
+            self._player_cosmetic_prefetch_task.cancel()
+        self._player_cosmetic_prefetch_task = None
 
         running = ", ".join(running_processes) or "Riot Client / Valorant"
         QMessageBox.information(
@@ -3059,9 +3047,8 @@ class ValorantStatsWindow(QMainWindow):
             'ws_task',
             '_agent_icons_task',
             '_rank_icons_task',
-            '_buddy_icons_task',
-            '_skin_icons_task',
             '_map_icons_task',
+            '_player_cosmetic_prefetch_task',
             '_background_helper_task',
         )
         for task_name in task_names:
@@ -3280,9 +3267,18 @@ class ValorantStatsWindow(QMainWindow):
             handler = OwnedSkins()
             fetch_task = await handler.sort_current_loadout()
             fetch_task2 = await handler.sort_owned_items()
+            loadout_skin_ids, loadout_buddy_ids = self._collect_loadout_cosmetic_ids(fetch_task.get("Skins", {}))
+            await ensure_skin_asset_files(loadout_skin_ids)
+            await ensure_buddy_asset_files(loadout_buddy_ids)
 
-            self.loadouts_popup = LoadoutsPopup(fetch_task, fetch_task2, getattr(self, "skin_icons", {}),
-                                                getattr(self, "buddy_icons", {}), self.uuid_handler, self)
+            self.loadouts_popup = LoadoutsPopup(
+                fetch_task,
+                fetch_task2,
+                self.get_skin_pixmap,
+                self.get_buddy_pixmap,
+                self.uuid_handler,
+                self,
+            )
             self.loadouts_popup.finished.connect(lambda: self.loadouts_button.setEnabled(True))
             self.loadouts_popup.open()
 
@@ -3381,26 +3377,6 @@ class ValorantStatsWindow(QMainWindow):
         finally:
             self._mark_asset_group_loaded("maps")
 
-    def _on_skins_loaded(self, task):
-        try:
-            self.skin_icons = task.result()
-        except Exception as exc:
-            print(f"Skin icon load failed: {exc}")
-            self.skin_icons = {}
-        else:
-            self.safe_load_players(self.valo_rank.frontend_data)
-        finally:
-            self._mark_asset_group_loaded("skins")
-
-    def _on_buddies_loaded(self, task):
-        try:
-            self.buddy_icons = task.result()
-        except Exception as exc:
-            print(f"Buddy icon load failed: {exc}")
-            self.buddy_icons = {}
-        finally:
-            self._mark_asset_group_loaded("buddies")
-
     def _on_agents_loaded(self, task):
         try:
             self.agent_icons = task.result()
@@ -3419,12 +3395,169 @@ class ValorantStatsWindow(QMainWindow):
         finally:
             self._mark_asset_group_loaded("ranks")
 
+    @staticmethod
+    def normalize_asset_id(asset_id):
+        return str(asset_id or "").strip().lower()
+
+    def _collect_loadout_cosmetic_ids(self, loadout_skins):
+        skin_ids = set()
+        buddy_ids = set()
+        if not isinstance(loadout_skins, dict):
+            return skin_ids, buddy_ids
+
+        for skin_data in loadout_skins.values():
+            skin_id = skin_data
+            buddy_id = None
+            if isinstance(skin_data, list):
+                skin_id = skin_data[0] if len(skin_data) > 0 else None
+                buddy_id = skin_data[1] if len(skin_data) > 1 else None
+
+            normalized_skin = self.normalize_asset_id(skin_id)
+            if normalized_skin:
+                skin_ids.add(normalized_skin)
+
+            if isinstance(buddy_id, dict):
+                buddy_id = buddy_id.get("CharmID", buddy_id.get("CharmLevelID", ""))
+            elif isinstance(buddy_id, list):
+                buddy_id = buddy_id[0] if buddy_id else None
+
+            normalized_buddy = self.normalize_asset_id(buddy_id)
+            if normalized_buddy:
+                buddy_ids.add(normalized_buddy)
+
+        return skin_ids, buddy_ids
+
+    def collect_current_player_cosmetic_ids(self, players):
+        skin_ids = set()
+        buddy_ids = set()
+        player_iterable = players.values() if isinstance(players, dict) else (players or [])
+        for player in player_iterable:
+            player_skin_ids, player_buddy_ids = self._collect_loadout_cosmetic_ids(player.get("skins") or {})
+            skin_ids.update(player_skin_ids)
+            buddy_ids.update(player_buddy_ids)
+        return skin_ids, buddy_ids
+
+    def get_skin_pixmap(self, asset_id, allow_load=True):
+        normalized_id = self.normalize_asset_id(asset_id)
+        if not normalized_id:
+            return None
+
+        pixmap = self.skin_icons.get(normalized_id)
+        if pixmap is not None and not pixmap.isNull():
+            return pixmap
+        if not allow_load:
+            return None
+
+        pixmap = load_skin_pixmap(normalized_id)
+        if pixmap is None:
+            return None
+        self.skin_icons[normalized_id] = pixmap
+        return pixmap
+
+    def get_buddy_pixmap(self, asset_id, allow_load=True):
+        normalized_id = self.normalize_asset_id(asset_id)
+        if not normalized_id:
+            return None
+
+        pixmap = self.buddy_icons.get(normalized_id)
+        if pixmap is not None and not pixmap.isNull():
+            return pixmap
+        if not allow_load:
+            return None
+
+        pixmap = load_buddy_pixmap(normalized_id)
+        if pixmap is None:
+            return None
+        self.buddy_icons[normalized_id] = pixmap
+        return pixmap
+
+    async def _prefetch_player_cosmetics(self, generation, skin_ids, buddy_ids):
+        try:
+            await ensure_skin_asset_files(skin_ids)
+            await ensure_buddy_asset_files(buddy_ids)
+
+            loaded_skin_icons = {}
+            loaded_buddy_icons = {}
+
+            for index, asset_id in enumerate(sorted(skin_ids)):
+                if generation != self._player_cosmetic_prefetch_generation:
+                    return
+                pixmap = load_skin_pixmap(asset_id)
+                if pixmap is not None:
+                    loaded_skin_icons[asset_id] = pixmap
+                if index % 20 == 0:
+                    await asyncio.sleep(0)
+
+            for index, asset_id in enumerate(sorted(buddy_ids)):
+                if generation != self._player_cosmetic_prefetch_generation:
+                    return
+                pixmap = load_buddy_pixmap(asset_id)
+                if pixmap is not None:
+                    loaded_buddy_icons[asset_id] = pixmap
+                if index % 20 == 0:
+                    await asyncio.sleep(0)
+
+            if generation != self._player_cosmetic_prefetch_generation:
+                return
+
+            self.skin_icons = {
+                asset_id: pixmap for asset_id, pixmap in self.skin_icons.items()
+                if asset_id in skin_ids and pixmap is not None and not pixmap.isNull()
+            }
+            self.skin_icons.update(loaded_skin_icons)
+
+            self.buddy_icons = {
+                asset_id: pixmap for asset_id, pixmap in self.buddy_icons.items()
+                if asset_id in buddy_ids and pixmap is not None and not pixmap.isNull()
+            }
+            self.buddy_icons.update(loaded_buddy_icons)
+
+            if getattr(self.valo_rank, "frontend_data", None):
+                self.safe_load_players(self.valo_rank.frontend_data)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            print(f"Player cosmetic prefetch failed: {exc}")
+
+    def schedule_player_cosmetic_prefetch(self, players):
+        skin_ids, buddy_ids = self.collect_current_player_cosmetic_ids(players)
+        cache_is_ready = (
+            skin_ids == self._current_player_skin_ids
+            and buddy_ids == self._current_player_buddy_ids
+            and skin_ids.issubset(self.skin_icons.keys())
+            and buddy_ids.issubset(self.buddy_icons.keys())
+        )
+        if cache_is_ready:
+            return
+
+        self._current_player_skin_ids = set(skin_ids)
+        self._current_player_buddy_ids = set(buddy_ids)
+
+        if self._player_cosmetic_prefetch_task and not self._player_cosmetic_prefetch_task.done():
+            self._player_cosmetic_prefetch_task.cancel()
+        self._player_cosmetic_prefetch_task = None
+
+        if not skin_ids and not buddy_ids:
+            self.skin_icons = {}
+            self.buddy_icons = {}
+            return
+
+        self._player_cosmetic_prefetch_generation += 1
+        loop = asyncio.get_running_loop()
+        self._player_cosmetic_prefetch_task = loop.create_task(
+            self._prefetch_player_cosmetics(
+                self._player_cosmetic_prefetch_generation,
+                skin_ids,
+                buddy_ids,
+            )
+        )
+
     def open_skin_popup(self, player_name, skins):
         popup = WeaponPopup(
             player_name,
             skins,
-            getattr(self, "skin_icons", {}),
-            getattr(self, "buddy_icons", {}),
+            self.get_skin_pixmap,
+            self.get_buddy_pixmap,
             self.uuid_handler,
             self,
         )
@@ -3538,7 +3671,6 @@ class ValorantStatsWindow(QMainWindow):
 
     def create_skin_button(self, player):
         skins = player.get("skins") or {}
-        skin_icons = getattr(self, "skin_icons", {}) or {}
         button = QPushButton()
         button.setCursor(Qt.PointingHandCursor)
         button.setObjectName("compactSkinButton")
@@ -3557,13 +3689,8 @@ class ValorantStatsWindow(QMainWindow):
             vandal_id = vandal_data[0] if isinstance(vandal_data, list) and len(vandal_data) > 0 else vandal_data
             phantom_id = phantom_data[0] if isinstance(phantom_data, list) and len(phantom_data) > 0 else phantom_data
 
-            v_pixmap = skin_icons.get(str(vandal_id)) if vandal_id else None
-            if not v_pixmap and vandal_id:
-                v_pixmap = skin_icons.get(str(vandal_id).lower())
-
-            p_pixmap = skin_icons.get(str(phantom_id)) if phantom_id else None
-            if not p_pixmap and phantom_id:
-                p_pixmap = skin_icons.get(str(phantom_id).lower())
+            v_pixmap = self.get_skin_pixmap(vandal_id, allow_load=False) if vandal_id else None
+            p_pixmap = self.get_skin_pixmap(phantom_id, allow_load=False) if phantom_id else None
 
             canvas = QPixmap(140, 28)
             canvas.fill(Qt.transparent)
@@ -4414,6 +4541,7 @@ class ValorantStatsWindow(QMainWindow):
     def load_players(self, players):
         self.left_players = []
         self.right_players = []
+        self.schedule_player_cosmetic_prefetch(players)
 
         if not players:
             self.populate_team_layout(self.left_scroll_area, self.left_layout, [], "You will start on Defense...")
