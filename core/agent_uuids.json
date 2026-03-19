@@ -52,7 +52,7 @@
         {
           "slot": "Grenade",
           "displayName": "Mosh Pit",
-          "description": "EQUIP Mosh. FIRE to throw Mosh like a grenade. ALT FIRE to lob. Upon landing Mosh duplicates across a large area that deals a small amount of damage over time then after a short delay explodes.",
+          "description": "EQUIP Mosh. FIRE to throw Mosh like a grenade. ALT FIRE to lob. Upon landing Mosh duplicates across a large area that deals a small amount of damage over time then after a short delay explodes. INTERACT to reclaim the globule and gain another Mosh charge after a short cooldown.",
           "displayIcon": "https://media.valorant-api.com/agents/e370fa57-4757-3604-3648-499e1f642d3f/abilities/grenade/displayicon.png"
         },
         {
@@ -373,7 +373,7 @@
         {
           "slot": "Ability1",
           "displayName": "Blast Pack",
-          "description": "INSTANTLY throw a Blast Pack that will stick to surfaces. RE-USE the ability after deployment to detonate, damaging and moving anything hit.",
+          "description": "INSTANTLY throw a Blast Pack that will stick to surfaces. RE-USE the ability after deployment to detonate, moving anything hit and dealing damage if fully armed.",
           "displayIcon": "https://media.valorant-api.com/agents/f94c3b30-42be-e959-889c-5aa313dba261/abilities/ability1/displayicon.png"
         },
         {
@@ -725,6 +725,71 @@
       "voiceLine": null
     },
     {
+      "uuid": "7c8a4701-4de6-9355-b254-e09bc2a34b72",
+      "displayName": "Miks",
+      "description": "Straight from Croatia, Miks takes the stage channeling pure sound energy. With his infectious passion and sonic powers, he rallies his squad to move as one as they set the tempo on the battlefield together.",
+      "developerName": "Iris",
+      "releaseDate": "2026-03-18T15:00:00Z",
+      "characterTags": null,
+      "displayIcon": "https://media.valorant-api.com/agents/7c8a4701-4de6-9355-b254-e09bc2a34b72/displayicon.png",
+      "displayIconSmall": "https://media.valorant-api.com/agents/7c8a4701-4de6-9355-b254-e09bc2a34b72/displayicon.png",
+      "bustPortrait": "https://media.valorant-api.com/agents/7c8a4701-4de6-9355-b254-e09bc2a34b72/fullportrait.png",
+      "fullPortrait": "https://media.valorant-api.com/agents/7c8a4701-4de6-9355-b254-e09bc2a34b72/fullportrait.png",
+      "fullPortraitV2": "https://media.valorant-api.com/agents/7c8a4701-4de6-9355-b254-e09bc2a34b72/fullportrait.png",
+      "killfeedPortrait": "https://media.valorant-api.com/agents/7c8a4701-4de6-9355-b254-e09bc2a34b72/killfeedportrait.png",
+      "minimapPortrait": "https://media.valorant-api.com/agents/7c8a4701-4de6-9355-b254-e09bc2a34b72/minimapportrait.png",
+      "homeScreenPromoTileImage": "https://media.valorant-api.com/agents/7c8a4701-4de6-9355-b254-e09bc2a34b72/homescreenpromotileimage.png",
+      "background": "https://media.valorant-api.com/agents/7c8a4701-4de6-9355-b254-e09bc2a34b72/background.png",
+      "backgroundGradientColors": [
+        "462b75ff",
+        "0f1923ff",
+        "344673ff",
+        "0f192300"
+      ],
+      "assetPath": "ShooterGame/Content/Characters/Iris/Iris_PrimaryAsset",
+      "isFullPortraitRightFacing": false,
+      "isPlayableCharacter": true,
+      "isAvailableForTest": true,
+      "isBaseContent": false,
+      "role": {
+        "uuid": "4ee40330-ecdd-4f2f-98a8-eb1243428373",
+        "displayName": "Controller",
+        "description": "Controllers are experts in slicing up dangerous territory to set their team up for success.",
+        "displayIcon": "https://media.valorant-api.com/agents/roles/4ee40330-ecdd-4f2f-98a8-eb1243428373/displayicon.png",
+        "assetPath": "ShooterGame/Content/Characters/_Core/Roles/Strategist_PrimaryDataAsset"
+      },
+      "recruitmentData": {
+        "counterId": "7c8a4701-4de6-9355-b254-e09bc2a34b72",
+        "milestoneId": "0e5f4b8f-4f50-4a07-fa17-c7b55a1c72d1",
+        "milestoneThreshold": 200000,
+        "useLevelVpCostOverride": false,
+        "levelVpCostOverride": 0,
+        "startDate": "2026-03-17T22:00:00Z",
+        "endDate": "2026-04-15T22:00:00Z"
+      },
+      "abilities": [
+        {
+          "slot": "Ability2",
+          "displayName": "Waveform",
+          "description": "EQUIP a Map Targeter. FIRE to set locations. ALT-FIRE to spawn Smokes at selected locations.",
+          "displayIcon": "https://media.valorant-api.com/agents/7c8a4701-4de6-9355-b254-e09bc2a34b72/abilities/ability2/displayicon.png"
+        },
+        {
+          "slot": "Ability1",
+          "displayName": "Harmonize",
+          "description": "EQUIP Harmonize. Target an ally and FIRE to activate a Combat Stim on yourself and the ally that refreshes with each kill. ALT-FIRE to grant Combat Stim to yourself.",
+          "displayIcon": "https://media.valorant-api.com/agents/7c8a4701-4de6-9355-b254-e09bc2a34b72/abilities/ability1/displayicon.png"
+        },
+        {
+          "slot": "Ultimate",
+          "displayName": "Bassquake",
+          "description": "EQUIP Bassquake. FIRE to build up and unleash Sonic Radiance forward, knocking back, Deafening, and Slowing players.",
+          "displayIcon": "https://media.valorant-api.com/agents/7c8a4701-4de6-9355-b254-e09bc2a34b72/abilities/ultimate/displayicon.png"
+        }
+      ],
+      "voiceLine": null
+    },
+    {
       "uuid": "1e58de9c-4950-5125-93e9-a0aee9f98746",
       "displayName": "Killjoy",
       "description": "The genius of Germany, Killjoy effortlessly secures key battlefield positions with her arsenal of inventions. If their damage doesn't take her enemies out, the debuff her robots provide will make short work of them.",
@@ -778,7 +843,7 @@
         {
           "slot": "Ability2",
           "displayName": "TURRET",
-          "description": "EQUIP a Turret. FIRE to deploy a turret that fires at enemies in a 100 degree cone. ALT FIRE to swap turret direction. HOLD EQUIP to recall the deployed turret.",
+          "description": "EQUIP a Turret. FIRE to deploy a turret that fires at enemies in a 100 degree cone. While targeting, EQUIP again to swap turret direction, HOLD ALT FIRE to rotate. HOLD EQUIP to recall the deployed turret.",
           "displayIcon": "https://media.valorant-api.com/agents/1e58de9c-4950-5125-93e9-a0aee9f98746/abilities/ability2/displayicon.png"
         },
         {

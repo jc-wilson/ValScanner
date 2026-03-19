@@ -1301,15 +1301,15 @@ class AgentPopup(QDialog):
 
         self.tile_width = 120
         self.tile_height = 120
-        columns = 7
+        columns = 6
 
         grid = QGridLayout()
         grid.setSpacing(16)
         grid.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
-        if len(agents_list) > 5:
-            main_agents = agents_list[:-5]
-            bottom_agents = agents_list[-5:]
+        if len(agents_list) > 4:
+            main_agents = agents_list[:-4]
+            bottom_agents = agents_list[-4:]
         else:
             main_agents = agents_list
             bottom_agents = []

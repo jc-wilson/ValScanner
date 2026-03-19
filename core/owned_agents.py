@@ -8,7 +8,7 @@ class OwnedAgents:
         self.agents = [
             "Astra", "Breach", "Brimstone", "Chamber", "Clove", "Cypher",
             "Deadlock", "Fade", "Gekko", "Harbor", "Iso", "Jett", "KAY/O",
-            "Killjoy", "Neon", "Omen", "Phoenix", "Raze", "Reyna", "Sage",
+            "Killjoy", "Miks", "Neon", "Omen", "Phoenix", "Raze", "Reyna", "Sage",
             "Skye", "Sova", "Tejo", "Veto", "Viper", "Vyse", "Waylay", "Yoru",
             "Random", "Duelist", "Initiator", "Controller", "Sentinel"
         ]
@@ -18,7 +18,7 @@ class OwnedAgents:
 
         self.duelists = ["Iso", "Jett", "Neon", "Phoenix", "Raze", "Reyna", "Waylay", "Yoru"]
         self.initiators = ["Breach", "Fade", "Gekko", "KAY/O", "Skye", "Sova", "Tejo"]
-        self.controllers = ["Astra", "Brimstone", "Clove", "Harbor", "Omen", "Viper"]
+        self.controllers = ["Astra", "Brimstone", "Clove", "Harbor", "Miks", "Omen", "Viper"]
         self.sentinels = ["Chamber", "Cypher", "Deadlock", "Killjoy", "Sage", "Veto", "Vyse"]
 
         self.owned_duelists = []
