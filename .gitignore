@@ -13,4 +13,4 @@ assets/
 core/__pycache__/
 scratch_test.txt
 loadouts/
-agent_selection/app_state.json
+agent_selection/

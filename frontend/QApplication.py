@@ -3653,7 +3653,7 @@ class ValorantStatsWindow(QMainWindow):
         safe_text = quote(str(riot_id), safe="")
         return (
             "https://tracker.gg/valorant/profile/riot/"
-            f"{safe_text}/overview?platform=pc&playlist=competitive&season=3ea2b318-423b-cf86-25da-7cbb0eefbe2d"
+            f"{safe_text}"
         )
 
     def create_stat_widget(self, title, value):
