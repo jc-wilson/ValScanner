@@ -1,9 +1,10 @@
 import asyncio
+import base64
 import json
 import re
 import ssl
 from datetime import datetime
-from xml.sax.saxutils import quoteattr
+from xml.etree import ElementTree
 
 from core.party_tracker import PartyTracker
 from core.presence_mode import PRESENCE_MODE_OFFLINE, normalize_presence_mode
@@ -15,6 +16,21 @@ from core.presence_mode import PRESENCE_MODE_OFFLINE, normalize_presence_mode
 
 
 XML_ATTR_RE = re.compile(r"([:\w-]+)\s*=\s*(['\"])(.*?)\2", flags=re.DOTALL)
+ROSTER_QUERY_RE = re.compile(
+    r"(<query\b[^>]*\bxmlns\s*=\s*(['\"])jabber:iq:riotgames:roster\2[^>]*>)",
+    flags=re.IGNORECASE,
+)
+FAKE_PLAYER_PUUID = "41c322a1-b328-495b-a004-5ccd3e45eae8"
+FAKE_PLAYER_JID = f"{FAKE_PLAYER_PUUID}@ares.pvp.net"
+FAKE_PLAYER_RESOURCE = "RC-ValScanner"
+FAKE_PLAYER_ROSTER_ITEM = (
+    f"<item jid='{FAKE_PLAYER_JID}' name='ValScanner Offline' subscription='both' puuid='{FAKE_PLAYER_PUUID}'>"
+    "<group priority='9999'>ValScanner</group>"
+    "<state>online</state>"
+    "<id name='ValScanner Offline' tagline='...'/>"
+    "<platforms><riot name='ValScanner Offline' tagline='...'/></platforms>"
+    "</item>"
+)
 
 
 def _find_tag_end(text: str, start_index: int = 0):
@@ -162,15 +178,132 @@ def _is_global_presence_stanza(stanza: str):
     return re.search(r"\bto\s*=", attrs_text, flags=re.IGNORECASE) is None
 
 
+def _decode_base64_json(encoded_value: str):
+    if not encoded_value:
+        return None
+
+    try:
+        payload_b64 = encoded_value.strip()
+        payload_b64 += "=" * (-len(payload_b64) % 4)
+        decoded = base64.b64decode(payload_b64).decode("utf-8")
+        return json.loads(decoded)
+    except Exception:
+        return None
+
+
+def _extract_party_client_version(presence_element):
+    if presence_element is None:
+        return None
+
+    games_element = presence_element.find("games")
+    if games_element is None:
+        return None
+
+    valorant_element = games_element.find("valorant")
+    if valorant_element is None:
+        return None
+
+    payload_element = valorant_element.find("p")
+    if payload_element is None or not payload_element.text:
+        return None
+
+    decoded_payload = _decode_base64_json(payload_element.text)
+    if not isinstance(decoded_payload, dict):
+        return None
+
+    party_presence_data = decoded_payload.get("partyPresenceData")
+    if not isinstance(party_presence_data, dict):
+        return None
+    version = party_presence_data.get("partyClientVersion")
+    if not version:
+        return None
+    return str(version).strip() or None
+
+
 def build_offline_presence_stanza(stanza: str):
-    attrs = _parse_xml_attrs(_extract_presence_attrs_text(stanza))
-    serialized_attrs = []
-    for key, value in attrs:
-        if key.lower() == "type":
-            continue
-        serialized_attrs.append(f"{key}={quoteattr(value)}")
-    serialized_attrs.append('type="unavailable"')
-    return f"<presence {' '.join(serialized_attrs)}/>"
+    try:
+        presence = ElementTree.fromstring(stanza)
+    except ElementTree.ParseError:
+        return stanza
+
+    if presence.tag != "presence":
+        return stanza
+
+    presence.attrib.pop("type", None)
+
+    show_element = presence.find("show")
+    if show_element is not None:
+        show_element.text = "offline"
+
+    status_element = presence.find("status")
+    if status_element is not None:
+        presence.remove(status_element)
+
+    games_element = presence.find("games")
+    if games_element is not None:
+        for child in list(games_element):
+            games_element.remove(child)
+
+    return ElementTree.tostring(presence, encoding="unicode")
+
+
+def _inject_fake_player_into_roster(stanza: str):
+    if FAKE_PLAYER_JID in stanza:
+        return stanza
+    match = ROSTER_QUERY_RE.search(stanza or "")
+    if match:
+        return stanza[:match.end()] + FAKE_PLAYER_ROSTER_ITEM + stanza[match.end():]
+    return stanza
+
+
+def _build_fake_roster_push(remove: bool = False):
+    roster_item = (
+        f"<item jid='{FAKE_PLAYER_JID}' subscription='remove' />"
+        if remove else
+        FAKE_PLAYER_ROSTER_ITEM
+    )
+    return (
+        "<iq type='set' id='valscanner-roster-sync'>"
+        "<query xmlns='jabber:iq:riotgames:roster'>"
+        f"{roster_item}"
+        "</query>"
+        "</iq>"
+    )
+
+
+def _build_fake_player_presence(version: str | None = None, available: bool = True):
+    if not available:
+        return f"<presence from='{FAKE_PLAYER_JID}/{FAKE_PLAYER_RESOURCE}' type='unavailable' />"
+
+    safe_version = version or "unknown"
+    unix_time_milliseconds = int(datetime.now().timestamp() * 1000)
+    encoded_valorant_presence = base64.b64encode(json.dumps({
+        "partyPresenceData": {
+            "partyId": "00000000-0000-0000-0000-000000000000",
+            "partyClientVersion": safe_version,
+            "partyState": "DEFAULT",
+            "partyOwnerSessionLoopState": "MENUS",
+            "queueEntryTime": "0001.01.01-00.00.00",
+        },
+        "playerPresenceData": {
+            "accountLevel": 1,
+            "competitiveTier": 0,
+        },
+        "sessionLoopState": "MENUS",
+        "queueId": "",
+    }).encode("utf-8")).decode("utf-8")
+
+    return (
+        f"<presence from='{FAKE_PLAYER_JID}/{FAKE_PLAYER_RESOURCE}' id='valscanner-fake-presence'>"
+        "<games>"
+        f"<keystone><st>chat</st><s.t>{unix_time_milliseconds}</s.t><s.p>keystone</s.p><pty/></keystone>"
+        f"<valorant><st>chat</st><s.t>{unix_time_milliseconds}</s.t><s.p>valorant</s.p><s.r>PC</s.r><p>{encoded_valorant_presence}</p><pty/></valorant>"
+        "</games>"
+        "<show>chat</show>"
+        "<platform>riot</platform>"
+        "<status/>"
+        "</presence>"
+    )
 
 
 class XmppMITM:
@@ -184,10 +317,14 @@ class XmppMITM:
         self._serve_task = None
         self._socket_tasks = {}
         self._socket_writers = {}
+        self._incoming_buffers = {}
         self._outgoing_buffers = {}
+        self._fake_player_inserted = set()
+        self._fake_player_visible = set()
         self._shutting_down = False
         self._presence_mode = normalize_presence_mode(None)
         self._last_presence_stanza = ""
+        self._valorant_version = None
 
     async def start(self) -> None:
         """Starts the XMPP server to listen to all hosts on port 35478 -> None"""
@@ -225,7 +362,10 @@ class XmppMITM:
 
         self._socket_tasks.clear()
         self._socket_writers.clear()
+        self._incoming_buffers.clear()
         self._outgoing_buffers.clear()
+        self._fake_player_inserted.clear()
+        self._fake_player_visible.clear()
 
     def get_presence_mode(self):
         return self._presence_mode
@@ -235,12 +375,23 @@ class XmppMITM:
         changed = normalized_mode != self._presence_mode
         self._presence_mode = normalized_mode
 
+        loop = None
+
         if broadcast and changed and self._last_presence_stanza:
             try:
                 loop = asyncio.get_running_loop()
             except RuntimeError:
                 return normalized_mode
             task = loop.create_task(self._broadcast_presence_update())
+            task.add_done_callback(self._consume_background_task_result)
+
+        if broadcast and changed:
+            if loop is None:
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    return normalized_mode
+            task = loop.create_task(self._broadcast_fake_player_state())
             task.add_done_callback(self._consume_background_task_result)
 
         return normalized_mode
@@ -321,7 +472,10 @@ class XmppMITM:
         self._consume_task_results(results)
 
         self.party_tracker.clear_socket(current_socket_id)
+        self._incoming_buffers.pop(current_socket_id, None)
         self._outgoing_buffers.pop(current_socket_id, None)
+        self._fake_player_inserted.discard(current_socket_id)
+        self._fake_player_visible.discard(current_socket_id)
         self._socket_tasks.pop(current_socket_id, None)
         self._socket_writers.pop(current_socket_id, None)
         await self._close_socket_pair(client_writer, riot_writer)
@@ -339,47 +493,28 @@ class XmppMITM:
             while True:
                 data = await reader.read(4096)
                 if not data:
-                    if direction == "outgoing":
-                        flushed = self.flush_outgoing_text(socket_id)
-                        if flushed:
-                            await self._write_text_fragments(writer, flushed)
-                            await self._safe_log_message(json.dumps({
-                                "type": direction,
-                                "time": datetime.now().timestamp(),
-                                "data": "".join(flushed),
-                                "socketID": socket_id,
-                            }))
-                    self._signal_stream_end(writer, socket_id, direction)
-                    break
-
-                if direction == "outgoing":
-                    decoded_text = data.decode(errors="ignore")
-                    fragments = self.process_outgoing_text(socket_id, decoded_text)
-                    if fragments:
-                        await self._write_text_fragments(writer, fragments)
+                    flushed = self.flush_buffered_text(socket_id, direction)
+                    if flushed:
+                        await self._write_text_fragments(writer, flushed)
                         await self._safe_log_message(json.dumps({
                             "type": direction,
                             "time": datetime.now().timestamp(),
-                            "data": "".join(fragments),
+                            "data": "".join(flushed),
                             "socketID": socket_id,
                         }))
-                    continue
+                    self._signal_stream_end(writer, socket_id, direction)
+                    break
 
-                writer.write(data)
-                await writer.drain()
                 decoded_text = data.decode(errors="ignore")
-                try:
-                    updated = self.party_tracker.feed_chunk(socket_id, decoded_text)
-                    if updated:
-                        print(f"[XMPPMitm] socket={socket_id} presence cache updated")
-                except Exception as exc:
-                    print(f"[XMPPMitm] socket={socket_id} presence parse error={exc!r}")
-                await self._safe_log_message(json.dumps({
-                    "type": direction,
-                    "time": datetime.now().timestamp(),
-                    "data": decoded_text,
-                    "socketID": socket_id,
-                }))
+                fragments = self.process_buffered_text(socket_id, decoded_text, direction)
+                if fragments:
+                    await self._write_text_fragments(writer, fragments)
+                    await self._safe_log_message(json.dumps({
+                        "type": direction,
+                        "time": datetime.now().timestamp(),
+                        "data": "".join(fragments),
+                        "socketID": socket_id,
+                    }))
         except asyncio.CancelledError:
             raise
         except (ssl.SSLError, ConnectionError, OSError, asyncio.IncompleteReadError):
@@ -387,40 +522,85 @@ class XmppMITM:
         except Exception as exc:
             print(f"[XMPPMitm] socket={socket_id} {direction} unexpected transfer error={exc!r}")
 
-    def process_outgoing_text(self, socket_id: int, text: str):
+    def process_buffered_text(self, socket_id: int, text: str, direction: str):
         if not text:
             return []
 
-        buffer = self._outgoing_buffers.get(socket_id, "") + text
+        buffers = self._outgoing_buffers if direction == "outgoing" else self._incoming_buffers
+        buffer = buffers.get(socket_id, "") + text
         fragments = []
 
         while True:
             fragment, buffer = _extract_next_xml_fragment(buffer)
             if fragment is None:
                 break
-            rewritten = self._rewrite_outgoing_fragment(fragment)
+            rewritten = self._rewrite_fragment(socket_id, fragment, direction)
             if rewritten:
                 fragments.append(rewritten)
 
-        self._outgoing_buffers[socket_id] = buffer[-20000:]
+        buffers[socket_id] = buffer[-20000:]
         return fragments
 
-    def flush_outgoing_text(self, socket_id: int):
-        buffer = self._outgoing_buffers.pop(socket_id, "")
+    def flush_buffered_text(self, socket_id: int, direction: str):
+        buffers = self._outgoing_buffers if direction == "outgoing" else self._incoming_buffers
+        buffer = buffers.pop(socket_id, "")
         if not buffer:
             return []
-        return [self._rewrite_outgoing_fragment(buffer)]
+        return [self._rewrite_fragment(socket_id, buffer, direction)]
+
+    def process_outgoing_text(self, socket_id: int, text: str):
+        return self.process_buffered_text(socket_id, text, "outgoing")
+
+    def process_incoming_text(self, socket_id: int, text: str):
+        return self.process_buffered_text(socket_id, text, "incoming")
+
+    def _rewrite_fragment(self, socket_id: int, fragment: str, direction: str):
+        if direction == "incoming":
+            return self._rewrite_incoming_fragment(socket_id, fragment)
+        return self._rewrite_outgoing_fragment(fragment)
 
     def _rewrite_outgoing_fragment(self, fragment: str):
+        if FAKE_PLAYER_PUUID in fragment or FAKE_PLAYER_JID in fragment:
+            return ""
         if not _is_presence_stanza(fragment):
             return fragment
         if not _is_global_presence_stanza(fragment):
             return fragment
         return self._apply_presence_mode(fragment, cache_original=True)
 
+    def _rewrite_incoming_fragment(self, socket_id: int, fragment: str):
+        try:
+            updated = self.party_tracker.feed_chunk(socket_id, fragment)
+            if updated:
+                print(f"[XMPPMitm] socket={socket_id} presence cache updated")
+        except Exception as exc:
+            print(f"[XMPPMitm] socket={socket_id} presence parse error={exc!r}")
+
+        if "jabber:iq:riotgames:roster" in fragment:
+            rewritten_fragment = fragment
+            if socket_id not in self._fake_player_inserted:
+                self._fake_player_inserted.add(socket_id)
+                rewritten_fragment = _inject_fake_player_into_roster(fragment)
+
+            if self._presence_mode == PRESENCE_MODE_OFFLINE and socket_id not in self._fake_player_visible:
+                self._fake_player_visible.add(socket_id)
+                return rewritten_fragment + _build_fake_player_presence(
+                    version=self._valorant_version,
+                    available=True,
+                )
+
+            return rewritten_fragment
+        return fragment
+
     def _apply_presence_mode(self, stanza: str, cache_original: bool):
         if cache_original and _presence_type(stanza) != "unavailable":
             self._last_presence_stanza = stanza
+            if self._valorant_version is None:
+                try:
+                    presence_element = ElementTree.fromstring(stanza)
+                except ElementTree.ParseError:
+                    presence_element = None
+                self._valorant_version = _extract_party_client_version(presence_element)
         if self._presence_mode == PRESENCE_MODE_OFFLINE:
             return build_offline_presence_stanza(stanza)
         return stanza
@@ -449,6 +629,41 @@ class XmppMITM:
                 "type": "presence-mode-sync",
                 "time": datetime.now().timestamp(),
                 "data": stanza,
+                "socketID": socket_id,
+                "presenceMode": self._presence_mode,
+            }))
+
+    async def _broadcast_fake_player_state(self):
+        for socket_id, writers in list(self._socket_writers.items()):
+            client_writer = writers.get("client")
+            if client_writer is None:
+                continue
+
+            payloads = []
+            if self._presence_mode == PRESENCE_MODE_OFFLINE:
+                if socket_id not in self._fake_player_visible:
+                    payloads.append(_build_fake_roster_push(remove=False))
+                    self._fake_player_visible.add(socket_id)
+                payloads.append(_build_fake_player_presence(version=self._valorant_version, available=True))
+            else:
+                if socket_id in self._fake_player_visible:
+                    payloads.append(_build_fake_player_presence(version=self._valorant_version, available=False))
+                    payloads.append(_build_fake_roster_push(remove=True))
+                    self._fake_player_visible.discard(socket_id)
+
+            if not payloads:
+                continue
+
+            try:
+                await self._write_text_fragments(client_writer, payloads)
+            except Exception as exc:
+                print(f"[XMPPMitm] socket={socket_id} fake player sync failed error={exc!r}")
+                continue
+
+            await self._safe_log_message(json.dumps({
+                "type": "fake-player-sync",
+                "time": datetime.now().timestamp(),
+                "data": "".join(payloads),
                 "socketID": socket_id,
                 "presenceMode": self._presence_mode,
             }))

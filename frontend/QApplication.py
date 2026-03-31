@@ -35,6 +35,7 @@ from core.player_loadout import PlayerLoadout
 from core.http_session import SharedSession
 from core.party_tracker import PartyTracker
 from core.presence_mode import (
+    PRESENCE_MODE_ONLINE,
     PRESENCE_MODE_OFFLINE,
     normalize_presence_mode,
 )
@@ -2920,7 +2921,7 @@ class ValorantStatsWindow(QMainWindow):
         persisted_state = load_app_state(map_uuids=self.map_asset_uuids)
         initial_theme_name = normalize_theme_name(persisted_state.get("selected_theme"))
         self.current_theme_name = apply_theme_palette(initial_theme_name)
-        initial_presence_mode = normalize_presence_mode(persisted_state.get("presence_mode"))
+        initial_presence_mode = PRESENCE_MODE_ONLINE
         initial_agent = str(persisted_state.get("selected_standard_agent", "Random") or "Random")
         initial_auto_lock_enabled = bool(persisted_state.get("auto_lock_enabled", False))
         initial_map_lock_enabled = bool(persisted_state.get("map_lock_enabled", False))

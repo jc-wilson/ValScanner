@@ -769,6 +769,12 @@
       },
       "abilities": [
         {
+          "slot": "Grenade",
+          "displayName": "M-pulse",
+          "description": "EQUIP M-pulse. ALT-FIRE to toggle between Concuss and Healing outputs. FIRE to throw the device. Upon landing, M-pulse sends out sound waves, either Concussing or Healing players.",
+          "displayIcon": "https://media.valorant-api.com/agents/7c8a4701-4de6-9355-b254-e09bc2a34b72/abilities/grenade/displayicon.png"
+        },
+        {
           "slot": "Ability2",
           "displayName": "Waveform",
           "description": "EQUIP a Map Targeter. FIRE to set locations. ALT-FIRE to spawn Smokes at selected locations.",
