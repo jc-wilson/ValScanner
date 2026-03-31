@@ -4,7 +4,7 @@ import sys
 import tempfile
 
 
-APP_STATE_VERSION = 2
+APP_STATE_VERSION = 3
 APP_STATE_RELATIVE_PATH = os.path.join("agent_selection", "app_state.json")
 LEGACY_MAP_SELECTION_RELATIVE_PATH = os.path.join("agent_selection", "map_agent_selection.json")
 DEFAULT_THEME_NAME = "midnight"
@@ -62,6 +62,8 @@ def default_app_state(map_uuids=None, base_path=None):
         "selected_standard_agent": "Random",
         "auto_lock_enabled": False,
         "map_lock_enabled": False,
+        "queue_snipe_enabled": False,
+        "queue_snipe_selected_friend": None,
         "map_agent_selection": {
             map_uuid: ""
             for map_uuid in normalized_map_uuids
@@ -95,6 +97,32 @@ def _normalize_selected_theme(theme_name):
     return DEFAULT_THEME_NAME
 
 
+def _normalize_queue_snipe_friend(friend_data):
+    if not isinstance(friend_data, dict):
+        return None
+
+    puuid = str(friend_data.get("puuid", "") or "").strip()
+    if not puuid:
+        return None
+
+    game_name = str(friend_data.get("game_name", "") or "").strip()
+    game_tag = str(friend_data.get("game_tag", "") or "").strip()
+    display_name = str(friend_data.get("display_name", "") or "").strip()
+    if not display_name:
+        if game_name and game_tag:
+            display_name = f"{game_name}#{game_tag}"
+        else:
+            display_name = game_name or str(friend_data.get("name", "") or "").strip() or puuid
+
+    return {
+        "puuid": puuid,
+        "game_name": game_name,
+        "game_tag": game_tag,
+        "display_name": display_name,
+        "pid": str(friend_data.get("pid", "") or "").strip(),
+    }
+
+
 def normalize_app_state(state_data, map_uuids=None, base_path=None):
     raw_state = state_data if isinstance(state_data, dict) else {}
     normalized_map_uuids = _coerce_map_uuids(
@@ -102,12 +130,15 @@ def normalize_app_state(state_data, map_uuids=None, base_path=None):
         base_path=base_path,
         existing_selection=raw_state.get("map_agent_selection"),
     )
+    normalized_queue_snipe_friend = _normalize_queue_snipe_friend(raw_state.get("queue_snipe_selected_friend"))
     normalized_state = {
         "version": APP_STATE_VERSION,
         "selected_theme": _normalize_selected_theme(raw_state.get("selected_theme")),
         "selected_standard_agent": str(raw_state.get("selected_standard_agent", "Random") or "Random"),
         "auto_lock_enabled": bool(raw_state.get("auto_lock_enabled", False)),
         "map_lock_enabled": bool(raw_state.get("map_lock_enabled", False)),
+        "queue_snipe_enabled": bool(raw_state.get("queue_snipe_enabled", False)),
+        "queue_snipe_selected_friend": normalized_queue_snipe_friend,
         "map_agent_selection": _normalize_map_agent_selection(
             raw_state.get("map_agent_selection"),
             normalized_map_uuids,
@@ -116,6 +147,8 @@ def normalize_app_state(state_data, map_uuids=None, base_path=None):
 
     if not normalized_state["auto_lock_enabled"]:
         normalized_state["map_lock_enabled"] = False
+    if normalized_state["queue_snipe_selected_friend"] is None:
+        normalized_state["queue_snipe_enabled"] = False
 
     return normalized_state
 

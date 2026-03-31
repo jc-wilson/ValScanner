@@ -22,7 +22,7 @@ import ssl
 import base64
 import json
 import requests
-from core.app_state import load_app_state, save_app_state
+from core.app_state import APP_STATE_VERSION, load_app_state, save_app_state
 from core.api_client import ValoRank
 from core.dodge_button import dodge
 from core.instalock_agent import instalock_agent
@@ -34,6 +34,7 @@ from core.owned_skins import OwnedSkins
 from core.player_loadout import PlayerLoadout
 from core.http_session import SharedSession
 from core.party_tracker import PartyTracker
+from core.queue_snipe import QueueSnipeService
 from core.startup_coordinator import AppStartupCoordinator
 from core.asset_loader import (
     ensure_skin_asset_files,
@@ -1701,6 +1702,202 @@ class AgentPopup(QDialog):
         self.accept()
 
 
+class FriendSelectionPopup(QDialog):
+    def __init__(self, friends_list, callback, parent=None):
+        super().__init__(parent)
+        self.callback = callback
+        self.friends_list = list(friends_list or [])
+        self.filtered_friends = list(self.friends_list)
+
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setMinimumSize(520, 640)
+
+        container = QWidget()
+        container.setObjectName("popupCard")
+
+        main_layout = QVBoxLayout(container)
+        main_layout.setContentsMargins(26, 26, 26, 22)
+        main_layout.setSpacing(14)
+
+        header = QVBoxLayout()
+        header.setSpacing(6)
+        header.setAlignment(Qt.AlignCenter)
+
+        title = QLabel("Queue Snipe")
+        title.setObjectName("title")
+        header.addWidget(title, alignment=Qt.AlignCenter)
+
+        subtitle = QLabel("Select a friend to mirror their queue")
+        subtitle.setObjectName("subtitle")
+        header.addWidget(subtitle, alignment=Qt.AlignCenter)
+        main_layout.addLayout(header)
+
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Search friends")
+        self.search_input.textChanged.connect(self.on_search_text_changed)
+        main_layout.addWidget(self.search_input)
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.NoFrame)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.scroll_area.setStyleSheet("background: transparent; border: none;")
+
+        self.scroll_content = QWidget()
+        self.scroll_layout = QVBoxLayout(self.scroll_content)
+        self.scroll_layout.setContentsMargins(0, 0, 0, 0)
+        self.scroll_layout.setSpacing(10)
+        self.scroll_area.setWidget(self.scroll_content)
+        main_layout.addWidget(self.scroll_area, 1)
+
+        close_btn = QPushButton("Close")
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setFixedHeight(42)
+        close_btn.clicked.connect(self.close)
+        main_layout.addWidget(close_btn)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(18, 18, 18, 18)
+        outer.addWidget(container)
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(50)
+        shadow.setOffset(0, 12)
+        shadow.setColor(QColor(0, 0, 0, 180))
+        container.setGraphicsEffect(shadow)
+
+        self.setStyleSheet(f"""
+            #popupCard {{
+                background-color: {THEME_MAIN};
+                border-radius: 22px;
+                border: 1px solid {THEME_BORDER_SOFT};
+            }}
+            #title {{ color: {THEME_TEXT}; font-size: 22px; font-weight: 600; }}
+            #subtitle {{ color: {THEME_MUTED}; font-size: 14px; }}
+            QLineEdit {{
+                background-color: {THEME_CARD_ALT};
+                border-radius: 12px;
+                padding: 10px 12px;
+                color: {THEME_TEXT};
+                border: 1px solid {THEME_BORDER};
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {THEME_ACCENT};
+            }}
+            QPushButton#friendRow {{
+                background-color: {THEME_CARD};
+                border-radius: 16px;
+                border: 1px solid {THEME_BORDER_SOFT};
+                text-align: left;
+            }}
+            QPushButton#friendRow:hover {{
+                border: 1px solid {THEME_ACCENT};
+                background-color: {THEME_CARD_ALT};
+            }}
+            QLabel#friendName {{
+                color: {THEME_TEXT};
+                font-size: 15px;
+                font-weight: 700;
+            }}
+            QLabel#friendMeta {{
+                color: {THEME_MUTED};
+                font-size: 12px;
+            }}
+            QLabel#friendEmptyState {{
+                color: {THEME_MUTED};
+                font-style: italic;
+                padding: 18px 6px;
+            }}
+            QScrollBar:vertical {{
+                background: transparent;
+                width: 12px;
+                margin: 6px 0 6px 0;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {THEME_BORDER};
+                border-radius: 6px;
+                min-height: 36px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: {THEME_ACCENT};
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+                background: transparent;
+            }}
+        """)
+
+        self.populate_friend_rows()
+
+    def on_search_text_changed(self, value):
+        query = str(value or "").strip().lower()
+        if not query:
+            self.filtered_friends = list(self.friends_list)
+        else:
+            self.filtered_friends = [
+                friend for friend in self.friends_list
+                if query in friend.get("display_name", "").lower()
+                or query in friend.get("puuid", "").lower()
+            ]
+        self.populate_friend_rows()
+
+    def populate_friend_rows(self):
+        while self.scroll_layout.count():
+            item = self.scroll_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        if not self.filtered_friends:
+            empty_label = QLabel("No friends match your search.")
+            empty_label.setObjectName("friendEmptyState")
+            empty_label.setAlignment(Qt.AlignCenter)
+            self.scroll_layout.addWidget(empty_label)
+            self.scroll_layout.addStretch(1)
+            return
+
+        for friend in self.filtered_friends:
+            self.scroll_layout.addWidget(self.build_friend_row(friend))
+        self.scroll_layout.addStretch(1)
+
+    def build_friend_row(self, friend):
+        row = QPushButton()
+        row.setObjectName("friendRow")
+        row.setCursor(Qt.PointingHandCursor)
+        row.setMinimumHeight(76)
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(16, 14, 16, 14)
+        row_layout.setSpacing(12)
+
+        text_layout = QVBoxLayout()
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(0)
+
+        name_label = QLabel(friend.get("display_name", friend.get("puuid", "Unknown")))
+        name_label.setObjectName("friendName")
+        name_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        name_label.setWordWrap(False)
+
+        text_layout.addWidget(name_label)
+        row_layout.addLayout(text_layout, 1)
+
+        pick_label = QLabel("Select")
+        pick_label.setObjectName("friendMeta")
+        pick_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        row_layout.addWidget(pick_label, alignment=Qt.AlignVCenter)
+
+        row.clicked.connect(lambda _, selected_friend=friend: self.on_select(selected_friend))
+        return row
+
+    def on_select(self, friend):
+        self.callback(friend)
+        self.accept()
+
+
 class MapAgentPopup(QDialog):
     def __init__(self, agent_options, owned_agents_list, agent_icons, map_icons, uuid_handler, selection_data,
                  save_callback, parent=None):
@@ -2518,6 +2715,10 @@ class ValorantStatsWindow(QMainWindow):
         initial_agent = str(persisted_state.get("selected_standard_agent", "Random") or "Random")
         initial_auto_lock_enabled = bool(persisted_state.get("auto_lock_enabled", False))
         initial_map_lock_enabled = bool(persisted_state.get("map_lock_enabled", False))
+        initial_queue_snipe_enabled = bool(persisted_state.get("queue_snipe_enabled", False))
+        initial_queue_snipe_friend = QueueSnipeService.normalize_friend(
+            persisted_state.get("queue_snipe_selected_friend")
+        )
         self._suspend_agent_lock_state_save = True
 
         self.agent_label = QLabel("Agent")
@@ -2547,6 +2748,19 @@ class ValorantStatsWindow(QMainWindow):
         self.map_lock_switch.setChecked(initial_map_lock_enabled)
         self.map_lock_switch.setEnabled(False)
         self.map_lock_switch.toggled.connect(self.on_map_lock_toggled)
+
+        self.queue_snipe_label = QLabel("Queue Snipe")
+        self.queue_snipe_label.setObjectName("sectionLabel")
+        self.queue_snipe_selected_friend = initial_queue_snipe_friend
+        self.queue_snipe_button = QPushButton(self.get_queue_snipe_button_text(initial_queue_snipe_friend))
+        self.queue_snipe_button.setCursor(Qt.PointingHandCursor)
+        self.queue_snipe_button.setObjectName("secondaryButton")
+        self.queue_snipe_button.setMinimumWidth(180)
+        self.queue_snipe_button.clicked.connect(self.open_queue_snipe_popup)
+        self.queue_snipe_switch = ToggleSwitch()
+        self.queue_snipe_switch.setChecked(initial_queue_snipe_enabled)
+        self.queue_snipe_switch.setEnabled(initial_queue_snipe_friend is not None)
+        self.queue_snipe_switch.toggled.connect(self.on_queue_snipe_toggled)
 
         self.loadouts_button = QPushButton("Loadouts")
         self.loadouts_button.setCursor(Qt.PointingHandCursor)
@@ -2595,6 +2809,7 @@ class ValorantStatsWindow(QMainWindow):
         self.loadouts_button.setFixedHeight(header_button_height)
         self.dodge_button.setFixedHeight(header_button_height)
         self.load_more_matches_button.setFixedHeight(header_button_height)
+        self.queue_snipe_button.setFixedHeight(header_button_height)
         self.refresh_button.setIconSize(QSize(28, 28))
         self.refresh_button.setFixedSize(refresh_button_size, refresh_button_size)
 
@@ -2638,6 +2853,18 @@ class ValorantStatsWindow(QMainWindow):
 
         header_layout.addWidget(agent_block, alignment=Qt.AlignVCenter)
 
+        queue_snipe_block = QFrame()
+        queue_snipe_block.setObjectName("agentBlock")
+        queue_snipe_block.setFixedHeight(agent_block_height)
+        queue_snipe_layout = QHBoxLayout(queue_snipe_block)
+        queue_snipe_layout.setContentsMargins(11, 8, 11, 8)
+        queue_snipe_layout.setSpacing(10)
+        queue_snipe_layout.addWidget(self.queue_snipe_label)
+        queue_snipe_layout.addWidget(self.queue_snipe_button)
+        queue_snipe_layout.addWidget(self.queue_snipe_switch)
+
+        header_layout.addWidget(queue_snipe_block, alignment=Qt.AlignVCenter)
+
         header_layout.addStretch(1)
 
         header_layout.addWidget(self.themes_button, alignment=Qt.AlignVCenter)
@@ -2677,6 +2904,9 @@ class ValorantStatsWindow(QMainWindow):
         self.startup_coordinator = AppStartupCoordinator(self.set_status_message)
         self.party_tracker = PartyTracker.get()
         self.party_tracker.subscribe(self.on_party_data_updated)
+        self.queue_snipe_service = QueueSnipeService(self.party_tracker)
+        self._queue_snipe_presence_callback = self.queue_snipe_service.handle_presence_update
+        self.party_tracker.subscribe(self._queue_snipe_presence_callback)
         self.party_detection_enabled = True
         self.party_group_colours = [
             ("#f7a15d", "rgba(247, 161, 93, 0.2)"),
@@ -2705,6 +2935,7 @@ class ValorantStatsWindow(QMainWindow):
         self._loaded_asset_groups = set()
         self._initial_assets_ready = asyncio.Event()
         self._initial_window_ready = False
+        self._queue_snipe_popup_dialog = None
 
         self.refreshed_pregame = None
         self.refreshed_game = None
@@ -2719,6 +2950,7 @@ class ValorantStatsWindow(QMainWindow):
 
         self._latency_start_time = None
         self.apply_restored_agent_lock_state(initial_auto_lock_enabled, initial_map_lock_enabled)
+        self.apply_restored_queue_snipe_state(initial_queue_snipe_enabled, initial_queue_snipe_friend)
         self._suspend_agent_lock_state_save = False
 
     def resizeEvent(self, event):
@@ -2835,6 +3067,8 @@ class ValorantStatsWindow(QMainWindow):
 
         self.start_asset_tasks()
         self.start_websocket_listener()
+        self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
+        self.queue_snipe_service.set_enabled(self.queue_snipe_switch.isChecked())
         await self.refresh_data()
 
     def start_runtime_tasks(self):
@@ -2912,6 +3146,8 @@ class ValorantStatsWindow(QMainWindow):
                 self.show_loading_window()
                 self.set_party_detection_enabled(self.startup_coordinator.party_detection_enabled)
                 self.start_websocket_listener()
+                self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
+                self.queue_snipe_service.set_enabled(self.queue_snipe_switch.isChecked())
                 await self.refresh_data()
         finally:
             self._startup_bootstrapped = True
@@ -2946,6 +3182,8 @@ class ValorantStatsWindow(QMainWindow):
             self.set_status_message("Party detection is disabled for this session.")
 
         self.start_websocket_listener()
+        self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
+        self.queue_snipe_service.set_enabled(self.queue_snipe_switch.isChecked())
         await self.refresh_data()
 
     def closeEvent(self, event: QCloseEvent):
@@ -2972,6 +3210,8 @@ class ValorantStatsWindow(QMainWindow):
         self._background_helper_active = True
         self._close_requested = False
         self.set_status_message("ValScanner will finish closing after Riot Client exits.")
+        if hasattr(self, "queue_snipe_service") and self.queue_snipe_service:
+            self.queue_snipe_service.shutdown()
 
         if self.ws_task and not self.ws_task.done():
             self.ws_task.cancel()
@@ -3029,6 +3269,10 @@ class ValorantStatsWindow(QMainWindow):
 
         if hasattr(self, 'party_tracker') and self.party_tracker:
             self.party_tracker.unsubscribe(self.on_party_data_updated)
+            if hasattr(self, "_queue_snipe_presence_callback") and self._queue_snipe_presence_callback:
+                self.party_tracker.unsubscribe(self._queue_snipe_presence_callback)
+        if hasattr(self, 'queue_snipe_service') and self.queue_snipe_service:
+            self.queue_snipe_service.shutdown()
         if hasattr(self, 'startup_coordinator') and self.startup_coordinator:
             await self.startup_coordinator.shutdown()
         if self._activation_server is not None:
@@ -3087,13 +3331,21 @@ class ValorantStatsWindow(QMainWindow):
             return agent_name
         return self.uuid_handler.agent_converter_reversed(agent_name)
 
+    def get_queue_snipe_button_text(self, friend_data=None):
+        normalized_friend = QueueSnipeService.normalize_friend(friend_data)
+        if normalized_friend is None:
+            return "Queue Snipe"
+        return normalized_friend.get("display_name", "Queue Snipe")
+
     def build_agent_lock_state_payload(self):
         return {
-            "version": 2,
+            "version": APP_STATE_VERSION,
             "selected_theme": self.current_theme_name,
             "selected_standard_agent": self.last_standard_agent_text or "Random",
             "auto_lock_enabled": self.auto_lock_switch.isChecked(),
             "map_lock_enabled": self.map_lock_switch.isChecked(),
+            "queue_snipe_enabled": self.queue_snipe_switch.isChecked() and self.queue_snipe_selected_friend is not None,
+            "queue_snipe_selected_friend": dict(self.queue_snipe_selected_friend) if self.queue_snipe_selected_friend else None,
             "map_agent_selection": dict(self.map_agent_selection or {}),
         }
 
@@ -3107,6 +3359,13 @@ class ValorantStatsWindow(QMainWindow):
         )
         self.current_theme_name = normalize_theme_name(normalized_state.get("selected_theme"))
         self.map_agent_selection = dict(normalized_state.get("map_agent_selection", {}))
+        self.queue_snipe_selected_friend = QueueSnipeService.normalize_friend(
+            normalized_state.get("queue_snipe_selected_friend")
+        )
+        if hasattr(self, "queue_snipe_button"):
+            self.queue_snipe_button.setText(self.get_queue_snipe_button_text(self.queue_snipe_selected_friend))
+        if hasattr(self, "queue_snipe_switch"):
+            self.queue_snipe_switch.setEnabled(self.queue_snipe_selected_friend is not None)
 
     def apply_restored_agent_lock_state(self, auto_lock_enabled, map_lock_enabled):
         self.auto_lock_switch.blockSignals(True)
@@ -3124,6 +3383,16 @@ class ValorantStatsWindow(QMainWindow):
 
         self.on_auto_lock_toggled(self.auto_lock_switch.isChecked())
         self.on_map_lock_toggled(self.map_lock_switch.isChecked())
+
+    def apply_restored_queue_snipe_state(self, queue_snipe_enabled, selected_friend):
+        self.queue_snipe_selected_friend = QueueSnipeService.normalize_friend(selected_friend)
+        self.queue_snipe_button.setText(self.get_queue_snipe_button_text(self.queue_snipe_selected_friend))
+        self.queue_snipe_switch.setEnabled(self.queue_snipe_selected_friend is not None)
+        self.queue_snipe_switch.blockSignals(True)
+        self.queue_snipe_switch.setChecked(bool(queue_snipe_enabled) and self.queue_snipe_selected_friend is not None)
+        self.queue_snipe_switch.blockSignals(False)
+        self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
+        self.queue_snipe_service.set_enabled(self.queue_snipe_switch.isChecked())
 
     def set_standard_agent_selection(self, agent_name):
         self.last_standard_agent_text = agent_name
@@ -3171,6 +3440,74 @@ class ValorantStatsWindow(QMainWindow):
     def save_map_agent_selection(self, map_uuid, selection_value):
         self.map_agent_selection[map_uuid] = str(selection_value or "")
         self.persist_agent_lock_state()
+
+    def on_queue_snipe_toggled(self, checked):
+        if checked and self.queue_snipe_selected_friend is None:
+            self.queue_snipe_switch.blockSignals(True)
+            self.queue_snipe_switch.setChecked(False)
+            self.queue_snipe_switch.blockSignals(False)
+            return
+
+        self.queue_snipe_service.set_enabled(bool(checked))
+        self.persist_agent_lock_state()
+
+    def on_queue_snipe_friend_selected(self, friend_data):
+        self.queue_snipe_selected_friend = QueueSnipeService.normalize_friend(friend_data)
+        self.queue_snipe_button.setText(self.get_queue_snipe_button_text(self.queue_snipe_selected_friend))
+        self.queue_snipe_switch.setEnabled(self.queue_snipe_selected_friend is not None)
+        self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
+        self.persist_agent_lock_state()
+
+    def open_queue_snipe_popup(self):
+        print("[QueueSnipeUI] open_queue_snipe_popup clicked")
+        active_popup = getattr(self, "_queue_snipe_popup_dialog", None)
+        if active_popup is not None:
+            print("[QueueSnipeUI] popup already open; focusing existing dialog")
+            active_popup.raise_()
+            active_popup.activateWindow()
+            return
+
+        if not self.queue_snipe_button.isEnabled():
+            print("[QueueSnipeUI] queue_snipe_button is disabled; ignoring click")
+            return
+
+        self.queue_snipe_button.setEnabled(False)
+        print("[QueueSnipeUI] starting async friends fetch")
+        asyncio.create_task(self._open_queue_snipe_popup_async())
+
+    async def _open_queue_snipe_popup_async(self):
+        print("[QueueSnipeUI] _open_queue_snipe_popup_async started")
+        try:
+            friends = await self.queue_snipe_service.fetch_friends()
+        except Exception as exc:
+            error_message = str(exc)
+            print(f"[QueueSnipeUI] friends fetch failed error={error_message}")
+            QTimer.singleShot(0, lambda message=error_message: self._show_queue_snipe_error(message))
+            return
+
+        print(f"[QueueSnipeUI] friends fetch succeeded count={len(friends)}")
+        QTimer.singleShot(0, lambda current_friends=friends: self._show_queue_snipe_popup(current_friends))
+
+    def _show_queue_snipe_popup(self, friends):
+        print(f"[QueueSnipeUI] showing queue snipe popup with {len(friends)} friends")
+        self.queue_snipe_button.setEnabled(True)
+        self._queue_snipe_popup_dialog = FriendSelectionPopup(friends, self.on_queue_snipe_friend_selected, self)
+        self._queue_snipe_popup_dialog.finished.connect(
+            lambda *_: setattr(self, "_queue_snipe_popup_dialog", None)
+        )
+        self._queue_snipe_popup_dialog.open()
+
+    def _show_queue_snipe_error(self, message):
+        print(f"[QueueSnipeUI] showing queue snipe error message={message}")
+        self.queue_snipe_button.setEnabled(True)
+        error_box = QMessageBox(self)
+        error_box.setWindowTitle("Friends Unavailable")
+        error_box.setIcon(QMessageBox.Warning)
+        error_box.setText("ValScanner couldn't load your friends list.")
+        error_box.setInformativeText(str(message or "Unknown error."))
+        error_box.setStandardButtons(QMessageBox.Ok)
+        error_box.setAttribute(Qt.WA_DeleteOnClose, True)
+        error_box.open()
 
     def open_agent_popup(self):
         active_popup = getattr(self, "_map_agent_popup_dialog", None) or getattr(self, "_agent_popup_dialog", None)
@@ -3254,6 +3591,8 @@ class ValorantStatsWindow(QMainWindow):
             self.auto_lock_switch.update()
         if hasattr(self, "map_lock_switch"):
             self.map_lock_switch.update()
+        if hasattr(self, "queue_snipe_switch"):
+            self.queue_snipe_switch.update()
 
         if persist:
             self.persist_agent_lock_state()
@@ -3305,6 +3644,7 @@ class ValorantStatsWindow(QMainWindow):
                     continue
 
                 self.puuid = handler.puuid
+                self.queue_snipe_service.set_local_self_puuid(self.puuid)
 
                 auth = base64.b64encode(f"riot:{handler.password}".encode()).decode()
                 headers = {"Authorization": f"Basic {auth}"}
@@ -3319,6 +3659,8 @@ class ValorantStatsWindow(QMainWindow):
                 async with websockets.connect(url, additional_headers=headers, ssl=ssl_context) as ws:
                     self.set_status_message("Connected to Riot Client. Waiting for match data...")
                     print("WebSocket Connected!")
+                    self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
+                    self.queue_snipe_service.set_enabled(self.queue_snipe_switch.isChecked())
                     await ws.send(json.dumps([5, "OnJsonApiEvent"]))
 
                     while True:
@@ -3330,6 +3672,7 @@ class ValorantStatsWindow(QMainWindow):
                         if isinstance(data, list) and len(data) == 3 and data[0] == 8:
                             event_data = data[2]
                             uri = event_data.get("uri", "")
+                            self.queue_snipe_service.handle_local_json_api_event(event_data, self.puuid)
 
                             if "/pregame/v1/matches" in uri:
                                 prematch_id = uri[-36:]

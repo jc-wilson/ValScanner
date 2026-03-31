@@ -69,9 +69,10 @@ class XmppMITM:
 
         server_addr = client_writer.get_extra_info('sockname')
         ipv4LocalHost = server_addr[0]
+        peer_addr = client_writer.get_extra_info('peername')
         mapping = next((m for m in self.config_mitm.affinityMappings if m['localHost'] == ipv4LocalHost), None)
         if mapping is None:
-            print(f'Unknown host {ipv4LocalHost}')
+            print(f"[XMPPMitm] Unknown host local={ipv4LocalHost} peer={peer_addr}")
             await self.log_message(f'Unknown host {ipv4LocalHost}')
             client_writer.close()
             await client_writer.wait_closed()
@@ -86,8 +87,11 @@ class XmppMITM:
             'port': mapping['riotPort'],
             'socketID': current_socket_id,
         }))
+        print(
+            f"[XMPPMitm] socket={current_socket_id} accepted local={ipv4LocalHost} peer={peer_addr} "
+            f"mapped_host={mapping['riotHost']} mapped_port={mapping['riotPort']}"
+        )
 
-        print(f"Connecting to: {mapping['riotHost']}:{mapping['riotPort']}...")
         try:
             riot_reader, riot_writer = await asyncio.open_connection(
                 mapping['riotHost'], mapping['riotPort'], ssl=ssl.create_default_context()
@@ -101,11 +105,12 @@ class XmppMITM:
                 'socketID': current_socket_id,
                 'error': str(exc),
             }))
+            print(f"[XMPPMitm] socket={current_socket_id} connect failed error={exc}")
             client_writer.close()
             await client_writer.wait_closed()
             return
 
-        print("Connected successfully!")
+        print(f"[XMPPMitm] socket={current_socket_id} connected to riot chat")
 
         outgoing_task = asyncio.create_task(
             self.transfer_data(client_reader, riot_writer, current_socket_id, 'outgoing')
@@ -118,27 +123,17 @@ class XmppMITM:
             'incoming': incoming_task,
         }
 
-        done, pending = await asyncio.wait(
-            [outgoing_task, incoming_task],
-            return_when=asyncio.FIRST_COMPLETED,
+        results = await asyncio.gather(
+            outgoing_task,
+            incoming_task,
+            return_exceptions=True,
         )
-
-        for task in pending:
-            task.cancel()
-
-        for task in done:
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-
-        if pending:
-            results = await asyncio.gather(*pending, return_exceptions=True)
-            self._consume_task_results(results)
+        self._consume_task_results(results)
 
         self.party_tracker.clear_socket(current_socket_id)
         self._socket_tasks.pop(current_socket_id, None)
         await self._close_socket_pair(client_writer, riot_writer)
+        print(f"[XMPPMitm] socket={current_socket_id} closed")
         await self._safe_log_message(json.dumps({
             'type': 'close-valorant',
             'time': datetime.now().timestamp(),
@@ -152,12 +147,18 @@ class XmppMITM:
             while True:
                 data = await reader.read(4096)
                 if not data:
+                    self._signal_stream_end(writer, socket_id, direction)
                     break
                 writer.write(data)
                 await writer.drain()
                 decoded_text = data.decode(errors='ignore')
                 if direction == 'incoming':
-                    self.party_tracker.feed_chunk(socket_id, decoded_text)
+                    try:
+                        updated = self.party_tracker.feed_chunk(socket_id, decoded_text)
+                        if updated:
+                            print(f"[XMPPMitm] socket={socket_id} presence cache updated")
+                    except Exception as exc:
+                        print(f"[XMPPMitm] socket={socket_id} presence parse error={exc!r}")
                 await self._safe_log_message(json.dumps({
                     'type': direction,
                     'time': datetime.now().timestamp(),
@@ -167,7 +168,9 @@ class XmppMITM:
         except asyncio.CancelledError:
             raise
         except (ssl.SSLError, ConnectionError, OSError, asyncio.IncompleteReadError):
-            print('Connection closed!')
+            print(f"[XMPPMitm] socket={socket_id} {direction} stream closed")
+        except Exception as exc:
+            print(f"[XMPPMitm] socket={socket_id} {direction} unexpected transfer error={exc!r}")
 
     async def log_message(self, message=str) -> None:
         """Logs the messages"""
@@ -206,3 +209,18 @@ class XmppMITM:
         for result in results:
             if isinstance(result, BaseException) and not isinstance(result, asyncio.CancelledError):
                 print(f"XMPP task error: {result}")
+
+    def _signal_stream_end(self, writer, socket_id: int, direction: str) -> None:
+        try:
+            if writer.can_write_eof():
+                writer.write_eof()
+                print(f"[XMPPMitm] socket={socket_id} {direction} EOF forwarded")
+                return
+        except Exception:
+            pass
+
+        try:
+            writer.close()
+            print(f"[XMPPMitm] socket={socket_id} {direction} writer closed")
+        except Exception:
+            pass
