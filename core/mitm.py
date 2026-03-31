@@ -7,6 +7,7 @@ from pathlib import Path
 from core.ConfigMITM import ConfigMITM
 from core.SharedValues import host, port, xmppPort
 from core.XMPPMitm import XmppMITM
+from core.presence_mode import normalize_presence_mode
 
 DEFAULT_RIOT_CLIENT_PATH = Path(r"C:\Riot Games\Riot Client\RiotClientServices.exe")
 TRACKED_PROCESS_NAMES = [
@@ -96,9 +97,12 @@ class RiotMitmService:
         self._started = False
         self._owns_running_session = False
         self._background_hold = False
+        self._presence_mode = normalize_presence_mode(None)
 
     async def start(self):
         if self._started:
+            if self.xmpp_mitm is not None:
+                self.xmpp_mitm.set_presence_mode(self._presence_mode, broadcast=False)
             return
 
         self._log_stream = InMemoryLogStream()
@@ -112,6 +116,7 @@ class RiotMitmService:
         self._config_thread.start()
 
         self.xmpp_mitm = XmppMITM(self.xmpp_port, self.config_mitm, self._log_stream)
+        self.xmpp_mitm.set_presence_mode(self._presence_mode, broadcast=False)
         await self.xmpp_mitm.start()
         self._started = True
 
@@ -132,6 +137,17 @@ class RiotMitmService:
         self._started = False
         self._owns_running_session = False
         self._background_hold = False
+
+    def set_presence_mode(self, mode):
+        self._presence_mode = normalize_presence_mode(mode)
+        if self.xmpp_mitm is not None:
+            self.xmpp_mitm.set_presence_mode(self._presence_mode)
+        return self._presence_mode
+
+    def get_presence_mode(self):
+        if self.xmpp_mitm is not None:
+            return self.xmpp_mitm.get_presence_mode()
+        return self._presence_mode
 
     def can_reuse_active_session(self) -> bool:
         return self._started and self._owns_running_session

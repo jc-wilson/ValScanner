@@ -34,6 +34,10 @@ from core.owned_skins import OwnedSkins
 from core.player_loadout import PlayerLoadout
 from core.http_session import SharedSession
 from core.party_tracker import PartyTracker
+from core.presence_mode import (
+    PRESENCE_MODE_OFFLINE,
+    normalize_presence_mode,
+)
 from core.queue_snipe import QueueSnipeService
 from core.startup_coordinator import AppStartupCoordinator
 from core.asset_loader import (
@@ -2712,6 +2716,7 @@ class ValorantStatsWindow(QMainWindow):
         persisted_state = load_app_state(map_uuids=self.map_asset_uuids)
         initial_theme_name = normalize_theme_name(persisted_state.get("selected_theme"))
         self.current_theme_name = apply_theme_palette(initial_theme_name)
+        initial_presence_mode = normalize_presence_mode(persisted_state.get("presence_mode"))
         initial_agent = str(persisted_state.get("selected_standard_agent", "Random") or "Random")
         initial_auto_lock_enabled = bool(persisted_state.get("auto_lock_enabled", False))
         initial_map_lock_enabled = bool(persisted_state.get("map_lock_enabled", False))
@@ -2719,6 +2724,7 @@ class ValorantStatsWindow(QMainWindow):
         initial_queue_snipe_friend = QueueSnipeService.normalize_friend(
             persisted_state.get("queue_snipe_selected_friend")
         )
+        self.presence_mode = initial_presence_mode
         self._suspend_agent_lock_state_save = True
 
         self.agent_label = QLabel("Agent")
@@ -2761,6 +2767,12 @@ class ValorantStatsWindow(QMainWindow):
         self.queue_snipe_switch.setChecked(initial_queue_snipe_enabled)
         self.queue_snipe_switch.setEnabled(initial_queue_snipe_friend is not None)
         self.queue_snipe_switch.toggled.connect(self.on_queue_snipe_toggled)
+
+        self.presence_mode_label = QLabel("Appear Offline")
+        self.presence_mode_label.setObjectName("sectionLabel")
+        self.presence_mode_switch = ToggleSwitch()
+        self.presence_mode_switch.setChecked(initial_presence_mode == PRESENCE_MODE_OFFLINE)
+        self.presence_mode_switch.toggled.connect(self.on_presence_mode_toggled)
 
         self.loadouts_button = QPushButton("Loadouts")
         self.loadouts_button.setCursor(Qt.PointingHandCursor)
@@ -2865,6 +2877,17 @@ class ValorantStatsWindow(QMainWindow):
 
         header_layout.addWidget(queue_snipe_block, alignment=Qt.AlignVCenter)
 
+        presence_mode_block = QFrame()
+        presence_mode_block.setObjectName("agentBlock")
+        presence_mode_block.setFixedHeight(agent_block_height)
+        presence_mode_layout = QHBoxLayout(presence_mode_block)
+        presence_mode_layout.setContentsMargins(11, 8, 11, 8)
+        presence_mode_layout.setSpacing(10)
+        presence_mode_layout.addWidget(self.presence_mode_label)
+        presence_mode_layout.addWidget(self.presence_mode_switch)
+
+        header_layout.addWidget(presence_mode_block, alignment=Qt.AlignVCenter)
+
         header_layout.addStretch(1)
 
         header_layout.addWidget(self.themes_button, alignment=Qt.AlignVCenter)
@@ -2902,6 +2925,7 @@ class ValorantStatsWindow(QMainWindow):
         QTimer.singleShot(0, self.refresh_player_row_heights)
 
         self.startup_coordinator = AppStartupCoordinator(self.set_status_message)
+        self.startup_coordinator.mitm_service.set_presence_mode(self.presence_mode)
         self.party_tracker = PartyTracker.get()
         self.party_tracker.subscribe(self.on_party_data_updated)
         self.queue_snipe_service = QueueSnipeService(self.party_tracker)
@@ -2951,6 +2975,7 @@ class ValorantStatsWindow(QMainWindow):
         self._latency_start_time = None
         self.apply_restored_agent_lock_state(initial_auto_lock_enabled, initial_map_lock_enabled)
         self.apply_restored_queue_snipe_state(initial_queue_snipe_enabled, initial_queue_snipe_friend)
+        self.apply_restored_presence_mode(initial_presence_mode)
         self._suspend_agent_lock_state_save = False
 
     def resizeEvent(self, event):
@@ -3341,6 +3366,7 @@ class ValorantStatsWindow(QMainWindow):
         return {
             "version": APP_STATE_VERSION,
             "selected_theme": self.current_theme_name,
+            "presence_mode": self.presence_mode,
             "selected_standard_agent": self.last_standard_agent_text or "Random",
             "auto_lock_enabled": self.auto_lock_switch.isChecked(),
             "map_lock_enabled": self.map_lock_switch.isChecked(),
@@ -3358,6 +3384,7 @@ class ValorantStatsWindow(QMainWindow):
             map_uuids=self.map_asset_uuids,
         )
         self.current_theme_name = normalize_theme_name(normalized_state.get("selected_theme"))
+        self.presence_mode = normalize_presence_mode(normalized_state.get("presence_mode"))
         self.map_agent_selection = dict(normalized_state.get("map_agent_selection", {}))
         self.queue_snipe_selected_friend = QueueSnipeService.normalize_friend(
             normalized_state.get("queue_snipe_selected_friend")
@@ -3366,6 +3393,10 @@ class ValorantStatsWindow(QMainWindow):
             self.queue_snipe_button.setText(self.get_queue_snipe_button_text(self.queue_snipe_selected_friend))
         if hasattr(self, "queue_snipe_switch"):
             self.queue_snipe_switch.setEnabled(self.queue_snipe_selected_friend is not None)
+        if hasattr(self, "presence_mode_switch"):
+            self.presence_mode_switch.blockSignals(True)
+            self.presence_mode_switch.setChecked(self.presence_mode == PRESENCE_MODE_OFFLINE)
+            self.presence_mode_switch.blockSignals(False)
 
     def apply_restored_agent_lock_state(self, auto_lock_enabled, map_lock_enabled):
         self.auto_lock_switch.blockSignals(True)
@@ -3393,6 +3424,14 @@ class ValorantStatsWindow(QMainWindow):
         self.queue_snipe_switch.blockSignals(False)
         self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
         self.queue_snipe_service.set_enabled(self.queue_snipe_switch.isChecked())
+
+    def apply_restored_presence_mode(self, presence_mode):
+        self.presence_mode = normalize_presence_mode(presence_mode)
+        self.presence_mode_switch.blockSignals(True)
+        self.presence_mode_switch.setChecked(self.presence_mode == PRESENCE_MODE_OFFLINE)
+        self.presence_mode_switch.blockSignals(False)
+        if hasattr(self, "startup_coordinator") and self.startup_coordinator:
+            self.startup_coordinator.mitm_service.set_presence_mode(self.presence_mode)
 
     def set_standard_agent_selection(self, agent_name):
         self.last_standard_agent_text = agent_name
@@ -3456,6 +3495,12 @@ class ValorantStatsWindow(QMainWindow):
         self.queue_snipe_button.setText(self.get_queue_snipe_button_text(self.queue_snipe_selected_friend))
         self.queue_snipe_switch.setEnabled(self.queue_snipe_selected_friend is not None)
         self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
+        self.persist_agent_lock_state()
+
+    def on_presence_mode_toggled(self, checked):
+        self.presence_mode = PRESENCE_MODE_OFFLINE if checked else "online"
+        if hasattr(self, "startup_coordinator") and self.startup_coordinator:
+            self.startup_coordinator.mitm_service.set_presence_mode(self.presence_mode)
         self.persist_agent_lock_state()
 
     def open_queue_snipe_popup(self):

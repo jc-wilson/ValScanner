@@ -3,8 +3,9 @@ import os
 import sys
 import tempfile
 
+from core.presence_mode import DEFAULT_PRESENCE_MODE, normalize_presence_mode
 
-APP_STATE_VERSION = 3
+APP_STATE_VERSION = 4
 APP_STATE_RELATIVE_PATH = os.path.join("agent_selection", "app_state.json")
 LEGACY_MAP_SELECTION_RELATIVE_PATH = os.path.join("agent_selection", "map_agent_selection.json")
 DEFAULT_THEME_NAME = "midnight"
@@ -59,6 +60,7 @@ def default_app_state(map_uuids=None, base_path=None):
     return {
         "version": APP_STATE_VERSION,
         "selected_theme": DEFAULT_THEME_NAME,
+        "presence_mode": DEFAULT_PRESENCE_MODE,
         "selected_standard_agent": "Random",
         "auto_lock_enabled": False,
         "map_lock_enabled": False,
@@ -134,6 +136,7 @@ def normalize_app_state(state_data, map_uuids=None, base_path=None):
     normalized_state = {
         "version": APP_STATE_VERSION,
         "selected_theme": _normalize_selected_theme(raw_state.get("selected_theme")),
+        "presence_mode": normalize_presence_mode(raw_state.get("presence_mode")),
         "selected_standard_agent": str(raw_state.get("selected_standard_agent", "Random") or "Random"),
         "auto_lock_enabled": bool(raw_state.get("auto_lock_enabled", False)),
         "map_lock_enabled": bool(raw_state.get("map_lock_enabled", False)),
