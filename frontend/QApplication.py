@@ -2925,10 +2925,8 @@ class ValorantStatsWindow(QMainWindow):
         initial_agent = str(persisted_state.get("selected_standard_agent", "Random") or "Random")
         initial_auto_lock_enabled = bool(persisted_state.get("auto_lock_enabled", False))
         initial_map_lock_enabled = bool(persisted_state.get("map_lock_enabled", False))
-        initial_queue_snipe_enabled = bool(persisted_state.get("queue_snipe_enabled", False))
-        initial_queue_snipe_friend = QueueSnipeService.normalize_friend(
-            persisted_state.get("queue_snipe_selected_friend")
-        )
+        initial_queue_snipe_enabled = False
+        initial_queue_snipe_friend = None
         self.presence_mode = initial_presence_mode
         self._suspend_agent_lock_state_save = True
 

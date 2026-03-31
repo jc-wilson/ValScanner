@@ -493,19 +493,32 @@ class XmppMITM:
             while True:
                 data = await reader.read(4096)
                 if not data:
-                    flushed = self.flush_buffered_text(socket_id, direction)
-                    if flushed:
-                        await self._write_text_fragments(writer, flushed)
-                        await self._safe_log_message(json.dumps({
-                            "type": direction,
-                            "time": datetime.now().timestamp(),
-                            "data": "".join(flushed),
-                            "socketID": socket_id,
-                        }))
+                    if direction == "outgoing":
+                        flushed = self.flush_buffered_text(socket_id, direction)
+                        if flushed:
+                            await self._write_text_fragments(writer, flushed)
+                            await self._safe_log_message(json.dumps({
+                                "type": direction,
+                                "time": datetime.now().timestamp(),
+                                "data": "".join(flushed),
+                                "socketID": socket_id,
+                            }))
                     self._signal_stream_end(writer, socket_id, direction)
                     break
 
                 decoded_text = data.decode(errors="ignore")
+                if direction == "incoming":
+                    writer.write(data)
+                    await writer.drain()
+                    self._observe_incoming_text(socket_id, decoded_text)
+                    await self._safe_log_message(json.dumps({
+                        "type": direction,
+                        "time": datetime.now().timestamp(),
+                        "data": decoded_text,
+                        "socketID": socket_id,
+                    }))
+                    continue
+
                 fragments = self.process_buffered_text(socket_id, decoded_text, direction)
                 if fragments:
                     await self._write_text_fragments(writer, fragments)
@@ -569,28 +582,18 @@ class XmppMITM:
         return self._apply_presence_mode(fragment, cache_original=True)
 
     def _rewrite_incoming_fragment(self, socket_id: int, fragment: str):
+        return fragment
+
+    def _observe_incoming_text(self, socket_id: int, text: str):
+        if not text:
+            return
+
         try:
-            updated = self.party_tracker.feed_chunk(socket_id, fragment)
+            updated = self.party_tracker.feed_chunk(socket_id, text)
             if updated:
                 print(f"[XMPPMitm] socket={socket_id} presence cache updated")
         except Exception as exc:
             print(f"[XMPPMitm] socket={socket_id} presence parse error={exc!r}")
-
-        if "jabber:iq:riotgames:roster" in fragment:
-            rewritten_fragment = fragment
-            if socket_id not in self._fake_player_inserted:
-                self._fake_player_inserted.add(socket_id)
-                rewritten_fragment = _inject_fake_player_into_roster(fragment)
-
-            if self._presence_mode == PRESENCE_MODE_OFFLINE and socket_id not in self._fake_player_visible:
-                self._fake_player_visible.add(socket_id)
-                return rewritten_fragment + _build_fake_player_presence(
-                    version=self._valorant_version,
-                    available=True,
-                )
-
-            return rewritten_fragment
-        return fragment
 
     def _apply_presence_mode(self, stanza: str, cache_original: bool):
         if cache_original and _presence_type(stanza) != "unavailable":
