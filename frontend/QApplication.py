@@ -2423,6 +2423,210 @@ class ThemePopup(QDialog):
         self.refresh_selection_styles()
 
 
+class ToolsPopup(QDialog):
+    def __init__(
+        self,
+        queue_snipe_label,
+        queue_snipe_button,
+        queue_snipe_switch,
+        presence_mode_label,
+        presence_mode_switch,
+        themes_button,
+        loadouts_button,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.queue_snipe_label = queue_snipe_label
+        self.queue_snipe_button = queue_snipe_button
+        self.queue_snipe_switch = queue_snipe_switch
+        self.presence_mode_label = presence_mode_label
+        self.presence_mode_switch = presence_mode_switch
+        self.themes_button = themes_button
+        self.loadouts_button = loadouts_button
+
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+
+        container = QWidget()
+        container.setObjectName("popupCard")
+
+        main_layout = QVBoxLayout(container)
+        main_layout.setContentsMargins(28, 28, 28, 24)
+        main_layout.setSpacing(16)
+
+        header = QVBoxLayout()
+        header.setSpacing(6)
+        header.setAlignment(Qt.AlignCenter)
+
+        title = QLabel("Tools")
+        title.setObjectName("title")
+        header.addWidget(title, alignment=Qt.AlignCenter)
+
+        subtitle = QLabel("Secondary controls and utilities")
+        subtitle.setObjectName("subtitle")
+        header.addWidget(subtitle, alignment=Qt.AlignCenter)
+        main_layout.addLayout(header)
+
+        queue_snipe_row = QFrame()
+        queue_snipe_row.setObjectName("toolsRow")
+        queue_snipe_layout = QHBoxLayout(queue_snipe_row)
+        queue_snipe_layout.setContentsMargins(16, 14, 16, 14)
+        queue_snipe_layout.setSpacing(12)
+        queue_snipe_layout.addWidget(self.queue_snipe_label)
+        queue_snipe_layout.addWidget(self.queue_snipe_button, 1)
+        queue_snipe_layout.addWidget(self.queue_snipe_switch)
+        main_layout.addWidget(queue_snipe_row)
+
+        presence_row = QFrame()
+        presence_row.setObjectName("toolsRow")
+        presence_layout = QHBoxLayout(presence_row)
+        presence_layout.setContentsMargins(16, 14, 16, 14)
+        presence_layout.setSpacing(12)
+        presence_layout.addWidget(self.presence_mode_label)
+        presence_layout.addStretch(1)
+        presence_layout.addWidget(self.presence_mode_switch)
+        main_layout.addWidget(presence_row)
+
+        utilities_row = QFrame()
+        utilities_row.setObjectName("toolsRow")
+        utilities_layout = QVBoxLayout(utilities_row)
+        utilities_layout.setContentsMargins(16, 14, 16, 14)
+        utilities_layout.setSpacing(12)
+
+        utilities_label = QLabel("Utilities")
+        utilities_label.setObjectName("sectionLabel")
+        utilities_layout.addWidget(utilities_label)
+
+        button_row = QHBoxLayout()
+        button_row.setSpacing(12)
+        button_row.addWidget(self.themes_button)
+        button_row.addWidget(self.loadouts_button)
+        utilities_layout.addLayout(button_row)
+        main_layout.addWidget(utilities_row)
+
+        close_btn = QPushButton("Close")
+        close_btn.setObjectName("popupCloseButton")
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setFixedHeight(44)
+        close_btn.clicked.connect(self.close)
+        main_layout.addWidget(close_btn)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(16, 16, 16, 16)
+        outer.addWidget(container)
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(50)
+        shadow.setOffset(0, 12)
+        shadow.setColor(QColor(0, 0, 0, 180))
+        container.setGraphicsEffect(shadow)
+
+        self.apply_theme_styles()
+        self.resize(560, 360)
+
+    def apply_theme_styles(self):
+        self.setStyleSheet(f"""
+            #popupCard {{
+                background-color: {THEME_MAIN};
+                border-radius: 22px;
+                border: 1px solid {THEME_BORDER_SOFT};
+            }}
+            #title {{ color: {THEME_TEXT}; font-size: 22px; font-weight: 600; }}
+            #subtitle {{ color: {THEME_MUTED}; font-size: 14px; }}
+            QFrame#toolsRow {{
+                background-color: {THEME_CARD};
+                border-radius: 18px;
+                border: 1px solid {THEME_BORDER_SOFT};
+            }}
+            QLabel#sectionLabel {{
+                color: {THEME_MUTED};
+                font-size: 12px;
+                letter-spacing: 1.6px;
+                text-transform: uppercase;
+                font-weight: 700;
+            }}
+            QPushButton {{
+                background-color: {THEME_CARD_ALT};
+                border-radius: 14px;
+                padding: 10px 18px;
+                color: {THEME_TEXT};
+                border: 1px solid {THEME_BORDER};
+                font-weight: 600;
+                letter-spacing: 0.6px;
+            }}
+            QPushButton:hover {{
+                background-color: {THEME_BORDER};
+            }}
+            QPushButton:pressed {{
+                background-color: {THEME_PANEL};
+            }}
+            QPushButton:disabled {{
+                background-color: {THEME_WINDOW};
+                color: #607086;
+                border: 1px solid {THEME_BORDER_SOFT};
+            }}
+            QPushButton#secondaryButton {{
+                background-color: {THEME_CARD_ALT};
+            }}
+            QPushButton#secondaryButton:hover {{
+                background-color: {THEME_BORDER};
+            }}
+            QPushButton#popupCloseButton {{
+                background-color: {THEME_PANEL};
+                border: 1px solid {THEME_BORDER_SOFT};
+            }}
+            QPushButton#popupCloseButton:hover {{
+                background-color: {THEME_CARD_ALT};
+                border: 1px solid {THEME_ACCENT};
+            }}
+        """)
+
+        for button in (
+            self.queue_snipe_button,
+            self.themes_button,
+            self.loadouts_button,
+        ):
+            button.setFixedHeight(42)
+            button.style().unpolish(button)
+            button.style().polish(button)
+            button.update()
+
+    def open_near(self, anchor_widget):
+        self.adjustSize()
+        if anchor_widget is not None:
+            anchor_rect = anchor_widget.rect()
+            anchor_bottom_left = anchor_widget.mapToGlobal(
+                QPoint(anchor_rect.left(), anchor_rect.bottom() + 10)
+            )
+            x = anchor_bottom_left.x() - max(0, (self.width() - anchor_widget.width()) // 2)
+            y = anchor_bottom_left.y()
+
+            parent_window = anchor_widget.window()
+            parent_geometry = parent_window.frameGeometry() if parent_window is not None else None
+
+            anchor_center = anchor_widget.mapToGlobal(anchor_rect.center())
+            screen = QApplication.screenAt(anchor_center)
+            if screen is None and parent_window is not None and parent_window.windowHandle() is not None:
+                screen = parent_window.windowHandle().screen()
+
+            bounds = screen.availableGeometry() if screen is not None else None
+            if parent_geometry is not None and not parent_geometry.isNull():
+                if bounds is None:
+                    bounds = parent_geometry
+                else:
+                    bounds = bounds.intersected(parent_geometry)
+                    if bounds.isNull():
+                        bounds = screen.availableGeometry()
+
+            if bounds is not None and not bounds.isNull():
+                x = max(bounds.left() + 12, min(x, bounds.right() - self.width() - 12))
+                y = max(bounds.top() + 12, min(y, bounds.bottom() - self.height() - 12))
+
+            self.move(x, y)
+
+        self.open()
+
+
 class WeaponPopup(QDialog):
     WEAPON_ORDER = [
         "Classic", "Bandit", "Shorty", "Frenzy", "Ghost", "Sheriff",
@@ -2804,6 +3008,11 @@ class ValorantStatsWindow(QMainWindow):
         self.refresh_button.setObjectName("refreshButton")
         self.refresh_button.clicked.connect(self.run_valo_stats)
 
+        self.tools_button = QPushButton("Tools")
+        self.tools_button.setCursor(Qt.PointingHandCursor)
+        self.tools_button.setObjectName("secondaryButton")
+        self.tools_button.clicked.connect(self.open_tools_popup)
+
         self.gamemode_chip, self.gamemode_value = self.build_meta_chip("Gamemode")
         self.server_chip, self.server_value = self.build_meta_chip("Server")
         self.status_value = QLabel("Initializing...")
@@ -2822,6 +3031,7 @@ class ValorantStatsWindow(QMainWindow):
         self.dodge_button.setFixedHeight(header_button_height)
         self.load_more_matches_button.setFixedHeight(header_button_height)
         self.queue_snipe_button.setFixedHeight(header_button_height)
+        self.tools_button.setFixedHeight(header_button_height)
         self.refresh_button.setIconSize(QSize(28, 28))
         self.refresh_button.setFixedSize(refresh_button_size, refresh_button_size)
 
@@ -2865,35 +3075,11 @@ class ValorantStatsWindow(QMainWindow):
 
         header_layout.addWidget(agent_block, alignment=Qt.AlignVCenter)
 
-        queue_snipe_block = QFrame()
-        queue_snipe_block.setObjectName("agentBlock")
-        queue_snipe_block.setFixedHeight(agent_block_height)
-        queue_snipe_layout = QHBoxLayout(queue_snipe_block)
-        queue_snipe_layout.setContentsMargins(11, 8, 11, 8)
-        queue_snipe_layout.setSpacing(10)
-        queue_snipe_layout.addWidget(self.queue_snipe_label)
-        queue_snipe_layout.addWidget(self.queue_snipe_button)
-        queue_snipe_layout.addWidget(self.queue_snipe_switch)
-
-        header_layout.addWidget(queue_snipe_block, alignment=Qt.AlignVCenter)
-
-        presence_mode_block = QFrame()
-        presence_mode_block.setObjectName("agentBlock")
-        presence_mode_block.setFixedHeight(agent_block_height)
-        presence_mode_layout = QHBoxLayout(presence_mode_block)
-        presence_mode_layout.setContentsMargins(11, 8, 11, 8)
-        presence_mode_layout.setSpacing(10)
-        presence_mode_layout.addWidget(self.presence_mode_label)
-        presence_mode_layout.addWidget(self.presence_mode_switch)
-
-        header_layout.addWidget(presence_mode_block, alignment=Qt.AlignVCenter)
-
         header_layout.addStretch(1)
 
-        header_layout.addWidget(self.themes_button, alignment=Qt.AlignVCenter)
-        header_layout.addWidget(self.loadouts_button, alignment=Qt.AlignVCenter)
         header_layout.addWidget(self.dodge_button, alignment=Qt.AlignVCenter)
         header_layout.addWidget(self.load_more_matches_button, alignment=Qt.AlignVCenter)
+        header_layout.addWidget(self.tools_button, alignment=Qt.AlignVCenter)
 
         header_layout.addWidget(self.refresh_button, alignment=Qt.AlignVCenter)
 
@@ -2960,6 +3146,16 @@ class ValorantStatsWindow(QMainWindow):
         self._initial_assets_ready = asyncio.Event()
         self._initial_window_ready = False
         self._queue_snipe_popup_dialog = None
+        self._tools_popup_dialog = ToolsPopup(
+            self.queue_snipe_label,
+            self.queue_snipe_button,
+            self.queue_snipe_switch,
+            self.presence_mode_label,
+            self.presence_mode_switch,
+            self.themes_button,
+            self.loadouts_button,
+            self,
+        )
 
         self.refreshed_pregame = None
         self.refreshed_game = None
@@ -3605,6 +3801,19 @@ class ValorantStatsWindow(QMainWindow):
             self.loadouts_button.setEnabled(False)
             asyncio.create_task(self._open_user_loadouts_async())
 
+    def open_tools_popup(self):
+        tools_popup = getattr(self, "_tools_popup_dialog", None)
+        if tools_popup is None:
+            return
+
+        if tools_popup.isVisible():
+            tools_popup.raise_()
+            tools_popup.activateWindow()
+            return
+
+        tools_popup.apply_theme_styles()
+        tools_popup.open_near(self.tools_button)
+
     def open_theme_popup(self):
         active_popup = getattr(self, "_theme_popup_dialog", None)
         if active_popup is not None:
@@ -3646,6 +3855,10 @@ class ValorantStatsWindow(QMainWindow):
         if current_popup is not None:
             current_popup.current_theme_name = self.current_theme_name
             current_popup.apply_theme_styles()
+
+        tools_popup = getattr(self, "_tools_popup_dialog", None)
+        if tools_popup is not None:
+            tools_popup.apply_theme_styles()
 
         if refresh_players:
             self.load_players(getattr(self.valo_rank, "frontend_data", None) or {})
