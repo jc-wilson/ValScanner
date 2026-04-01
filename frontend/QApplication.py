@@ -123,6 +123,8 @@ THEME_COLOR_KEYS = (
     "gold",
     "cyan",
 )
+
+
 THEME_DEFINITIONS = {
     "midnight": {
         "label": "WWTB",
@@ -271,19 +273,19 @@ THEME_DEFINITIONS = {
     "rosewood": {
         "label": "Citrus",
         "swatch_a": "#EE9B2E",
-        "swatch_b": "#FBD7AC",
+        "swatch_b": "#BF8750",
         "main": "#EE9B2E",
-        "window": "#FFF4E7",
-        "panel": "#F7D19A",
-        "card": "#FBE2BE",
-        "card_alt": "#FFF0DA",
-        "border": "#D99839",
-        "border_soft": "#E8BC78",
+        "window": "#C79256",
+        "panel": "#AF763B",
+        "card": "#BA8548",
+        "card_alt": "#C8945A",
+        "border": "#8D5821",
+        "border_soft": "#A76E34",
         "text": "#2C1A07",
         "muted": "#7E5A2D",
-        "accent": "#FBD7AC",
-        "accent_hover": "#FCE2C2",
-        "accent_pressed": "#E7BE8E",
+        "accent": "#DBA563",
+        "accent_hover": "#E6B983",
+        "accent_pressed": "#BE8848",
         "teal": "#76CDB3",
         "teal_hover": "#93DAC4",
         "red": "#CD6D4A",
@@ -295,19 +297,19 @@ THEME_DEFINITIONS = {
     "horizon": {
         "label": "Forest",
         "swatch_a": "#355834",
-        "swatch_b": "#F0ECE4",
+        "swatch_b": "#8F8A73",
         "main": "#355834",
-        "window": "#F7F3ED",
-        "panel": "#D7E2D0",
-        "card": "#E6EEDF",
-        "card_alt": "#F0F5EC",
-        "border": "#668062",
-        "border_soft": "#A8BAA1",
+        "window": "#A39D86",
+        "panel": "#7B8A69",
+        "card": "#899879",
+        "card_alt": "#97A688",
+        "border": "#4A5F46",
+        "border_soft": "#6B7D64",
         "text": "#1E2A1C",
         "muted": "#596C56",
-        "accent": "#F0ECE4",
-        "accent_hover": "#F6F3EE",
-        "accent_pressed": "#D8D3CA",
+        "accent": "#B4AA8F",
+        "accent_hover": "#C4BCA4",
+        "accent_pressed": "#958A70",
         "teal": "#70A996",
         "teal_hover": "#8ABAA9",
         "red": "#B05C4F",
@@ -317,6 +319,7 @@ THEME_DEFINITIONS = {
         "cyan": "#6FA6B3",
     },
 }
+
 THEME_ORDER = tuple(THEME_DEFINITIONS.keys())
 THEME_MAIN = ""
 THEME_WINDOW = ""
