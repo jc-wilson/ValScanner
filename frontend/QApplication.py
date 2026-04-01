@@ -52,6 +52,7 @@ CURRENT_VERSION = "1.10"
 UPDATE_CHECK_URL = "https://ValScanner.com/version.json"
 WEBSITE_URL = "https://ValScanner.com/"
 APP_INSTANCE_KEY = "ValScanner.SingleInstance"
+CLOSE_ICON_RELATIVE_PATH = os.path.join("assets", "x.png")
 MAP_AGENT_SELECTION_RELATIVE_PATH = os.path.join("agent_selection", "map_agent_selection.json")
 MAP_SPECIFIC_ROLE_TOKENS = {"Random", "Duelist", "Initiator", "Controller", "Sentinel"}
 MAP_DISPLAY_NAMES = {
@@ -365,6 +366,17 @@ def resource_path(relative_path):
     else:
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_path, relative_path)
+
+def configure_close_button(button, icon_size=20):
+    close_icon = QIcon(resource_path(CLOSE_ICON_RELATIVE_PATH))
+    if close_icon.isNull():
+        button.setText("X")
+    else:
+        button.setText("")
+        button.setIcon(close_icon)
+        button.setIconSize(QSize(icon_size, icon_size))
+    button.setToolTip("Close")
+    button.setAccessibleName("Close")
 
 def get_agent_asset_path(agent_name):
     filename = str(agent_name).replace("/", "_")
@@ -688,6 +700,7 @@ class VariantSelectorPopup(QDialog):
         close_btn = QPushButton("Close")
         close_btn.setFixedSize(120, 50)
         close_btn.setCursor(Qt.PointingHandCursor)
+        configure_close_button(close_btn, 20)
         close_btn.clicked.connect(self.close)
         main_layout.addWidget(close_btn, alignment=Qt.AlignRight)
 
@@ -865,6 +878,7 @@ class SkinSelectorPopup(QDialog):
         close_btn = QPushButton("Close")
         close_btn.setFixedSize(120, 50)
         close_btn.setCursor(Qt.PointingHandCursor)
+        configure_close_button(close_btn, 20)
         close_btn.clicked.connect(self.close)
         main_layout.addWidget(close_btn, alignment=Qt.AlignRight)
 
@@ -1137,6 +1151,7 @@ class LoadoutsPopup(QDialog):
         close_btn = QPushButton("Close")
         close_btn.setFixedSize(120, 50)
         close_btn.setCursor(Qt.PointingHandCursor)
+        configure_close_button(close_btn, 20)
         close_btn.clicked.connect(self.close)
         right_layout.addWidget(close_btn, alignment=Qt.AlignRight | Qt.AlignBottom)
 
@@ -1684,6 +1699,7 @@ class AgentPopup(QDialog):
         full_width = (self.tile_width * cols) + (self.grid_spacing * (cols - 1))
         tile.setFixedSize(full_width, 60)
         tile.setCursor(Qt.PointingHandCursor)
+        configure_close_button(tile, 24)
         tile.clicked.connect(self.close)
 
         return tile
@@ -1746,6 +1762,7 @@ class FriendSelectionPopup(QDialog):
         close_btn = QPushButton("Close")
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.setFixedHeight(42)
+        configure_close_button(close_btn, 18)
         close_btn.clicked.connect(self.close)
         main_layout.addWidget(close_btn)
 
@@ -1963,6 +1980,7 @@ class MapAgentPopup(QDialog):
         close_btn = QPushButton("X")
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.setFixedHeight(44)
+        configure_close_button(close_btn, 18)
         close_btn.clicked.connect(self.close)
         main_layout.addWidget(close_btn)
 
@@ -2262,6 +2280,7 @@ class ThemePopup(QDialog):
         close_btn.setObjectName("exitTile")
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.setFixedHeight(52)
+        configure_close_button(close_btn, 20)
         close_btn.clicked.connect(self.close)
         main_layout.addWidget(close_btn)
 
@@ -2495,6 +2514,7 @@ class ToolsPopup(QDialog):
         close_btn.setObjectName("popupCloseButton")
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.setFixedHeight(44)
+        configure_close_button(close_btn, 18)
         close_btn.clicked.connect(self.close)
         main_layout.addWidget(close_btn)
 
@@ -2564,6 +2584,7 @@ class ToolsPopup(QDialog):
             QPushButton#popupCloseButton {{
                 background-color: {THEME_PANEL};
                 border: 1px solid {THEME_BORDER_SOFT};
+                padding: 0px;
             }}
             QPushButton#popupCloseButton:hover {{
                 background-color: {THEME_CARD_ALT};
@@ -2821,6 +2842,7 @@ class WeaponPopup(QDialog):
         layout.setAlignment(Qt.AlignCenter)
 
         tile.setCursor(Qt.PointingHandCursor)
+        configure_close_button(tile, 24)
         tile.clicked.connect(self.close)
 
         return tile
