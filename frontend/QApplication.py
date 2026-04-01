@@ -2546,6 +2546,9 @@ class ToolsPopup(QDialog):
                 text-transform: uppercase;
                 font-weight: 700;
             }}
+            QLabel#sectionLabel:disabled {{
+                color: #607086;
+            }}
             QPushButton {{
                 background-color: {THEME_CARD_ALT};
                 border-radius: 14px;
@@ -2873,14 +2876,16 @@ class ToggleSwitch(QCheckBox):
         p.setRenderHint(QPainter.Antialiasing)
         p.setPen(Qt.NoPen)
 
-        if self.isChecked():
+        if not self.isEnabled():
+            p.setBrush(QColor(THEME_BORDER_SOFT))
+        elif self.isChecked():
             p.setBrush(QColor(THEME_ACCENT))
         else:
             p.setBrush(QColor(THEME_CARD_ALT))
 
         p.drawRoundedRect(0, 0, self.width(), self.height(), 11, 11)
 
-        p.setBrush(QColor(THEME_TEXT))
+        p.setBrush(QColor("#607086") if not self.isEnabled() else QColor(THEME_TEXT))
         p.drawEllipse(int(self._position), 3, 16, 16)
         p.end()
 
@@ -3006,6 +3011,11 @@ class ValorantStatsWindow(QMainWindow):
         self.refresh_button.setCursor(Qt.PointingHandCursor)
         self.refresh_button.setObjectName("refreshButton")
         self.refresh_button.clicked.connect(self.run_valo_stats)
+        self.offline_icon = QPixmap(resource_path("assets/offline.png"))
+        self.presence_mode_indicator = QLabel()
+        self.presence_mode_indicator.setObjectName("headerStatusIcon")
+        self.presence_mode_indicator.setAlignment(Qt.AlignCenter)
+        self.presence_mode_indicator.setToolTip("Appear Offline is enabled")
 
         self.tools_button = QPushButton("Tools")
         self.tools_button.setCursor(Qt.PointingHandCursor)
@@ -3033,6 +3043,7 @@ class ValorantStatsWindow(QMainWindow):
         self.tools_button.setFixedHeight(header_button_height)
         self.refresh_button.setIconSize(QSize(28, 28))
         self.refresh_button.setFixedSize(refresh_button_size, refresh_button_size)
+        self.presence_mode_indicator.setFixedSize(refresh_button_size, refresh_button_size)
 
         self.agent_icons = None
         self.rank_icons = None
@@ -3079,6 +3090,7 @@ class ValorantStatsWindow(QMainWindow):
         header_layout.addWidget(self.dodge_button, alignment=Qt.AlignVCenter)
         header_layout.addWidget(self.load_more_matches_button, alignment=Qt.AlignVCenter)
         header_layout.addWidget(self.tools_button, alignment=Qt.AlignVCenter)
+        header_layout.addWidget(self.presence_mode_indicator, alignment=Qt.AlignVCenter)
 
         header_layout.addWidget(self.refresh_button, alignment=Qt.AlignVCenter)
 
@@ -3125,6 +3137,7 @@ class ValorantStatsWindow(QMainWindow):
             ("#ffe06b", "rgba(255, 224, 107, 0.2)"),
         ]
         self.party_icon = QPixmap(resource_path("assets/group.png"))
+        self.update_presence_mode_indicator()
         self._party_refresh_scheduled = False
         self.startup_task = None
         self._startup_bootstrapped = False
@@ -3288,7 +3301,7 @@ class ValorantStatsWindow(QMainWindow):
         self.start_asset_tasks()
         self.start_websocket_listener()
         self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
-        self.queue_snipe_service.set_enabled(self.queue_snipe_switch.isChecked())
+        self.sync_party_detection_tool_states()
         await self.refresh_data()
 
     def start_runtime_tasks(self):
@@ -3339,6 +3352,7 @@ class ValorantStatsWindow(QMainWindow):
         if not self.party_detection_enabled and self.valo_rank.frontend_data:
             if self.party_tracker.clear_party_metadata(self.valo_rank.frontend_data):
                 self.safe_load_players(self.valo_rank.frontend_data)
+        self.sync_party_detection_tool_states()
 
     def on_party_data_updated(self):
         if not self.party_detection_enabled:
@@ -3367,7 +3381,7 @@ class ValorantStatsWindow(QMainWindow):
                 self.set_party_detection_enabled(self.startup_coordinator.party_detection_enabled)
                 self.start_websocket_listener()
                 self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
-                self.queue_snipe_service.set_enabled(self.queue_snipe_switch.isChecked())
+                self.sync_party_detection_tool_states()
                 await self.refresh_data()
         finally:
             self._startup_bootstrapped = True
@@ -3379,11 +3393,11 @@ class ValorantStatsWindow(QMainWindow):
         prompt = QMessageBox()
         prompt.setWindowTitle("Restart Riot Client")
         prompt.setIcon(QMessageBox.Question)
-        prompt.setText("Party detection needs Riot Client to restart before startup can finish.")
+        prompt.setText("Party detection, Appear Offline, and Queue Sniping needs Riot Client to restart before startup can finish.")
         prompt.setInformativeText(
             f"Currently running: {running}\n\n"
             "Pressing Yes will close Valorant and Riot Client, then launch Valorant for you.\n\n"
-            "Pressing No will keep ValScanner open, but party detection will stay disabled until ValScanner is restarted."
+            "Pressing No will keep ValScanner open, but Party Detection, Appear Offline, and Queue Sniping will stay disabled until ValScanner is restarted."
         )
         prompt.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
         prompt.setDefaultButton(QMessageBox.Yes)
@@ -3403,7 +3417,7 @@ class ValorantStatsWindow(QMainWindow):
 
         self.start_websocket_listener()
         self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
-        self.queue_snipe_service.set_enabled(self.queue_snipe_switch.isChecked())
+        self.sync_party_detection_tool_states()
         await self.refresh_data()
 
     def closeEvent(self, event: QCloseEvent):
@@ -3557,6 +3571,25 @@ class ValorantStatsWindow(QMainWindow):
             return "Queue Snipe"
         return normalized_friend.get("display_name", "Queue Snipe")
 
+    def sync_party_detection_tool_states(self):
+        party_detection_enabled = bool(getattr(self, "party_detection_enabled", False))
+        queue_friend_selected = self.queue_snipe_selected_friend is not None
+
+        self.queue_snipe_label.setEnabled(party_detection_enabled)
+        self.queue_snipe_button.setEnabled(party_detection_enabled)
+        self.queue_snipe_switch.setEnabled(party_detection_enabled and queue_friend_selected)
+        self.presence_mode_label.setEnabled(party_detection_enabled)
+        self.presence_mode_switch.setEnabled(party_detection_enabled)
+
+        if not party_detection_enabled and getattr(self, "_queue_snipe_popup_dialog", None) is not None:
+            self._queue_snipe_popup_dialog.close()
+
+        self.queue_snipe_service.set_enabled(
+            party_detection_enabled
+            and self.queue_snipe_switch.isChecked()
+            and queue_friend_selected
+        )
+
     def build_agent_lock_state_payload(self):
         return {
             "version": APP_STATE_VERSION,
@@ -3586,12 +3619,13 @@ class ValorantStatsWindow(QMainWindow):
         )
         if hasattr(self, "queue_snipe_button"):
             self.queue_snipe_button.setText(self.get_queue_snipe_button_text(self.queue_snipe_selected_friend))
-        if hasattr(self, "queue_snipe_switch"):
-            self.queue_snipe_switch.setEnabled(self.queue_snipe_selected_friend is not None)
         if hasattr(self, "presence_mode_switch"):
             self.presence_mode_switch.blockSignals(True)
             self.presence_mode_switch.setChecked(self.presence_mode == PRESENCE_MODE_OFFLINE)
             self.presence_mode_switch.blockSignals(False)
+        self.update_presence_mode_indicator()
+        if hasattr(self, "queue_snipe_switch"):
+            self.sync_party_detection_tool_states()
 
     def apply_restored_agent_lock_state(self, auto_lock_enabled, map_lock_enabled):
         self.auto_lock_switch.blockSignals(True)
@@ -3613,20 +3647,39 @@ class ValorantStatsWindow(QMainWindow):
     def apply_restored_queue_snipe_state(self, queue_snipe_enabled, selected_friend):
         self.queue_snipe_selected_friend = QueueSnipeService.normalize_friend(selected_friend)
         self.queue_snipe_button.setText(self.get_queue_snipe_button_text(self.queue_snipe_selected_friend))
-        self.queue_snipe_switch.setEnabled(self.queue_snipe_selected_friend is not None)
         self.queue_snipe_switch.blockSignals(True)
         self.queue_snipe_switch.setChecked(bool(queue_snipe_enabled) and self.queue_snipe_selected_friend is not None)
         self.queue_snipe_switch.blockSignals(False)
         self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
-        self.queue_snipe_service.set_enabled(self.queue_snipe_switch.isChecked())
+        self.sync_party_detection_tool_states()
 
     def apply_restored_presence_mode(self, presence_mode):
         self.presence_mode = normalize_presence_mode(presence_mode)
         self.presence_mode_switch.blockSignals(True)
         self.presence_mode_switch.setChecked(self.presence_mode == PRESENCE_MODE_OFFLINE)
         self.presence_mode_switch.blockSignals(False)
+        self.update_presence_mode_indicator()
         if hasattr(self, "startup_coordinator") and self.startup_coordinator:
             self.startup_coordinator.mitm_service.set_presence_mode(self.presence_mode)
+        self.sync_party_detection_tool_states()
+
+    def update_presence_mode_indicator(self):
+        if not hasattr(self, "presence_mode_indicator") or self.presence_mode_indicator is None:
+            return
+
+        is_offline = normalize_presence_mode(self.presence_mode) == PRESENCE_MODE_OFFLINE
+        self.presence_mode_indicator.setVisible(is_offline)
+        if not is_offline:
+            return
+
+        if hasattr(self, "offline_icon") and not self.offline_icon.isNull():
+            scaled_icon = self.offline_icon.scaled(18, 18, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.presence_mode_indicator.setPixmap(scaled_icon)
+            self.presence_mode_indicator.setText("")
+            return
+
+        self.presence_mode_indicator.setPixmap(QPixmap())
+        self.presence_mode_indicator.setText("OFF")
 
     def set_standard_agent_selection(self, agent_name):
         self.last_standard_agent_text = agent_name
@@ -3682,14 +3735,14 @@ class ValorantStatsWindow(QMainWindow):
             self.queue_snipe_switch.blockSignals(False)
             return
 
-        self.queue_snipe_service.set_enabled(bool(checked))
+        self.sync_party_detection_tool_states()
         self.persist_agent_lock_state()
 
     def on_queue_snipe_friend_selected(self, friend_data):
         self.queue_snipe_selected_friend = QueueSnipeService.normalize_friend(friend_data)
         self.queue_snipe_button.setText(self.get_queue_snipe_button_text(self.queue_snipe_selected_friend))
-        self.queue_snipe_switch.setEnabled(self.queue_snipe_selected_friend is not None)
         self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
+        self.sync_party_detection_tool_states()
         self.persist_agent_lock_state()
 
     def on_presence_mode_toggled(self, checked):
@@ -3730,7 +3783,9 @@ class ValorantStatsWindow(QMainWindow):
 
     def _show_queue_snipe_popup(self, friends):
         print(f"[QueueSnipeUI] showing queue snipe popup with {len(friends)} friends")
-        self.queue_snipe_button.setEnabled(True)
+        self.sync_party_detection_tool_states()
+        if not self.party_detection_enabled:
+            return
         self._queue_snipe_popup_dialog = FriendSelectionPopup(friends, self.on_queue_snipe_friend_selected, self)
         self._queue_snipe_popup_dialog.finished.connect(
             lambda *_: setattr(self, "_queue_snipe_popup_dialog", None)
@@ -3739,7 +3794,9 @@ class ValorantStatsWindow(QMainWindow):
 
     def _show_queue_snipe_error(self, message):
         print(f"[QueueSnipeUI] showing queue snipe error message={message}")
-        self.queue_snipe_button.setEnabled(True)
+        self.sync_party_detection_tool_states()
+        if not self.party_detection_enabled:
+            return
         error_box = QMessageBox(self)
         error_box.setWindowTitle("Friends Unavailable")
         error_box.setIcon(QMessageBox.Warning)
@@ -3917,7 +3974,7 @@ class ValorantStatsWindow(QMainWindow):
                     self.set_status_message("Connected to Riot Client. Waiting for match data...")
                     print("WebSocket Connected!")
                     self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
-                    self.queue_snipe_service.set_enabled(self.queue_snipe_switch.isChecked())
+                    self.sync_party_detection_tool_states()
                     await ws.send(json.dumps([5, "OnJsonApiEvent"]))
 
                     while True:
@@ -4849,6 +4906,9 @@ class ValorantStatsWindow(QMainWindow):
             f" text-transform: uppercase;"
             f" font-weight: 700;"
             f"}}"
+            f"QLabel#sectionLabel:disabled {{"
+            f" color: #607086;"
+            f"}}"
             f"QFrame#agentBlock {{"
             f" background-color: {THEME_MAIN};"
             f" border-radius: 16px;"
@@ -5010,6 +5070,15 @@ class ValorantStatsWindow(QMainWindow):
             f"}}"
             f"QPushButton#refreshButton:hover {{"
             f" background-color: {THEME_CARD_ALT};"
+            f"}}"
+            f"QLabel#headerStatusIcon {{"
+            f" background-color: {THEME_CARD};"
+            f" border-radius: 20px;"
+            f" border: 1px solid {THEME_BORDER};"
+            f" padding: 5px;"
+            f" color: {THEME_MUTED};"
+            f" font-size: 10px;"
+            f" font-weight: 800;"
             f"}}"
             f"QPushButton#compactSkinButton {{"
             f" background-color: {THEME_PANEL};"
