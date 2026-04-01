@@ -1555,18 +1555,17 @@ class AgentPopup(QDialog):
 
         self.tile_width = 120
         self.tile_height = 120
-        columns = 6
+        self.grid_spacing = 16
+        columns = 10
 
         grid = QGridLayout()
-        grid.setSpacing(16)
+        grid.setSpacing(self.grid_spacing)
         grid.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
-        if len(agents_list) > 4:
-            main_agents = agents_list[:-4]
-            bottom_agents = agents_list[-4:]
-        else:
-            main_agents = agents_list
-            bottom_agents = []
+        remainder = len(agents_list) % columns
+        has_partial_bottom_row = 0 < remainder < len(agents_list)
+        main_agents = agents_list[:-remainder] if has_partial_bottom_row else agents_list
+        bottom_agents = agents_list[-remainder:] if has_partial_bottom_row else []
 
         current_row = -1
         for index, agent in enumerate(main_agents):
@@ -1627,12 +1626,7 @@ class AgentPopup(QDialog):
                 border-radius: 18px;
                 border: 1px solid {THEME_BORDER_SOFT};
             }}
-            #exitTile QPushButton {{
-                background-color: {THEME_CARD};
-                border: none; color: {THEME_TEXT}; font-size: 28px;
-                font-weight: 700; border-radius: 16px;
-            }}
-            #exitTile QPushButton:hover {{
+            #exitTile:hover {{
                 background-color: {THEME_RED};
             }}
         """)
@@ -1684,21 +1678,13 @@ class AgentPopup(QDialog):
         return tile
 
     def build_exit_tile(self, cols):
-        tile = QFrame()
+        tile = QPushButton("X")
         tile.setObjectName("exitTile")
 
-        full_width = (self.tile_width * cols) + (16 * (cols - 1))
+        full_width = (self.tile_width * cols) + (self.grid_spacing * (cols - 1))
         tile.setFixedSize(full_width, 60)
-
-        layout = QVBoxLayout(tile)
-        layout.setContentsMargins(12, 6, 12, 6)
-        layout.setAlignment(Qt.AlignCenter)
-
-        exit_button = QPushButton("X")
-        exit_button.setFixedSize(96, 40)
-        exit_button.setCursor(Qt.PointingHandCursor)
-        exit_button.clicked.connect(self.close)
-        layout.addWidget(exit_button, alignment=Qt.AlignCenter)
+        tile.setCursor(Qt.PointingHandCursor)
+        tile.clicked.connect(self.close)
 
         return tile
 
