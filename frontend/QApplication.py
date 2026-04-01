@@ -3568,8 +3568,8 @@ class ValorantStatsWindow(QMainWindow):
     def get_queue_snipe_button_text(self, friend_data=None):
         normalized_friend = QueueSnipeService.normalize_friend(friend_data)
         if normalized_friend is None:
-            return "Queue Snipe"
-        return normalized_friend.get("display_name", "Queue Snipe")
+            return "Select Friend"
+        return normalized_friend.get("display_name", "Select Friend")
 
     def sync_party_detection_tool_states(self):
         party_detection_enabled = bool(getattr(self, "party_detection_enabled", False))
@@ -4265,6 +4265,7 @@ class ValorantStatsWindow(QMainWindow):
 
     def get_visible_player_row_height(self, scroll_area, layout, player_count):
         visible_rows = min(max(player_count, 1), self.MAX_VISIBLE_PLAYER_ROWS)
+        slot_count = self.MAX_VISIBLE_PLAYER_ROWS if visible_rows < self.MAX_VISIBLE_PLAYER_ROWS else visible_rows
         viewport_height = scroll_area.viewport().height()
         if viewport_height <= 0:
             return self.MIN_PLAYER_ROW_HEIGHT
@@ -4274,9 +4275,9 @@ class ValorantStatsWindow(QMainWindow):
             viewport_height
             - margins.top()
             - margins.bottom()
-            - (max(visible_rows - 1, 0) * layout.spacing())
+            - (max(slot_count - 1, 0) * layout.spacing())
         )
-        return max(self.MIN_PLAYER_ROW_HEIGHT, available_height // visible_rows)
+        return max(self.MIN_PLAYER_ROW_HEIGHT, available_height // slot_count)
 
     def refresh_player_row_heights(self):
         self.update_team_row_heights(self.left_scroll_area, self.left_layout)
