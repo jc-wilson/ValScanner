@@ -432,6 +432,22 @@ THEME_CYAN = ""
 ACTIVE_THEME_STYLE_PROFILE = dict(DEFAULT_THEME_STYLE_PROFILE)
 INITIAL_ASSET_GROUPS = ("agents", "ranks", "maps")
 SPECIAL_BUDDY_UUID = "a57aa3d0-4ad0-b06a-6c54-338cb3ea6b41"
+VALSCANNER_LOGO_PUUIDS = {
+    "d0851dcc-43d3-585b-ace8-92b655d40c8e",
+    "2120edeb-2cdd-5beb-8ecb-3377987f25e8",
+    "68259dff-1550-5866-a6a9-7b24b373bce5",
+    "486fc4ee-a111-5a5c-9ed0-3e229e3c3c3f",
+    "1e639ab6-ceee-5c4c-ae58-1ea25c361daf",
+    "820f4269-219b-52b3-9c88-07b5e76351dd",
+}
+ROSE_EMOJI_PUUIDS = {
+    "68259dff-1550-5866-a6a9-7b24b373bce5",
+    "486fc4ee-a111-5a5c-9ed0-3e229e3c3c3f",
+    "1e639ab6-ceee-5c4c-ae58-1ea25c361daf",
+}
+VOMIT_EMOJI_PUUIDS = {
+    "99853431-64d8-5a57-8045-95d8212c1ab9",
+}
 
 
 def normalize_theme_name(theme_name):
@@ -3427,6 +3443,7 @@ class ValorantStatsWindow(QMainWindow):
             ("#ffe06b", "rgba(255, 224, 107, 0.2)"),
         ]
         self.party_icon = QPixmap(resource_path("assets/group.png"))
+        self.valscanner_logo = QPixmap(resource_path("assets/logoone.png"))
         self.update_presence_mode_indicator()
         self._party_refresh_scheduled = False
         self.startup_task = None
@@ -4840,6 +4857,46 @@ class ValorantStatsWindow(QMainWindow):
         indicator.setToolTip(buddy_uuid)
         return indicator
 
+    def player_matches_puuid_set(self, player, puuid_set):
+        normalized_puuid = str(player.get("puuid") or "").strip().lower()
+        return normalized_puuid in puuid_set
+
+    def player_has_valscanner_logo(self, player):
+        return self.player_matches_puuid_set(player, VALSCANNER_LOGO_PUUIDS)
+
+    def player_has_rose_emoji(self, player):
+        return self.player_matches_puuid_set(player, ROSE_EMOJI_PUUIDS)
+
+    def player_has_vomit_emoji(self, player):
+        return self.player_matches_puuid_set(player, VOMIT_EMOJI_PUUIDS)
+
+    def create_valscanner_logo_indicator(self, target_height=18):
+        if self.valscanner_logo.isNull():
+            return None
+
+        scaled_logo = self.valscanner_logo.scaled(
+            target_height,
+            target_height,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
+        indicator = QLabel()
+        indicator.setObjectName("valscannerLogoIndicator")
+        indicator.setAlignment(Qt.AlignCenter)
+        indicator.setPixmap(scaled_logo)
+        indicator.setFixedSize(scaled_logo.size())
+        indicator.setToolTip("ValScanner")
+        return indicator
+
+    def create_name_row_emoji_indicator(self, emoji_text, tooltip, target_height=18):
+        indicator = QLabel(emoji_text)
+        indicator.setObjectName("nameRowEmojiIndicator")
+        indicator.setAlignment(Qt.AlignCenter)
+        indicator.setFixedSize(max(target_height, 20), target_height)
+        indicator.setStyleSheet("font-size: 16px;")
+        indicator.setToolTip(tooltip)
+        return indicator
+
     def build_party_overlay(self, player):
         group_index = player.get("party_group_index")
         if group_index is None:
@@ -4899,7 +4956,7 @@ class ValorantStatsWindow(QMainWindow):
         row.setMinimumHeight(self.MIN_PLAYER_ROW_HEIGHT)
 
         outer_layout = QVBoxLayout(row)
-        outer_layout.setContentsMargins(12, 4, 4, 9)
+        outer_layout.setContentsMargins(12, 9, 4, 9)
         outer_layout.setSpacing(0)
 
         content_frame = PlayerRowContentFrame()
@@ -4912,7 +4969,7 @@ class ValorantStatsWindow(QMainWindow):
         row_layout.setSpacing(18)
 
         icon_wrapper = QFrame()
-        icon_wrapper.setFixedSize(138, 138)
+        icon_wrapper.setFixedSize(142, 142)
 
         icon_layout = QGridLayout(icon_wrapper)
         icon_layout.setContentsMargins(0, 0, 0, 0)
@@ -4927,7 +4984,9 @@ class ValorantStatsWindow(QMainWindow):
         agent_icon = self.agent_icons.get(agent_name)
 
         if agent_icon:
-            agent_icon_label.setPixmap(agent_icon)
+            agent_icon_label.setPixmap(
+                agent_icon.scaled(140, 140, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
         else:
             agent_icon_label.setText(agent_name)
 
@@ -4938,7 +4997,7 @@ class ValorantStatsWindow(QMainWindow):
         icon_layout.addWidget(agent_icon_label, 0, 0)
         icon_layout.addWidget(level_label, 0, 0, Qt.AlignBottom | Qt.AlignLeft)
 
-        row_layout.addWidget(icon_wrapper)
+        row_layout.addWidget(icon_wrapper, 0, Qt.AlignLeft | Qt.AlignVCenter)
 
         info_column = QVBoxLayout()
         info_column.setContentsMargins(0, 0, 0, 0)
@@ -4964,6 +5023,14 @@ class ValorantStatsWindow(QMainWindow):
         )
         name_row.addWidget(name_label, 0, Qt.AlignVCenter)
 
+        if self.player_has_rose_emoji(player):
+            rose_indicator = self.create_name_row_emoji_indicator("🌹", "Rose")
+            name_row.addWidget(rose_indicator, 0, Qt.AlignVCenter)
+
+        if self.player_has_vomit_emoji(player):
+            vomit_indicator = self.create_name_row_emoji_indicator("🤮", "Vomit")
+            name_row.addWidget(vomit_indicator, 0, Qt.AlignVCenter)
+
         vtl_label = QLabel()
         vtl_label.setAlignment(Qt.AlignCenter)
         vtl_label.setContentsMargins(0, 0, 0, 0)
@@ -4976,6 +5043,11 @@ class ValorantStatsWindow(QMainWindow):
         vtl_label.setText(f"<a href='{vtl_url}' style='text-decoration: none; font-size: 13px;'>🔗</a>")
         vtl_label.setToolTip("View on VTL.lol")
         name_row.addWidget(vtl_label, 0, Qt.AlignVCenter)
+
+        if self.player_has_valscanner_logo(player):
+            valscanner_logo_indicator = self.create_valscanner_logo_indicator(vtl_label.height())
+            if valscanner_logo_indicator is not None:
+                name_row.addWidget(valscanner_logo_indicator, 0, Qt.AlignVCenter)
 
         name_row.addStretch()
 
@@ -4996,15 +5068,16 @@ class ValorantStatsWindow(QMainWindow):
         meta_bar.addStretch(1)
 
         rank_icon_label = QLabel()
+        compact_rank_icon_size = 30
         rank_icon_label.setObjectName("compactRankIcon")
-        rank_icon_label.setFixedSize(32, 32)
+        rank_icon_label.setFixedSize(compact_rank_icon_size, compact_rank_icon_size)
         rank_icon_label.setAlignment(Qt.AlignCenter)
 
         rank_name = str(player.get("rank", "Unknown"))
         rank_icon = self.rank_icons.get(rank_name)
         if rank_icon:
             rank_icon_label.setPixmap(
-                rank_icon.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                rank_icon.scaled(compact_rank_icon_size, compact_rank_icon_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
         else:
             rank_icon_label.setText(rank_name if rank_name not in ("[]", "") else "N/A")
@@ -5018,21 +5091,22 @@ class ValorantStatsWindow(QMainWindow):
 
         peak_icon_label = QLabel()
         peak_icon_label.setObjectName("compactRankIcon")
-        peak_icon_label.setFixedSize(32, 32)
+        peak_icon_label.setFixedSize(compact_rank_icon_size, compact_rank_icon_size)
         peak_icon_label.setAlignment(Qt.AlignCenter)
 
         peak_name = str(player.get("peak_rank", "Unknown"))
-        peak_icon = self.rank_icons.get(peak_name)
+        peak_rank_display = "N/A" if peak_name.upper() == "UNRANKED" else peak_name
+        peak_icon = None if peak_rank_display == "N/A" else self.rank_icons.get(peak_name)
         if peak_icon:
             peak_icon_label.setPixmap(
-                peak_icon.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                peak_icon.scaled(compact_rank_icon_size, compact_rank_icon_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
-        elif peak_name == "[]":
+        elif peak_name == "[]" or peak_rank_display == "N/A":
             peak_icon_label.setText("N/A")
         else:
             peak_icon_label.setText(peak_name)
 
-        peak_text = QLabel(peak_name if peak_name not in ("[]", "") else "N/A")
+        peak_text = QLabel(peak_rank_display if peak_name not in ("[]", "") else "N/A")
         peak_text.setObjectName("metaValue")
 
         peak_act_value = str(player.get("peak_act", "N/A"))
@@ -5150,7 +5224,7 @@ class ValorantStatsWindow(QMainWindow):
         peak_row.setAlignment(Qt.AlignCenter)
         peak_row.setSpacing(8)
 
-        peak_icon_size = 50
+        peak_icon_size = 48
         peak_act_value = str(player.get("peak_act", "N/A"))
         peak_act_label = QLabel(peak_act_value if peak_act_value not in ("[]", "") else "N/A")
         peak_act_label.setAlignment(Qt.AlignCenter)
@@ -5167,7 +5241,8 @@ class ValorantStatsWindow(QMainWindow):
         peak_icon_label.setAlignment(Qt.AlignCenter)
         peak_icon_label.setFixedSize(peak_icon_size, peak_icon_size)
         peak_name = str(player.get("peak_rank", "Unknown"))
-        peak_icon = self.rank_icons.get(peak_name)
+        peak_rank_display = "N/A" if peak_name.upper() == "UNRANKED" else peak_name
+        peak_icon = None if peak_rank_display == "N/A" else self.rank_icons.get(peak_name)
 
         if peak_icon:
             peak_icon_label.setPixmap(
@@ -5175,7 +5250,7 @@ class ValorantStatsWindow(QMainWindow):
             )
             peak_row.addWidget(peak_icon_label)
         elif peak_name not in ("[]", ""):
-            peak_icon_label.setText(peak_name)
+            peak_icon_label.setText(peak_rank_display)
             peak_icon_label.setStyleSheet(f"color: {THEME_MUTED}; font-size: 16px; font-weight: bold;")
             peak_row.addWidget(peak_icon_label)
 
@@ -5186,24 +5261,30 @@ class ValorantStatsWindow(QMainWindow):
         right_rank_col = QVBoxLayout()
         right_rank_col.setAlignment(Qt.AlignCenter)
         right_rank_col.setContentsMargins(0, 0, 0, 0)
-        right_rank_col.setSpacing(6)
+        right_rank_col.setSpacing(0)
 
+        right_rank_stack = QWidget()
+        right_rank_stack_layout = QVBoxLayout(right_rank_stack)
+        right_rank_stack_layout.setContentsMargins(0, 0, 0, 0)
+        right_rank_stack_layout.setSpacing(8)
+
+        current_rank_icon_size = 124
         current_rank_icon_label = QLabel()
         current_rank_icon_label.setAlignment(Qt.AlignCenter)
-        current_rank_icon_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        current_rank_icon_label.setFixedSize(current_rank_icon_size, current_rank_icon_size)
 
         rank_name = str(player.get("rank", "Unknown"))
         rank_icon = self.rank_icons.get(rank_name)
 
         if rank_icon:
             current_rank_icon_label.setPixmap(
-                rank_icon.scaled(115, 115, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                rank_icon.scaled(current_rank_icon_size, current_rank_icon_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
         else:
             current_rank_icon_label.setText(rank_name if rank_name not in ("[]", "") else "N/A")
             current_rank_icon_label.setStyleSheet(f"color: {THEME_MUTED}; font-size: 14px; font-weight: bold;")
 
-        right_rank_col.addWidget(current_rank_icon_label, 1)
+        right_rank_stack_layout.addWidget(current_rank_icon_label, 0, Qt.AlignHCenter)
 
         rr_value_str = str(player.get("rr", "N/A"))
         try:
@@ -5233,7 +5314,11 @@ class ValorantStatsWindow(QMainWindow):
                 f" QProgressBar::chunk {{ background-color: {THEME_ACCENT}; border-radius: 3px; }}"
             )
 
-        right_rank_col.addWidget(rr_widget, 0, Qt.AlignHCenter | Qt.AlignBottom)
+        right_rank_stack_layout.addWidget(rr_widget, 0, Qt.AlignHCenter)
+
+        right_rank_col.addStretch(1)
+        right_rank_col.addWidget(right_rank_stack, 0, Qt.AlignCenter)
+        right_rank_col.addStretch(1)
 
         rank_area_layout.addLayout(right_rank_col)
 
@@ -5407,9 +5492,10 @@ class ValorantStatsWindow(QMainWindow):
             f" margin: 2px;"
             f"}}"
             f"QLabel#emptyState {{"
-            f" color: {THEME_MUTED};"
-            f" font-style: italic;"
-            f" letter-spacing: 0.6px;"
+            f" color: {THEME_TEXT};"
+            f" font-size: 18px;"
+            f" font-weight: 800;"
+            f" letter-spacing: 0.8px;"
             f"}}"
             f"QFrame#compactStat {{"
             f" background-color: {THEME_CARD_ALT};"
@@ -5849,8 +5935,8 @@ class ValorantStatsWindow(QMainWindow):
         self.schedule_player_cosmetic_prefetch(players)
 
         if not players:
-            self.populate_team_layout(self.left_scroll_area, self.left_layout, [], "You will start on Defense...")
-            self.populate_team_layout(self.right_scroll_area, self.right_layout, [], "You will start on Attack...")
+            self.populate_team_layout(self.left_scroll_area, self.left_layout, [], "STARTING SIDE: DEFENSE")
+            self.populate_team_layout(self.right_scroll_area, self.right_layout, [], "STARTING SIDE: ATTACK")
             self.update_metadata()
             return
 
@@ -5871,10 +5957,10 @@ class ValorantStatsWindow(QMainWindow):
                     self.right_players.append(player)
 
         self.populate_team_layout(
-            self.left_scroll_area, self.left_layout, self.left_players, "You will start on Defense..."
+            self.left_scroll_area, self.left_layout, self.left_players, "STARTING SIDE: DEFENSE"
         )
         self.populate_team_layout(
-            self.right_scroll_area, self.right_layout, self.right_players, "You will start on Attack..."
+            self.right_scroll_area, self.right_layout, self.right_players, "STARTING SIDE: ATTACK"
         )
         self.update_metadata()
         QTimer.singleShot(0, self.refresh_player_row_heights)
