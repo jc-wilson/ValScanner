@@ -15,6 +15,7 @@ from PySide6.QtGui import (
     QIcon,
     QFontDatabase,
     QFont,
+    QFontMetrics,
     QColor,
     QPainter,
     QCloseEvent,
@@ -401,6 +402,14 @@ THEME_STYLE_PROFILES = {
 }
 
 THEME_ORDER = tuple(THEME_DEFINITIONS.keys())
+LIGHT_LOCK_AGENT_TEXT_THEMES = {
+    "midnight",
+    "sandstorm",
+    "amethyst",
+    "bailey",
+    "glacier",
+    "liquidglass",
+}
 THEME_MAIN = ""
 THEME_WINDOW = ""
 THEME_PANEL = ""
@@ -454,6 +463,10 @@ apply_theme_palette(DEFAULT_THEME_NAME)
 
 def get_active_theme_style_profile():
     return ACTIVE_THEME_STYLE_PROFILE
+
+
+def should_use_light_lock_agent_text(theme_name):
+    return normalize_theme_name(theme_name) in LIGHT_LOCK_AGENT_TEXT_THEMES
 
 
 def is_glass_theme(theme_name=None):
@@ -4039,6 +4052,11 @@ class ValorantStatsWindow(QMainWindow):
         self.update_presence_mode_indicator()
 
     def apply_theme_dependent_widgets(self):
+        light_text = should_use_light_lock_agent_text(self.current_theme_name)
+        self.lock_agent_button.setProperty("lightText", "true" if light_text else "false")
+        self.lock_agent_button.style().unpolish(self.lock_agent_button)
+        self.lock_agent_button.style().polish(self.lock_agent_button)
+        self.lock_agent_button.update()
         self.apply_toggle_switch_theme()
         self.apply_theme_icons()
 
@@ -4688,7 +4706,6 @@ class ValorantStatsWindow(QMainWindow):
         return wrapper, value_label
 
     def build_rating_change_style(self, background_color, text_color, diameter):
-        border_color = themed_border_color("soft") if is_glass_theme() else background_color
         background = (
             theme_rgba(background_color, 0.76)
             if is_glass_theme()
@@ -4698,9 +4715,9 @@ class ValorantStatsWindow(QMainWindow):
             f"background-color: {background};"
             f"color: {text_color};"
             f"border-radius: {diameter // 2}px;"
-            f"border: 1px solid {border_color};"
+            "border: none;"
             "font-weight: 700;"
-            "font-size: 11px;"
+            "font-size: 12px;"
         )
 
     def create_skin_button(self, player):
@@ -5031,7 +5048,7 @@ class ValorantStatsWindow(QMainWindow):
             text_val = str(change).replace("-", "")
 
             circle_label = QLabel(text_val)
-            circle_label.setFixedSize(32, 32)
+            circle_label.setFixedSize(42, 42)
             circle_label.setAlignment(Qt.AlignCenter)
 
             try:
@@ -5049,7 +5066,7 @@ class ValorantStatsWindow(QMainWindow):
                 bg_color = "#7f7f7f"
                 text_color = THEME_TEXT
 
-            circle_label.setStyleSheet(self.build_rating_change_style(bg_color, text_color, 32))
+            circle_label.setStyleSheet(self.build_rating_change_style(bg_color, text_color, 42))
 
         info_column.addLayout(meta_bar)
         info_column.addSpacing(6)
@@ -5104,7 +5121,7 @@ class ValorantStatsWindow(QMainWindow):
             text_val = str(change).replace("-", "")
 
             circle_label = QLabel(text_val)
-            circle_label.setFixedSize(34, 34)
+            circle_label.setFixedSize(42, 42)
             circle_label.setAlignment(Qt.AlignCenter)
 
             try:
@@ -5122,7 +5139,7 @@ class ValorantStatsWindow(QMainWindow):
                 bg_color = "#7f7f7f"
                 text_color = THEME_TEXT
 
-            circle_label.setStyleSheet(self.build_rating_change_style(bg_color, text_color, 34))
+            circle_label.setStyleSheet(self.build_rating_change_style(bg_color, text_color, 42))
             rating_changes_row.addWidget(circle_label)
 
         left_rank_col.addLayout(rating_changes_row)
@@ -5133,20 +5150,28 @@ class ValorantStatsWindow(QMainWindow):
         peak_row.setAlignment(Qt.AlignCenter)
         peak_row.setSpacing(8)
 
+        peak_icon_size = 50
         peak_act_value = str(player.get("peak_act", "N/A"))
         peak_act_label = QLabel(peak_act_value if peak_act_value not in ("[]", "") else "N/A")
         peak_act_label.setAlignment(Qt.AlignCenter)
-        peak_act_label.setStyleSheet("color: #8b96b6; font-size: 16px; font-weight: bold;")
+        peak_act_font = peak_act_label.font()
+        peak_act_font.setBold(True)
+        peak_act_font.setPixelSize(24)
+        peak_act_label.setFont(peak_act_font)
+        peak_act_width = max(50, QFontMetrics(peak_act_font).horizontalAdvance(peak_act_label.text()) + 12)
+        peak_act_label.setFixedSize(peak_act_width, peak_icon_size)
+        peak_act_label.setStyleSheet("color: #8b96b6; font-size: 24px; font-weight: 700;")
         peak_row.addWidget(peak_act_label)
 
         peak_icon_label = QLabel()
         peak_icon_label.setAlignment(Qt.AlignCenter)
+        peak_icon_label.setFixedSize(peak_icon_size, peak_icon_size)
         peak_name = str(player.get("peak_rank", "Unknown"))
         peak_icon = self.rank_icons.get(peak_name)
 
         if peak_icon:
             peak_icon_label.setPixmap(
-                peak_icon.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                peak_icon.scaled(peak_icon_size, peak_icon_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
             peak_row.addWidget(peak_icon_label)
         elif peak_name not in ("[]", ""):
@@ -5633,6 +5658,9 @@ class ValorantStatsWindow(QMainWindow):
                 f" background-color: {theme_rgba(THEME_ACCENT, 0.84)};"
                 f" color: #071320;"
                 f" border: 1px solid {theme_rgba('#ffffff', 0.18)};"
+                f"}}"
+                f"QPushButton#accentButton[lightText=\"true\"] {{"
+                f" color: {THEME_TEXT};"
                 f"}}"
                 f"QPushButton#accentButton:hover {{"
                 f" background-color: {theme_rgba(THEME_ACCENT_HOVER, 0.92)};"
