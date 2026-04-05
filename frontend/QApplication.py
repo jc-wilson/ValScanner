@@ -6,22 +6,36 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow,
     QVBoxLayout, QGridLayout, QHBoxLayout, QWidget, QLabel, QPushButton,
     QComboBox, QFrame, QSplitter, QScrollArea, QDialog,
-    QGraphicsDropShadowEffect, QSizePolicy, QProgressBar, QCheckBox,
+    QGraphicsDropShadowEffect, QSizePolicy, QProgressBar,
     QGraphicsOpacityEffect, QLineEdit, QMessageBox
 )
-from PySide6.QtCore import Qt, QTimer, QSize, QPropertyAnimation, Property, QEasingCurve, QUrl, QPoint
-from PySide6.QtGui import QPixmap, QIcon, QFontDatabase, QFont, QColor, QPainter, QCloseEvent, QDesktopServices, QCursor
+from PySide6.QtCore import Qt, QEvent, QTimer, QSize, QUrl, QPoint
+from PySide6.QtGui import (
+    QPixmap,
+    QIcon,
+    QFontDatabase,
+    QFont,
+    QColor,
+    QPainter,
+    QCloseEvent,
+    QDesktopServices,
+    QCursor,
+    QPen,
+    QRadialGradient,
+)
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 import sys
 import os
 import random
 import asyncio
 import qasync
+import qtawesome as qta
 import websockets
 import ssl
 import base64
 import json
 import requests
+from superqt import QToggleSwitch as SuperQtToggleSwitch
 from core.app_state import APP_STATE_VERSION, load_app_state, save_app_state
 from core.api_client import ValoRank
 from core.dodge_button import dodge
@@ -52,7 +66,9 @@ CURRENT_VERSION = "1.10"
 UPDATE_CHECK_URL = "https://ValScanner.com/version.json"
 WEBSITE_URL = "https://ValScanner.com/"
 APP_INSTANCE_KEY = "ValScanner.SingleInstance"
-CLOSE_ICON_RELATIVE_PATH = os.path.join("assets", "x.png")
+CLOSE_ICON_NAME = "fa6s.xmark"
+REFRESH_ICON_NAME = "fa6s.arrows-rotate"
+OFFLINE_ICON_NAME = "fa6s.user-slash"
 MAP_AGENT_SELECTION_RELATIVE_PATH = os.path.join("agent_selection", "map_agent_selection.json")
 MAP_SPECIFIC_ROLE_TOKENS = {"Random", "Duelist", "Initiator", "Controller", "Sentinel"}
 MAP_DISPLAY_NAMES = {
@@ -144,9 +160,9 @@ THEME_DEFINITIONS = {
         "accent_pressed": "#347fda",
         "teal": "#46d7b0",
         "teal_hover": "#63e4c0",
-        "red": "#c65a61",
-        "red_hover": "#d87077",
-        "red_pressed": "#ad4951",
+        "red": "#D64C5F",
+        "red_hover": "#E15F72",
+        "red_pressed": "#B73A4C",
         "gold": "#f0b35a",
         "cyan": "#7ae6ff",
     },
@@ -155,24 +171,24 @@ THEME_DEFINITIONS = {
         "swatch_a": "#246EA1",
         "swatch_b": "#010000",
         "main": "#246EA1",
-        "window": "#0E2C40",
-        "panel": "#164766",
-        "card": "#1D5881",
-        "card_alt": "#2A73A7",
-        "border": "#6D9BBC",
-        "border_soft": "#3B6C8D",
-        "text": "#F3FAFF",
-        "muted": "#BDD3E2",
+        "window": "#0A2030",
+        "panel": "#12354A",
+        "card": "#184760",
+        "card_alt": "#215978",
+        "border": "#7EA5C2",
+        "border_soft": "#2E5570",
+        "text": "#F4F8FC",
+        "muted": "#AFC4D5",
         "accent": "#010000",
         "accent_hover": "#343333",
         "accent_pressed": "#000000",
-        "teal": "#63D8CA",
-        "teal_hover": "#83E5D9",
-        "red": "#CF6677",
-        "red_hover": "#E07E8D",
-        "red_pressed": "#B14E60",
-        "gold": "#E7C46E",
-        "cyan": "#9EDFFF",
+        "teal": "#6DD4C8",
+        "teal_hover": "#8AE0D5",
+        "red": "#D64C5F",
+        "red_hover": "#E15F72",
+        "red_pressed": "#B73A4C",
+        "gold": "#D8BE7A",
+        "cyan": "#A7D9EE",
     },
     "amethyst": {
         "label": "Nebula",
@@ -192,9 +208,9 @@ THEME_DEFINITIONS = {
         "accent_pressed": "#e09c24",
         "teal": "#63e6d0",
         "teal_hover": "#82efdd",
-        "red": "#d86c96",
-        "red_hover": "#ea84ab",
-        "red_pressed": "#ba4f79",
+        "red": "#D64C5F",
+        "red_hover": "#E15F72",
+        "red_pressed": "#B73A4C",
         "gold": "#efc16f",
         "cyan": "#7fd7ff",
     },
@@ -203,24 +219,24 @@ THEME_DEFINITIONS = {
         "swatch_a": "#485A63",
         "swatch_b": "#939494",
         "main": "#485A63",
-        "window": "#1D2428",
-        "panel": "#2B363B",
-        "card": "#3A484F",
-        "card_alt": "#6D7B82",
-        "border": "#919CA1",
-        "border_soft": "#596A72",
-        "text": "#F5F7F8",
-        "muted": "#C5CCCF",
+        "window": "#171D21",
+        "panel": "#242D33",
+        "card": "#313C43",
+        "card_alt": "#43515A",
+        "border": "#9CA9B0",
+        "border_soft": "#54626B",
+        "text": "#F4F7F8",
+        "muted": "#BBC6CB",
         "accent": "#939494",
         "accent_hover": "#A9A9A9",
         "accent_pressed": "#767676",
-        "teal": "#69C8BE",
-        "teal_hover": "#86D7CE",
-        "red": "#C96D72",
-        "red_hover": "#D98489",
-        "red_pressed": "#A9575C",
-        "gold": "#D6B06D",
-        "cyan": "#9FD3E1",
+        "teal": "#74CAC1",
+        "teal_hover": "#8BD7CF",
+        "red": "#D64C5F",
+        "red_hover": "#E15F72",
+        "red_pressed": "#B73A4C",
+        "gold": "#CDB178",
+        "cyan": "#A5CEDA",
     },
     "bailey": {
         "label": "Bailey",
@@ -240,9 +256,9 @@ THEME_DEFINITIONS = {
         "accent_pressed": "#a97e37",
         "teal": "#68c39a",
         "teal_hover": "#7dd3aa",
-        "red": "#be6b61",
-        "red_hover": "#cf8075",
-        "red_pressed": "#9f544c",
+        "red": "#D64C5F",
+        "red_hover": "#E15F72",
+        "red_pressed": "#B73A4C",
         "gold": "#d6ae5d",
         "cyan": "#86c8be",
     },
@@ -251,72 +267,136 @@ THEME_DEFINITIONS = {
         "swatch_a": "#BA5478",
         "swatch_b": "#424242",
         "main": "#BA5478",
-        "window": "#241018",
-        "panel": "#703248",
-        "card": "#8A4060",
-        "card_alt": "#A54C6C",
-        "border": "#D698AE",
-        "border_soft": "#8C5069",
-        "text": "#FFF5F8",
-        "muted": "#E6C0CF",
+        "window": "#221219",
+        "panel": "#5B3242",
+        "card": "#704052",
+        "card_alt": "#845066",
+        "border": "#C993A7",
+        "border_soft": "#71495B",
+        "text": "#FFF6F8",
+        "muted": "#DDBBC7",
         "accent": "#424242",
         "accent_hover": "#686868",
         "accent_pressed": "#282828",
-        "teal": "#78C7A0",
-        "teal_hover": "#93D5B2",
-        "red": "#D5576F",
-        "red_hover": "#E37287",
-        "red_pressed": "#B24259",
-        "gold": "#F0B768",
-        "cyan": "#A7DCE8",
+        "teal": "#84C8AC",
+        "teal_hover": "#9AD5BA",
+        "red": "#D64C5F",
+        "red_hover": "#E15F72",
+        "red_pressed": "#B73A4C",
+        "gold": "#E2B37A",
+        "cyan": "#A9D4DC",
     },
     "rosewood": {
         "label": "Citrus",
         "swatch_a": "#EE9B2E",
-        "swatch_b": "#BF8750",
+        "swatch_b": "#F2D1A0",
         "main": "#EE9B2E",
-        "window": "#C79256",
-        "panel": "#AF763B",
-        "card": "#BA8548",
-        "card_alt": "#C8945A",
-        "border": "#8D5821",
-        "border_soft": "#A76E34",
-        "text": "#2C1A07",
-        "muted": "#7E5A2D",
-        "accent": "#DBA563",
-        "accent_hover": "#E6B983",
-        "accent_pressed": "#BE8848",
-        "teal": "#76CDB3",
-        "teal_hover": "#93DAC4",
-        "red": "#CD6D4A",
-        "red_hover": "#DE8461",
-        "red_pressed": "#AF5638",
-        "gold": "#D69A2C",
-        "cyan": "#6BB6D2",
+        "window": "#D7A15C",
+        "panel": "#C9893F",
+        "card": "#D79B55",
+        "card_alt": "#E2AD68",
+        "border": "#8E5925",
+        "border_soft": "#B57635",
+        "text": "#45240D",
+        "muted": "#71421A",
+        "accent": "#FFF1D8",
+        "accent_hover": "#FFF7EA",
+        "accent_pressed": "#F0CF96",
+        "teal": "#53AE98",
+        "teal_hover": "#6CC0AA",
+        "red": "#D64C5F",
+        "red_hover": "#E15F72",
+        "red_pressed": "#B73A4C",
+        "gold": "#DFA33E",
+        "cyan": "#6EB5C7",
     },
     "horizon": {
         "label": "Forest",
         "swatch_a": "#355834",
         "swatch_b": "#8F8A73",
         "main": "#355834",
-        "window": "#A39D86",
-        "panel": "#7B8A69",
-        "card": "#899879",
-        "card_alt": "#97A688",
-        "border": "#4A5F46",
-        "border_soft": "#6B7D64",
-        "text": "#1E2A1C",
-        "muted": "#596C56",
+        "window": "#7E775F",
+        "panel": "#6E785E",
+        "card": "#7C866A",
+        "card_alt": "#8A9477",
+        "border": "#475A43",
+        "border_soft": "#607256",
+        "text": "#F3F0E3",
+        "muted": "#D7D0BA",
         "accent": "#B4AA8F",
         "accent_hover": "#C4BCA4",
         "accent_pressed": "#958A70",
-        "teal": "#70A996",
-        "teal_hover": "#8ABAA9",
-        "red": "#B05C4F",
-        "red_hover": "#C47466",
-        "red_pressed": "#92473D",
-        "gold": "#BEA367",
-        "cyan": "#6FA6B3",
+        "teal": "#76AA98",
+        "teal_hover": "#8CBAA8",
+        "red": "#D64C5F",
+        "red_hover": "#E15F72",
+        "red_pressed": "#B73A4C",
+        "gold": "#B19B67",
+        "cyan": "#769FAC",
+    },
+    "liquidglass": {
+        "label": "Liquid",
+        "swatch_a": "#b7d9ff",
+        "swatch_b": "#79a8ff",
+        "main": "#18243a",
+        "window": "#091120",
+        "panel": "#213351",
+        "card": "#2b4163",
+        "card_alt": "#3c5b88",
+        "border": "#7daef6",
+        "border_soft": "#4f76aa",
+        "text": "#f5fbff",
+        "muted": "#b9cde6",
+        "accent": "#8ad7ff",
+        "accent_hover": "#a9e3ff",
+        "accent_pressed": "#6cbde8",
+        "teal": "#7aeac7",
+        "teal_hover": "#9af1d6",
+        "red": "#D64C5F",
+        "red_hover": "#E15F72",
+        "red_pressed": "#B73A4C",
+        "gold": "#f6d28c",
+        "cyan": "#b9f4ff",
+    },
+}
+
+DEFAULT_THEME_STYLE_PROFILE = {
+    "glass": True,
+    "decorative_background": True,
+    "surface_alpha_main": 0.84,
+    "surface_alpha_panel": 0.76,
+    "surface_alpha_card": 0.68,
+    "surface_alpha_alt": 0.8,
+    "surface_alpha_window": 0.58,
+    "button_alpha": 0.7,
+    "button_hover_alpha": 0.88,
+    "button_pressed_alpha": 0.96,
+    "soft_border_alpha": 0.3,
+    "highlight_border_alpha": 0.24,
+    "popup_shadow_blur": 68,
+    "popup_shadow_offset_y": 18,
+    "popup_shadow_alpha": 120,
+    "tooltip_alpha": 0.94,
+}
+
+THEME_STYLE_PROFILES = {
+    "liquidglass": {
+        "glass": True,
+        "decorative_background": True,
+        "surface_alpha_main": 0.84,
+        "surface_alpha_panel": 0.76,
+        "surface_alpha_card": 0.68,
+        "surface_alpha_alt": 0.8,
+        "surface_alpha_window": 0.58,
+        "button_alpha": 0.7,
+        "button_hover_alpha": 0.88,
+        "button_pressed_alpha": 0.96,
+        "soft_border_alpha": 0.3,
+        "highlight_border_alpha": 0.24,
+        "popup_shadow_blur": 68,
+        "popup_shadow_offset_y": 18,
+        "popup_shadow_alpha": 120,
+        "tooltip_alpha": 0.94,
     },
 }
 
@@ -340,6 +420,7 @@ THEME_RED_HOVER = ""
 THEME_RED_PRESSED = ""
 THEME_GOLD = ""
 THEME_CYAN = ""
+ACTIVE_THEME_STYLE_PROFILE = dict(DEFAULT_THEME_STYLE_PROFILE)
 INITIAL_ASSET_GROUPS = ("agents", "ranks", "maps")
 SPECIAL_BUDDY_UUID = "a57aa3d0-4ad0-b06a-6c54-338cb3ea6b41"
 
@@ -349,18 +430,175 @@ def normalize_theme_name(theme_name):
     return normalized if normalized in THEME_DEFINITIONS else DEFAULT_THEME_NAME
 
 
+def get_theme_style_profile(theme_name=None):
+    profile = dict(DEFAULT_THEME_STYLE_PROFILE)
+    profile.update(THEME_STYLE_PROFILES.get(normalize_theme_name(theme_name), {}))
+    return profile
+
+
 def get_theme_definition(theme_name=None):
     return THEME_DEFINITIONS[normalize_theme_name(theme_name)]
 
 
 def apply_theme_palette(theme_name=None):
+    global ACTIVE_THEME_STYLE_PROFILE
     palette = get_theme_definition(theme_name)
     for color_key in THEME_COLOR_KEYS:
         globals()[f"THEME_{color_key.upper()}"] = palette[color_key]
+    ACTIVE_THEME_STYLE_PROFILE = get_theme_style_profile(theme_name)
     return normalize_theme_name(theme_name)
 
 
 apply_theme_palette(DEFAULT_THEME_NAME)
+
+
+def get_active_theme_style_profile():
+    return ACTIVE_THEME_STYLE_PROFILE
+
+
+def is_glass_theme(theme_name=None):
+    if theme_name is None:
+        return bool(get_active_theme_style_profile().get("glass"))
+    return bool(get_theme_style_profile(theme_name).get("glass"))
+
+
+def make_qcolor(color_value, alpha=None):
+    color = QColor(color_value)
+    if not color.isValid():
+        color = QColor("#000000")
+    if alpha is not None:
+        color.setAlphaF(max(0.0, min(float(alpha), 1.0)))
+    return color
+
+
+def theme_rgba(color_value, alpha):
+    color = make_qcolor(color_value, alpha=alpha)
+    return f"rgba({color.red()}, {color.green()}, {color.blue()}, {color.alpha()})"
+
+
+def get_surface_color(surface_name):
+    surface_map = {
+        "main": THEME_MAIN,
+        "window": THEME_WINDOW,
+        "panel": THEME_PANEL,
+        "card": THEME_CARD,
+        "card_alt": THEME_CARD_ALT,
+    }
+    return surface_map.get(surface_name, THEME_MAIN)
+
+
+def get_surface_alpha(surface_name):
+    profile = get_active_theme_style_profile()
+    alpha_map = {
+        "main": "surface_alpha_main",
+        "window": "surface_alpha_window",
+        "panel": "surface_alpha_panel",
+        "card": "surface_alpha_card",
+        "card_alt": "surface_alpha_alt",
+    }
+    return float(profile.get(alpha_map.get(surface_name, "surface_alpha_main"), 1.0))
+
+
+def build_surface_fill(surface_name, secondary_surface=None, tertiary_color=None, alpha=None):
+    primary = get_surface_color(surface_name)
+    secondary = get_surface_color(secondary_surface) if secondary_surface else primary
+    tertiary = tertiary_color or THEME_WINDOW
+    surface_alpha = get_surface_alpha(surface_name) if alpha is None else float(alpha)
+
+    if not is_glass_theme():
+        if secondary_surface:
+            return (
+                "qlineargradient(x1:0, y1:0, x2:1, y2:1,"
+                f" stop:0 {primary}, stop:1 {secondary})"
+            )
+        if surface_alpha < 1.0:
+            return theme_rgba(primary, surface_alpha)
+        return primary
+
+    top_alpha = min(1.0, surface_alpha + 0.08)
+    bottom_alpha = max(0.12, surface_alpha - 0.12)
+    return (
+        "qlineargradient(x1:0, y1:0, x2:1, y2:1,"
+        f" stop:0 {theme_rgba(primary, top_alpha)},"
+        f" stop:0.55 {theme_rgba(secondary, surface_alpha)},"
+        f" stop:1 {theme_rgba(tertiary, bottom_alpha)})"
+    )
+
+
+def themed_border_color(kind="soft"):
+    if not is_glass_theme():
+        if kind == "highlight":
+            return THEME_ACCENT
+        if kind == "accent":
+            return THEME_ACCENT
+        if kind == "control":
+            return THEME_BORDER
+        return THEME_BORDER_SOFT
+
+    profile = get_active_theme_style_profile()
+    if kind == "highlight":
+        return theme_rgba("#ffffff", profile.get("highlight_border_alpha", 0.24))
+    if kind == "accent":
+        return theme_rgba(THEME_ACCENT, 0.56)
+    if kind == "control":
+        return theme_rgba("#ffffff", 0.18)
+    return theme_rgba("#ffffff", profile.get("soft_border_alpha", 0.3))
+
+
+def build_popup_card_rule(selector="#popupCard", radius=22, surface_name="main", secondary_surface="panel"):
+    return (
+        f"{selector} {{"
+        f" background: {build_surface_fill(surface_name, secondary_surface=secondary_surface)};"
+        f" border-radius: {radius}px;"
+        f" border: 1px solid {themed_border_color('highlight' if is_glass_theme() else 'soft')};"
+        f"}}"
+    )
+
+
+def build_tooltip_rule(selector="QToolTip"):
+    tooltip_background = (
+        build_surface_fill("window", secondary_surface="panel", alpha=get_active_theme_style_profile().get("tooltip_alpha", 1.0))
+        if is_glass_theme()
+        else THEME_WINDOW
+    )
+    return (
+        f"{selector} {{"
+        f" background: {tooltip_background};"
+        f" color: {THEME_TEXT};"
+        f" border: 1px solid {themed_border_color('control')};"
+        " border-radius: 8px;"
+        " padding: 4px 8px;"
+        " font-size: 12px;"
+        "}}"
+    )
+
+
+def build_scrollbar_rules(axis="vertical", margin="0px", thickness=14, handle_radius=7, handle_min=32):
+    handle_background = theme_rgba("#ffffff", 0.22) if is_glass_theme() else THEME_BORDER
+    hover_background = theme_rgba(THEME_ACCENT, 0.55) if is_glass_theme() else THEME_ACCENT
+    min_property = "min-height" if axis == "vertical" else "min-width"
+    size_property = "width" if axis == "vertical" else "height"
+    add_size_property = "height" if axis == "vertical" else "width"
+    return (
+        f"QScrollBar:{axis} {{ background: transparent; {size_property}: {thickness}px; margin: {margin}; }}"
+        f"QScrollBar::handle:{axis} {{ background: {handle_background}; {min_property}: {handle_min}px; border-radius: {handle_radius}px; }}"
+        f"QScrollBar::handle:{axis}:hover {{ background: {hover_background}; }}"
+        f"QScrollBar::add-line:{axis}, QScrollBar::sub-line:{axis} {{ background: none; {add_size_property}: 0px; }}"
+    )
+
+
+def apply_popup_shadow(widget):
+    if widget is None:
+        return
+    effect = widget.graphicsEffect()
+    if not isinstance(effect, QGraphicsDropShadowEffect):
+        effect = QGraphicsDropShadowEffect(widget)
+        widget.setGraphicsEffect(effect)
+
+    profile = get_active_theme_style_profile()
+    effect.setBlurRadius(profile.get("popup_shadow_blur", 50))
+    effect.setOffset(0, profile.get("popup_shadow_offset_y", 12))
+    effect.setColor(QColor(0, 0, 0, int(profile.get("popup_shadow_alpha", 180))))
 
 
 def resource_path(relative_path):
@@ -370,8 +608,24 @@ def resource_path(relative_path):
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_path, relative_path)
 
+def create_qtawesome_icon(icon_name, color=None, disabled_color=None):
+    icon_kwargs = {
+        "color": make_qcolor(color or THEME_TEXT),
+    }
+    if disabled_color is not None:
+        icon_kwargs["color_disabled"] = make_qcolor(disabled_color)
+
+    try:
+        return qta.icon(icon_name, **icon_kwargs)
+    except Exception:
+        return QIcon()
+
 def configure_close_button(button, icon_size=20):
-    close_icon = QIcon(resource_path(CLOSE_ICON_RELATIVE_PATH))
+    close_icon = create_qtawesome_icon(
+        CLOSE_ICON_NAME,
+        color=THEME_TEXT,
+        disabled_color=THEME_MUTED,
+    )
     if close_icon.isNull():
         button.setText("X")
     else:
@@ -481,13 +735,7 @@ class InstantTooltipPopup(QLabel):
         self.apply_theme_styles()
 
     def apply_theme_styles(self):
-        self.setStyleSheet(
-            f"background-color: {THEME_WINDOW};"
-            f"color: {THEME_TEXT};"
-            f"border: 1px solid {THEME_BORDER};"
-            "border-radius: 4px;"
-            "font-size: 12px;"
-        )
+        self.setStyleSheet(build_tooltip_rule("QLabel"))
 
     def show_text(self, text):
         self.setText(str(text))
@@ -587,6 +835,7 @@ class StartupLoadingWindow(QDialog):
 
         card = QFrame()
         card.setObjectName("startupLoadingCard")
+        self._card = card
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(28, 24, 28, 24)
         card_layout.setSpacing(0)
@@ -614,6 +863,7 @@ class StartupLoadingWindow(QDialog):
 
         outer_layout.addWidget(card)
 
+        apply_popup_shadow(card)
         self.apply_theme_styles()
 
     def apply_theme_styles(self):
@@ -623,13 +873,14 @@ class StartupLoadingWindow(QDialog):
                 background-color: transparent;
             }}
             QFrame#startupLoadingCard {{
-                background: transparent;
-                border: none;
+                background: {build_surface_fill("main", secondary_surface="panel")};
+                border-radius: 28px;
+                border: 1px solid {themed_border_color('highlight' if is_glass_theme() else 'soft')};
             }}
             QProgressBar#loadingBar {{
                 border: none;
                 border-radius: 4px;
-                background: {THEME_CARD};
+                background: {build_surface_fill("card") if is_glass_theme() else THEME_CARD};
             }}
             QProgressBar#loadingBar::chunk {{
                 border-radius: 4px;
@@ -637,6 +888,7 @@ class StartupLoadingWindow(QDialog):
             }}
             """
         )
+        apply_popup_shadow(self._card)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -701,32 +953,32 @@ class VariantSelectorPopup(QDialog):
         main_layout.addWidget(self.scroll_area, 1)
 
         close_btn = QPushButton("Close")
+        close_btn.setObjectName("popupCloseButton")
         close_btn.setFixedSize(120, 50)
         close_btn.setCursor(Qt.PointingHandCursor)
         configure_close_button(close_btn, 20)
         close_btn.clicked.connect(self.close)
         main_layout.addWidget(close_btn, alignment=Qt.AlignRight)
 
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(50)
-        shadow.setOffset(0, 12)
-        shadow.setColor(QColor(0, 0, 0, 180))
-        container.setGraphicsEffect(shadow)
-
+        apply_popup_shadow(container)
+        glass_theme = is_glass_theme()
+        close_background = build_surface_fill("panel", secondary_surface="card") if glass_theme else THEME_PANEL
+        close_hover = build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT
+        profile = get_active_theme_style_profile()
         self.setStyleSheet(f"""
-            #popupCard {{ background-color: {THEME_MAIN}; border-radius: 22px; border: 1px solid {THEME_BORDER_SOFT}; }}
+            {build_popup_card_rule()}
             #title {{ color: {THEME_TEXT}; font-size: 26px; font-weight: 600; margin-bottom: 20px;}}
             #skinLabel {{ color: {THEME_MUTED}; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }}
-            #skinTile {{ background-color: {THEME_CARD}; border-radius: 18px; border: 1px solid {THEME_BORDER_SOFT}; }}
-            #skinTile:hover {{ border: 1px solid {THEME_ACCENT}; background-color: {THEME_CARD_ALT}; }}
-            #skinPreview {{ background-color: {THEME_WINDOW}; border-radius: 12px; border: 1px dashed {THEME_BORDER_SOFT}; }}
+            #skinTile {{ background: {build_surface_fill("card", secondary_surface="panel") if glass_theme else THEME_CARD}; border-radius: 18px; border: 1px solid {themed_border_color('soft')}; }}
+            #skinTile:hover {{ border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT}; background: {build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT}; }}
+            #skinPreview {{ background: transparent; border-radius: 12px; border: none; }}
             #skinPreview[empty="true"] {{ color: {THEME_MUTED}; font-size: 11px; letter-spacing: 1px; }}
-            QPushButton {{ background-color: {THEME_CARD_ALT}; border: none; color: {THEME_TEXT}; font-size: 18px; font-weight: 700; border-radius: 16px; }}
-            QPushButton:hover {{ background-color: {THEME_ACCENT}; }}
-            QToolTip {{ background-color: {THEME_WINDOW}; color: {THEME_TEXT}; border: 1px solid {THEME_BORDER}; border-radius: 4px; padding: 4px 8px; font-size: 12px; }}
-            QScrollBar:vertical {{ background: transparent; width: 14px; margin: 0px; }}
-            QScrollBar::handle:vertical {{ background: {THEME_BORDER}; min-height: 32px; border-radius: 7px; }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ background: none; height: 0px; }}
+            QPushButton {{ background-color: {theme_rgba(THEME_CARD_ALT, profile.get('button_alpha', 0.7)) if glass_theme else THEME_CARD_ALT}; border: {'1px solid ' + themed_border_color('control') if glass_theme else 'none'}; color: {THEME_TEXT}; font-size: 18px; font-weight: 700; border-radius: 16px; }}
+            QPushButton:hover {{ background-color: {theme_rgba(THEME_ACCENT, 0.78) if glass_theme else THEME_ACCENT}; }}
+            QPushButton#popupCloseButton {{ background: {close_background}; border: 1px solid {themed_border_color('soft')}; padding: 0px; }}
+            QPushButton#popupCloseButton:hover {{ background: {close_hover}; border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT}; }}
+            {build_tooltip_rule()}
+            {build_scrollbar_rules('vertical', margin='0px')}
         """)
 
     def build_variant_tile(self, variant_id):
@@ -879,32 +1131,32 @@ class SkinSelectorPopup(QDialog):
         main_layout.addWidget(self.scroll_area, 1)
 
         close_btn = QPushButton("Close")
+        close_btn.setObjectName("popupCloseButton")
         close_btn.setFixedSize(120, 50)
         close_btn.setCursor(Qt.PointingHandCursor)
         configure_close_button(close_btn, 20)
         close_btn.clicked.connect(self.close)
         main_layout.addWidget(close_btn, alignment=Qt.AlignRight)
 
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(50)
-        shadow.setOffset(0, 12)
-        shadow.setColor(QColor(0, 0, 0, 180))
-        container.setGraphicsEffect(shadow)
-
+        apply_popup_shadow(container)
+        glass_theme = is_glass_theme()
+        profile = get_active_theme_style_profile()
+        close_background = build_surface_fill("panel", secondary_surface="card") if glass_theme else THEME_PANEL
+        close_hover = build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT
         self.setStyleSheet(f"""
-            #popupCard {{ background-color: {THEME_MAIN}; border-radius: 22px; border: 1px solid {THEME_BORDER_SOFT}; }}
+            {build_popup_card_rule()}
             #title {{ color: {THEME_TEXT}; font-size: 26px; font-weight: 600; margin-bottom: 20px;}}
             #skinLabel {{ color: {THEME_MUTED}; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }}
-            #skinTile {{ background-color: {THEME_CARD}; border-radius: 18px; border: 1px solid {THEME_BORDER_SOFT}; }}
-            #skinTile:hover {{ border: 1px solid {THEME_ACCENT}; background-color: {THEME_CARD_ALT}; }}
-            #skinPreview {{ background-color: {THEME_WINDOW}; border-radius: 12px; border: 1px dashed {THEME_BORDER_SOFT}; }}
+            #skinTile {{ background: {build_surface_fill("card", secondary_surface="panel") if glass_theme else THEME_CARD}; border-radius: 18px; border: 1px solid {themed_border_color('soft')}; }}
+            #skinTile:hover {{ border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT}; background: {build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT}; }}
+            #skinPreview {{ background: transparent; border-radius: 12px; border: none; }}
             #skinPreview[empty="true"] {{ color: {THEME_MUTED}; font-size: 11px; letter-spacing: 1px; }}
-            QPushButton {{ background-color: {THEME_CARD_ALT}; border: none; color: {THEME_TEXT}; font-size: 18px; font-weight: 700; border-radius: 16px; }}
-            QPushButton:hover {{ background-color: {THEME_ACCENT}; }}
-            QToolTip {{ background-color: {THEME_WINDOW}; color: {THEME_TEXT}; border: 1px solid {THEME_BORDER}; border-radius: 4px; padding: 4px 8px; font-size: 12px; }}
-            QScrollBar:vertical {{ background: transparent; width: 14px; margin: 0px; }}
-            QScrollBar::handle:vertical {{ background: {THEME_BORDER}; min-height: 32px; border-radius: 7px; }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ background: none; height: 0px; }}
+            QPushButton {{ background-color: {theme_rgba(THEME_CARD_ALT, profile.get('button_alpha', 0.7)) if glass_theme else THEME_CARD_ALT}; border: {'1px solid ' + themed_border_color('control') if glass_theme else 'none'}; color: {THEME_TEXT}; font-size: 18px; font-weight: 700; border-radius: 16px; }}
+            QPushButton:hover {{ background-color: {theme_rgba(THEME_ACCENT, 0.78) if glass_theme else THEME_ACCENT}; }}
+            QPushButton#popupCloseButton {{ background: {close_background}; border: 1px solid {themed_border_color('soft')}; padding: 0px; }}
+            QPushButton#popupCloseButton:hover {{ background: {close_hover}; border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT}; }}
+            {build_tooltip_rule()}
+            {build_scrollbar_rules('vertical', margin='0px')}
         """)
 
     def build_skin_tile(self, clean_id, resolved_name):
@@ -1152,6 +1404,7 @@ class LoadoutsPopup(QDialog):
         right_layout.addWidget(presets_card, 1)
 
         close_btn = QPushButton("Close")
+        close_btn.setObjectName("popupCloseButton")
         close_btn.setFixedSize(120, 50)
         close_btn.setCursor(Qt.PointingHandCursor)
         configure_close_button(close_btn, 20)
@@ -1161,43 +1414,44 @@ class LoadoutsPopup(QDialog):
         main_layout.addWidget(left_panel, 3)
         main_layout.addWidget(right_panel, 1)
 
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(50)
-        shadow.setOffset(0, 12)
-        shadow.setColor(QColor(0, 0, 0, 180))
-        container.setGraphicsEffect(shadow)
-
+        apply_popup_shadow(container)
+        glass_theme = is_glass_theme()
+        profile = get_active_theme_style_profile()
+        close_background = build_surface_fill("panel", secondary_surface="card") if glass_theme else THEME_PANEL
+        close_hover = build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT
         self.setStyleSheet(f"""
-            #popupCard {{ background-color: {THEME_MAIN}; border-radius: 22px; border: 1px solid {THEME_BORDER_SOFT}; }}
-            #presetsCard {{ background-color: {THEME_CARD}; border-radius: 18px; border: 1px solid {THEME_BORDER_SOFT}; }}
+            {build_popup_card_rule()}
+            #presetsCard {{ background: {build_surface_fill("card", secondary_surface="panel") if glass_theme else THEME_CARD}; border-radius: 18px; border: 1px solid {themed_border_color('soft')}; }}
             #title {{ color: {THEME_TEXT}; font-size: 26px; font-weight: 600; margin-bottom: 20px;}}
             #skinLabel {{ color: {THEME_MUTED}; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }}
-            QPushButton#skinTile {{ background-color: {THEME_CARD}; border-radius: 18px; border: 1px solid {THEME_BORDER_SOFT}; }}
-            QPushButton#skinTile:hover {{ border: 1px solid {THEME_ACCENT}; background-color: {THEME_CARD_ALT}; }}
-            #skinPreview {{ background-color: {THEME_WINDOW}; border-radius: 12px; border: 1px dashed {THEME_BORDER_SOFT}; }}
+            QPushButton#skinTile {{ background: {build_surface_fill("card", secondary_surface="panel") if glass_theme else THEME_CARD}; border-radius: 18px; border: 1px solid {themed_border_color('soft')}; }}
+            QPushButton#skinTile:hover {{ border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT}; background: {build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT}; }}
+            #skinPreview {{ background: transparent; border-radius: 12px; border: none; }}
             #skinPreview[empty="true"] {{ color: {THEME_MUTED}; font-size: 11px; letter-spacing: 1px; }}
-            QPushButton {{ background-color: {THEME_CARD_ALT}; border: none; color: {THEME_TEXT}; font-size: 18px; font-weight: 700; border-radius: 16px; }}
-            QPushButton:hover {{ background-color: {THEME_ACCENT}; }}
-            QPushButton#accentButton {{ background-color: {THEME_ACCENT}; border-radius: 8px; font-size: 14px; padding: 6px 12px; }}
-            QPushButton#accentButton:hover {{ background-color: {THEME_ACCENT_HOVER}; }}
-            #presetInput {{ background-color: {THEME_WINDOW}; border: 1px solid {THEME_BORDER}; color: {THEME_TEXT}; font-size: 14px; padding: 0 10px; border-radius: 8px; height: 36px; }}
-            QPushButton#submitBtn {{ background-color: {THEME_TEAL}; color: #071018; border-radius: 8px; font-size: 14px; font-weight: bold; padding: 6px 12px; }}
-            QPushButton#submitBtn:hover {{ background-color: {THEME_TEAL_HOVER}; }}
-            QPushButton#cancelBtn {{ background-color: {THEME_RED}; color: {THEME_TEXT}; border-radius: 8px; font-size: 14px; font-weight: bold; padding: 6px 12px; }}
-            QPushButton#cancelBtn:hover {{ background-color: {THEME_RED_HOVER}; }}
-            QPushButton#presetSaveBtn {{ background-color: {THEME_TEAL}; color: #071018; border-radius: 8px; font-size: 16px; font-weight: bold; }}
-            QPushButton#presetSaveBtn:hover {{ background-color: {THEME_TEAL_HOVER}; }}
-            QPushButton#presetCancelBtn {{ background-color: {THEME_RED}; color: {THEME_TEXT}; border-radius: 8px; font-size: 16px; font-weight: bold; }}
-            QPushButton#presetCancelBtn:hover {{ background-color: {THEME_RED_HOVER}; }}
-            QPushButton#presetApplyBtn {{ background-color: {THEME_TEAL}; color: #071018; font-size: 13px; border-radius: 8px; padding: 6px 12px; font-weight: 600; }}
-            QPushButton#presetApplyBtn:hover {{ background-color: {THEME_TEAL_HOVER}; }}
-            QToolTip {{ background-color: {THEME_WINDOW}; color: {THEME_TEXT}; border: 1px solid {THEME_BORDER}; border-radius: 4px; padding: 4px 8px; font-size: 12px; }}
-            #presetRow {{ background-color: {THEME_CARD_ALT}; border-radius: 14px; border: 1px solid {THEME_BORDER_SOFT}; }}
-            #presetRow:hover {{ border: 1px solid {THEME_ACCENT}; background-color: {THEME_CARD}; }}
-            #presetRowSelected {{ background-color: {THEME_PANEL}; border-radius: 14px; border: 1px solid {THEME_ACCENT}; }}
+            QPushButton {{ background-color: {theme_rgba(THEME_CARD_ALT, profile.get('button_alpha', 0.7)) if glass_theme else THEME_CARD_ALT}; border: {'1px solid ' + themed_border_color('control') if glass_theme else 'none'}; color: {THEME_TEXT}; font-size: 18px; font-weight: 700; border-radius: 16px; }}
+            QPushButton:hover {{ background-color: {theme_rgba(THEME_ACCENT, 0.78) if glass_theme else THEME_ACCENT}; }}
+            QPushButton#accentButton {{ background-color: {theme_rgba(THEME_ACCENT, 0.84) if glass_theme else THEME_ACCENT}; border-radius: 8px; font-size: 14px; padding: 6px 12px; color: {'#071018' if glass_theme else THEME_TEXT}; border: {'1px solid ' + themed_border_color('control') if glass_theme else 'none'}; }}
+            QPushButton#accentButton:hover {{ background-color: {theme_rgba(THEME_ACCENT_HOVER, 0.92) if glass_theme else THEME_ACCENT_HOVER}; }}
+            QPushButton#popupCloseButton {{ background: {close_background}; border: 1px solid {themed_border_color('soft')}; padding: 0px; }}
+            QPushButton#popupCloseButton:hover {{ background: {close_hover}; border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT}; }}
+            #presetInput {{ background: {build_surface_fill("window", secondary_surface="panel") if glass_theme else THEME_WINDOW}; border: 1px solid {themed_border_color('control') if glass_theme else THEME_BORDER}; color: {THEME_TEXT}; font-size: 14px; padding: 0 10px; border-radius: 8px; height: 36px; }}
+            QPushButton#submitBtn {{ background-color: {theme_rgba(THEME_TEAL, 0.84) if glass_theme else THEME_TEAL}; color: #071018; border-radius: 8px; font-size: 14px; font-weight: bold; padding: 6px 12px; }}
+            QPushButton#submitBtn:hover {{ background-color: {theme_rgba(THEME_TEAL_HOVER, 0.92) if glass_theme else THEME_TEAL_HOVER}; }}
+            QPushButton#cancelBtn {{ background-color: {theme_rgba(THEME_RED, 0.82) if glass_theme else THEME_RED}; color: {THEME_TEXT}; border-radius: 8px; font-size: 14px; font-weight: bold; padding: 6px 12px; }}
+            QPushButton#cancelBtn:hover {{ background-color: {theme_rgba(THEME_RED_HOVER, 0.9) if glass_theme else THEME_RED_HOVER}; }}
+            QPushButton#presetSaveBtn {{ background-color: {theme_rgba(THEME_TEAL, 0.84) if glass_theme else THEME_TEAL}; color: #071018; border-radius: 8px; font-size: 16px; font-weight: bold; }}
+            QPushButton#presetSaveBtn:hover {{ background-color: {theme_rgba(THEME_TEAL_HOVER, 0.92) if glass_theme else THEME_TEAL_HOVER}; }}
+            QPushButton#presetCancelBtn {{ background-color: {theme_rgba(THEME_RED, 0.82) if glass_theme else THEME_RED}; color: {THEME_TEXT}; border-radius: 8px; font-size: 16px; font-weight: bold; }}
+            QPushButton#presetCancelBtn:hover {{ background-color: {theme_rgba(THEME_RED_HOVER, 0.9) if glass_theme else THEME_RED_HOVER}; }}
+            QPushButton#presetApplyBtn {{ background-color: {theme_rgba(THEME_TEAL, 0.84) if glass_theme else THEME_TEAL}; color: #071018; font-size: 13px; border-radius: 8px; padding: 6px 12px; font-weight: 600; }}
+            QPushButton#presetApplyBtn:hover {{ background-color: {theme_rgba(THEME_TEAL_HOVER, 0.92) if glass_theme else THEME_TEAL_HOVER}; }}
+            {build_tooltip_rule()}
+            #presetRow {{ background: {build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT}; border-radius: 14px; border: 1px solid {themed_border_color('soft')}; }}
+            #presetRow:hover {{ border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT}; background: {build_surface_fill("card", secondary_surface="panel") if glass_theme else THEME_CARD}; }}
+            #presetRowSelected {{ background: {build_surface_fill("panel", secondary_surface="card") if glass_theme else THEME_PANEL}; border-radius: 14px; border: 1px solid {themed_border_color('accent') if glass_theme else THEME_ACCENT}; }}
             #presetName {{ color: {THEME_TEXT}; font-weight: 600; font-size: 16px; }}
-            QPushButton#presetDelBtn {{ background-color: {THEME_RED_PRESSED}; font-size: 13px; border-radius: 8px; padding: 6px 12px; font-weight: 600; }}
-            QPushButton#presetDelBtn:hover {{ background-color: {THEME_RED}; }}
+            QPushButton#presetDelBtn {{ background-color: {theme_rgba(THEME_RED_PRESSED, 0.84) if glass_theme else THEME_RED_PRESSED}; font-size: 13px; border-radius: 8px; padding: 6px 12px; font-weight: 600; }}
+            QPushButton#presetDelBtn:hover {{ background-color: {theme_rgba(THEME_RED, 0.88) if glass_theme else THEME_RED}; }}
         """)
 
         self.loadouts_dir = resource_path("loadouts")
@@ -1551,6 +1805,7 @@ class AgentPopup(QDialog):
 
         container = QWidget()
         container.setObjectName("popupCard")
+        self._container = container
 
         main_layout = QVBoxLayout(container)
         main_layout.setContentsMargins(30, 30, 30, 30)
@@ -1607,18 +1862,12 @@ class AgentPopup(QDialog):
         outer = QVBoxLayout(self)
         outer.addWidget(container)
 
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(50)
-        shadow.setOffset(0, 12)
-        shadow.setColor(QColor(0, 0, 0, 180))
-        container.setGraphicsEffect(shadow)
-
+        apply_popup_shadow(container)
+        glass_theme = is_glass_theme()
+        close_background = build_surface_fill("panel", secondary_surface="card") if glass_theme else THEME_PANEL
+        close_hover = build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT
         self.setStyleSheet(f"""
-            #popupCard {{
-                background-color: {THEME_MAIN};
-                border-radius: 22px;
-                border: 1px solid {THEME_BORDER_SOFT};
-            }}
+            {build_popup_card_rule()}
             #title {{ color: {THEME_TEXT}; font-size: 22px; font-weight: 600; }}
             #subtitle {{ color: {THEME_MUTED}; font-size: 14px; }}
             #agentLabel {{
@@ -1626,26 +1875,27 @@ class AgentPopup(QDialog):
                 text-transform: uppercase;
             }}
             #agentTile {{
-                background-color: {THEME_CARD};
+                background: {build_surface_fill("card", secondary_surface="panel") if glass_theme else THEME_CARD};
                 border-radius: 18px;
-                border: 1px solid {THEME_BORDER_SOFT};
+                border: 1px solid {themed_border_color('soft')};
             }}
             #agentTile:hover {{
-                border: 1px solid {THEME_ACCENT};
-                background-color: {THEME_CARD_ALT};
+                border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT};
+                background: {build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT};
             }}
             #agentTileDisabled {{
-                background-color: {THEME_WINDOW};
+                background: {build_surface_fill("card", secondary_surface="panel") if glass_theme else THEME_CARD};
                 border-radius: 18px;
-                border: 1px solid {THEME_BORDER_SOFT};
+                border: 1px solid {themed_border_color('soft')};
             }}
             #exitTile {{
-                background-color: {THEME_CARD_ALT};
+                background-color: {theme_rgba(THEME_CARD_ALT, 0.72) if glass_theme else THEME_CARD_ALT};
                 border-radius: 18px;
-                border: 1px solid {THEME_BORDER_SOFT};
+                border: 1px solid {themed_border_color('soft')};
             }}
             #exitTile:hover {{
-                background-color: {THEME_RED};
+                background: {build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT};
+                border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT};
             }}
         """)
 
@@ -1763,6 +2013,7 @@ class FriendSelectionPopup(QDialog):
         main_layout.addWidget(self.scroll_area, 1)
 
         close_btn = QPushButton("Close")
+        close_btn.setObjectName("popupCloseButton")
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.setFixedHeight(42)
         configure_close_button(close_btn, 18)
@@ -1773,39 +2024,33 @@ class FriendSelectionPopup(QDialog):
         outer.setContentsMargins(18, 18, 18, 18)
         outer.addWidget(container)
 
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(50)
-        shadow.setOffset(0, 12)
-        shadow.setColor(QColor(0, 0, 0, 180))
-        container.setGraphicsEffect(shadow)
-
+        apply_popup_shadow(container)
+        glass_theme = is_glass_theme()
+        close_background = build_surface_fill("panel", secondary_surface="card") if glass_theme else THEME_PANEL
+        close_hover = build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT
         self.setStyleSheet(f"""
-            #popupCard {{
-                background-color: {THEME_MAIN};
-                border-radius: 22px;
-                border: 1px solid {THEME_BORDER_SOFT};
-            }}
+            {build_popup_card_rule()}
             #title {{ color: {THEME_TEXT}; font-size: 22px; font-weight: 600; }}
             #subtitle {{ color: {THEME_MUTED}; font-size: 14px; }}
             QLineEdit {{
-                background-color: {THEME_CARD_ALT};
+                background: {build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT};
                 border-radius: 12px;
                 padding: 10px 12px;
                 color: {THEME_TEXT};
-                border: 1px solid {THEME_BORDER};
+                border: 1px solid {themed_border_color('control') if glass_theme else THEME_BORDER};
             }}
             QLineEdit:focus {{
-                border: 1px solid {THEME_ACCENT};
+                border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT};
             }}
             QPushButton#friendRow {{
-                background-color: {THEME_CARD};
+                background: {build_surface_fill("card", secondary_surface="panel") if glass_theme else THEME_CARD};
                 border-radius: 16px;
-                border: 1px solid {THEME_BORDER_SOFT};
+                border: 1px solid {themed_border_color('soft')};
                 text-align: left;
             }}
             QPushButton#friendRow:hover {{
-                border: 1px solid {THEME_ACCENT};
-                background-color: {THEME_CARD_ALT};
+                border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT};
+                background: {build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT};
             }}
             QLabel#friendName {{
                 color: {THEME_TEXT};
@@ -1821,22 +2066,16 @@ class FriendSelectionPopup(QDialog):
                 font-style: italic;
                 padding: 18px 6px;
             }}
-            QScrollBar:vertical {{
-                background: transparent;
-                width: 12px;
-                margin: 6px 0 6px 0;
+            QPushButton#popupCloseButton {{
+                background: {close_background};
+                border: 1px solid {themed_border_color('soft')};
+                padding: 0px;
             }}
-            QScrollBar::handle:vertical {{
-                background: {THEME_BORDER};
-                border-radius: 6px;
-                min-height: 36px;
+            QPushButton#popupCloseButton:hover {{
+                background: {close_hover};
+                border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT};
             }}
-            QScrollBar::handle:vertical:hover {{
-                background: {THEME_ACCENT};
-            }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-                height: 0px;
-            }}
+            {build_scrollbar_rules('vertical', margin='6px 0 6px 0', thickness=12, handle_radius=6, handle_min=36)}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
                 background: transparent;
             }}
@@ -1981,6 +2220,7 @@ class MapAgentPopup(QDialog):
         main_layout.addWidget(scroll_area, 1)
 
         close_btn = QPushButton("X")
+        close_btn.setObjectName("popupCloseButton")
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.setFixedHeight(44)
         configure_close_button(close_btn, 18)
@@ -1991,24 +2231,18 @@ class MapAgentPopup(QDialog):
         outer.setContentsMargins(outer_margin, outer_margin, outer_margin, outer_margin)
         outer.addWidget(container)
 
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(50)
-        shadow.setOffset(0, 12)
-        shadow.setColor(QColor(0, 0, 0, 180))
-        container.setGraphicsEffect(shadow)
-
+        apply_popup_shadow(container)
+        glass_theme = is_glass_theme()
+        close_background = build_surface_fill("panel", secondary_surface="card") if glass_theme else THEME_PANEL
+        close_hover = build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT
         self.setStyleSheet(f"""
-            #popupCard {{
-                background-color: {THEME_MAIN};
-                border-radius: 22px;
-                border: 1px solid {THEME_BORDER_SOFT};
-            }}
+            {build_popup_card_rule()}
             #title {{ color: {THEME_TEXT}; font-size: 22px; font-weight: 600; }}
             #subtitle {{ color: {THEME_MUTED}; font-size: 14px; }}
             #mapSection {{
-                background-color: {THEME_CARD};
+                background: {build_surface_fill("card", secondary_surface="panel") if glass_theme else THEME_CARD};
                 border-radius: 20px;
-                border: 1px solid {THEME_BORDER_SOFT};
+                border: 1px solid {themed_border_color('soft')};
             }}
             #mapSectionTitle {{
                 color: {THEME_TEXT};
@@ -2017,14 +2251,14 @@ class MapAgentPopup(QDialog):
                 letter-spacing: 0.5px;
             }}
             #mapCard {{
-                background-color: {THEME_PANEL};
+                background: {build_surface_fill("panel", secondary_surface="card") if glass_theme else THEME_PANEL};
                 border-radius: 18px;
-                border: 1px solid {THEME_BORDER_SOFT};
+                border: 1px solid {themed_border_color('soft')};
             }}
             #mapPreview {{
-                background-color: {THEME_WINDOW};
+                background: {build_surface_fill("window", secondary_surface="panel") if glass_theme else THEME_WINDOW};
                 border-radius: 14px;
-                border: 1px solid {THEME_BORDER};
+                border: 1px solid {themed_border_color('control') if glass_theme else THEME_BORDER};
             }}
             #mapName {{
                 color: {THEME_TEXT};
@@ -2033,22 +2267,22 @@ class MapAgentPopup(QDialog):
                 letter-spacing: 0.4px;
             }}
             QPushButton#mapSelectionButton {{
-                background-color: {THEME_CARD_ALT};
+                background: {build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT};
                 border-radius: 18px;
-                border: 1px solid {THEME_BORDER};
+                border: 1px solid {themed_border_color('control') if glass_theme else THEME_BORDER};
                 padding: 0px;
             }}
             QPushButton#mapSelectionButton[selected="true"] {{
-                border: 1px solid {THEME_ACCENT};
-                background-color: {THEME_PANEL};
+                border: 1px solid {themed_border_color('accent') if glass_theme else THEME_ACCENT};
+                background: {build_surface_fill("panel", secondary_surface="card") if glass_theme else THEME_PANEL};
             }}
             QPushButton#mapSelectionButton:hover {{
-                border: 1px solid {THEME_ACCENT};
-                background-color: {THEME_CARD};
+                border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT};
+                background: {build_surface_fill("card", secondary_surface="panel") if glass_theme else THEME_CARD};
             }}
             QPushButton {{
-                background-color: {THEME_CARD_ALT};
-                border: none;
+                background-color: {theme_rgba(THEME_CARD_ALT, 0.72) if glass_theme else THEME_CARD_ALT};
+                border: {'1px solid ' + themed_border_color('control') if glass_theme else 'none'};
                 color: {THEME_TEXT};
                 font-size: 14px;
                 font-weight: 700;
@@ -2056,11 +2290,18 @@ class MapAgentPopup(QDialog):
                 padding: 10px 18px;
             }}
             QPushButton:hover {{
-                background-color: {THEME_ACCENT};
+                background-color: {theme_rgba(THEME_ACCENT, 0.78) if glass_theme else THEME_ACCENT};
             }}
-            QScrollBar:vertical {{ background: transparent; width: 14px; margin: 4px 0px 4px 0px; }}
-            QScrollBar::handle:vertical {{ background: {THEME_BORDER}; min-height: 32px; border-radius: 7px; }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ background: none; height: 0px; }}
+            QPushButton#popupCloseButton {{
+                background: {close_background};
+                border: 1px solid {themed_border_color('soft')};
+                padding: 0px;
+            }}
+            QPushButton#popupCloseButton:hover {{
+                background: {close_hover};
+                border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT};
+            }}
+            {build_scrollbar_rules('vertical', margin='4px 0px 4px 0px')}
         """)
 
     def build_section(self, title_text, map_uuids):
@@ -2209,10 +2450,14 @@ class MapAgentPopup(QDialog):
 
         painter = QPainter(canvas)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.setBrush(QColor(THEME_WINDOW))
-        painter.setPen(QColor(THEME_BORDER))
+        if is_glass_theme():
+            painter.setBrush(make_qcolor(THEME_WINDOW, 0.58))
+            painter.setPen(QPen(make_qcolor("#ffffff", 0.18), 1.2))
+        else:
+            painter.setBrush(QColor(THEME_WINDOW))
+            painter.setPen(QColor(THEME_BORDER))
         painter.drawRoundedRect(4, 4, 48, 48, 14, 14)
-        painter.setPen(QColor(THEME_MUTED))
+        painter.setPen(make_qcolor(THEME_ACCENT, 0.92) if is_glass_theme() else QColor(THEME_MUTED))
         painter.drawLine(28, 17, 28, 39)
         painter.drawLine(17, 28, 39, 28)
         painter.end()
@@ -2252,6 +2497,7 @@ class ThemePopup(QDialog):
 
         container = QWidget()
         container.setObjectName("popupCard")
+        self._container = container
 
         main_layout = QVBoxLayout(container)
         main_layout.setContentsMargins(30, 30, 30, 26)
@@ -2290,12 +2536,7 @@ class ThemePopup(QDialog):
         outer = QVBoxLayout(self)
         outer.addWidget(container)
 
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(50)
-        shadow.setOffset(0, 12)
-        shadow.setColor(QColor(0, 0, 0, 180))
-        container.setGraphicsEffect(shadow)
-
+        apply_popup_shadow(container)
         self.apply_theme_styles()
         self.resize(760, 420)
 
@@ -2357,27 +2598,36 @@ class ThemePopup(QDialog):
         return tile
 
     def apply_theme_styles(self):
+        glass_theme = is_glass_theme()
+        profile = get_active_theme_style_profile()
+        tile_background = build_surface_fill("card", secondary_surface="panel") if glass_theme else THEME_CARD
+        tile_hover = build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT
+        tile_selected = build_surface_fill("panel", secondary_surface="card") if glass_theme else THEME_PANEL
+        exit_background = theme_rgba(THEME_CARD_ALT, profile.get("button_alpha", 0.7)) if glass_theme else THEME_CARD_ALT
+        exit_border = themed_border_color("control") if glass_theme else THEME_BORDER_SOFT
+        default_button_rule = (
+            f"border: 1px solid {themed_border_color('control')};"
+            if glass_theme
+            else "border: none;"
+        )
+
         self.setStyleSheet(f"""
-            #popupCard {{
-                background-color: {THEME_MAIN};
-                border-radius: 22px;
-                border: 1px solid {THEME_BORDER_SOFT};
-            }}
+            {build_popup_card_rule()}
             #title {{ color: {THEME_TEXT}; font-size: 22px; font-weight: 600; }}
             #subtitle {{ color: {THEME_MUTED}; font-size: 14px; }}
             QPushButton#themeTile {{
-                background-color: {THEME_CARD};
+                background: {tile_background};
                 border-radius: 18px;
-                border: 1px solid {THEME_BORDER_SOFT};
+                border: 1px solid {themed_border_color('soft')};
                 padding: 0px;
             }}
             QPushButton#themeTile:hover {{
-                border: 1px solid {THEME_ACCENT};
-                background-color: {THEME_CARD_ALT};
+                border: 1px solid {themed_border_color('highlight')};
+                background: {tile_hover};
             }}
             QPushButton#themeTile[selected="true"] {{
-                border: 1px solid {THEME_ACCENT};
-                background-color: {THEME_PANEL};
+                border: 1px solid {themed_border_color('accent')};
+                background: {tile_selected};
             }}
             #themeName {{
                 color: {THEME_TEXT};
@@ -2392,8 +2642,8 @@ class ThemePopup(QDialog):
                 text-transform: uppercase;
             }}
             QPushButton#exitTile {{
-                background-color: {THEME_CARD_ALT};
-                border: 1px solid {THEME_BORDER_SOFT};
+                background-color: {exit_background};
+                border: 1px solid {exit_border};
                 color: {THEME_TEXT};
                 font-size: 24px;
                 font-weight: 700;
@@ -2401,11 +2651,12 @@ class ThemePopup(QDialog):
                 padding: 0px;
             }}
             QPushButton#exitTile:hover {{
-                background-color: {THEME_RED};
+                background: {tile_hover};
+                border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT};
             }}
             QPushButton {{
-                background-color: {THEME_CARD_ALT};
-                border: none;
+                background-color: {theme_rgba(THEME_CARD_ALT, profile.get('button_alpha', 0.7)) if glass_theme else THEME_CARD_ALT};
+                {default_button_rule}
                 color: {THEME_TEXT};
                 font-size: 14px;
                 font-weight: 700;
@@ -2413,9 +2664,10 @@ class ThemePopup(QDialog):
                 padding: 10px 18px;
             }}
             QPushButton:hover {{
-                background-color: {THEME_ACCENT};
+                background-color: {theme_rgba(THEME_ACCENT, 0.78) if glass_theme else THEME_ACCENT};
             }}
         """)
+        apply_popup_shadow(self._container)
         self.refresh_selection_styles()
 
     def refresh_selection_styles(self):
@@ -2458,6 +2710,7 @@ class ToolsPopup(QDialog):
 
         container = QWidget()
         container.setObjectName("popupCard")
+        self._container = container
 
         main_layout = QVBoxLayout(container)
         main_layout.setContentsMargins(28, 28, 28, 24)
@@ -2525,28 +2778,28 @@ class ToolsPopup(QDialog):
         outer.setContentsMargins(16, 16, 16, 16)
         outer.addWidget(container)
 
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(50)
-        shadow.setOffset(0, 12)
-        shadow.setColor(QColor(0, 0, 0, 180))
-        container.setGraphicsEffect(shadow)
-
+        apply_popup_shadow(container)
         self.apply_theme_styles()
         self.resize(560, 360)
 
     def apply_theme_styles(self):
+        glass_theme = is_glass_theme()
+        profile = get_active_theme_style_profile()
+        button_background = theme_rgba(THEME_CARD_ALT, profile.get("button_alpha", 0.7)) if glass_theme else THEME_CARD_ALT
+        button_hover = theme_rgba(THEME_CARD_ALT, profile.get("button_hover_alpha", 0.88)) if glass_theme else THEME_BORDER
+        button_pressed = theme_rgba(THEME_PANEL, profile.get("button_pressed_alpha", 0.96)) if glass_theme else THEME_PANEL
+        button_disabled = theme_rgba(THEME_WINDOW, 0.5) if glass_theme else THEME_WINDOW
+        close_background = build_surface_fill("panel", secondary_surface="card") if glass_theme else THEME_PANEL
+        close_hover = build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT
+
         self.setStyleSheet(f"""
-            #popupCard {{
-                background-color: {THEME_MAIN};
-                border-radius: 22px;
-                border: 1px solid {THEME_BORDER_SOFT};
-            }}
+            {build_popup_card_rule()}
             #title {{ color: {THEME_TEXT}; font-size: 22px; font-weight: 600; }}
             #subtitle {{ color: {THEME_MUTED}; font-size: 14px; }}
             QFrame#toolsRow {{
-                background-color: {THEME_CARD};
+                background: {build_surface_fill("card", secondary_surface="panel") if glass_theme else THEME_CARD};
                 border-radius: 18px;
-                border: 1px solid {THEME_BORDER_SOFT};
+                border: 1px solid {themed_border_color('soft')};
             }}
             QLabel#sectionLabel {{
                 color: {THEME_MUTED};
@@ -2559,41 +2812,43 @@ class ToolsPopup(QDialog):
                 color: #607086;
             }}
             QPushButton {{
-                background-color: {THEME_CARD_ALT};
+                background-color: {button_background};
                 border-radius: 14px;
                 padding: 10px 18px;
                 color: {THEME_TEXT};
-                border: 1px solid {THEME_BORDER};
+                border: 1px solid {themed_border_color('control') if glass_theme else THEME_BORDER};
                 font-weight: 600;
                 letter-spacing: 0.6px;
             }}
             QPushButton:hover {{
-                background-color: {THEME_BORDER};
+                background-color: {button_hover};
+                border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_BORDER};
             }}
             QPushButton:pressed {{
-                background-color: {THEME_PANEL};
+                background-color: {button_pressed};
             }}
             QPushButton:disabled {{
-                background-color: {THEME_WINDOW};
+                background-color: {button_disabled};
                 color: #607086;
-                border: 1px solid {THEME_BORDER_SOFT};
+                border: 1px solid {themed_border_color('soft') if glass_theme else THEME_BORDER_SOFT};
             }}
             QPushButton#secondaryButton {{
-                background-color: {THEME_CARD_ALT};
+                background-color: {button_background};
             }}
             QPushButton#secondaryButton:hover {{
-                background-color: {THEME_BORDER};
+                background-color: {button_hover};
             }}
             QPushButton#popupCloseButton {{
-                background-color: {THEME_PANEL};
-                border: 1px solid {THEME_BORDER_SOFT};
+                background: {close_background};
+                border: 1px solid {themed_border_color('soft')};
                 padding: 0px;
             }}
             QPushButton#popupCloseButton:hover {{
-                background-color: {THEME_CARD_ALT};
-                border: 1px solid {THEME_ACCENT};
+                background: {close_hover};
+                border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT};
             }}
         """)
+        apply_popup_shadow(self._container)
 
         for button in (
             self.queue_snipe_button,
@@ -2705,18 +2960,10 @@ class WeaponPopup(QDialog):
         outer = QVBoxLayout(self)
         outer.addWidget(container)
 
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(50)
-        shadow.setOffset(0, 12)
-        shadow.setColor(QColor(0, 0, 0, 180))
-        container.setGraphicsEffect(shadow)
-
+        apply_popup_shadow(container)
+        glass_theme = is_glass_theme()
         self.setStyleSheet(f"""
-            #popupCard {{
-                background-color: {THEME_MAIN};
-                border-radius: 22px;
-                border: 1px solid {THEME_BORDER_SOFT};
-            }}
+            {build_popup_card_rule()}
             #title {{ color: {THEME_TEXT}; font-size: 22px; font-weight: 600; }}
             #subtitle {{ color: {THEME_MUTED}; font-size: 14px; }}
             #weaponLabel {{
@@ -2728,35 +2975,32 @@ class WeaponPopup(QDialog):
                 text-transform: uppercase;
             }}
             #skinTile {{
-                background-color: {THEME_CARD};
+                background: {build_surface_fill("card", secondary_surface="panel") if glass_theme else THEME_CARD};
                 border-radius: 18px;
-                border: 1px solid {THEME_BORDER_SOFT};
+                border: 1px solid {themed_border_color('soft')};
             }}
             #skinTile:hover {{
-                border: 1px solid {THEME_ACCENT};
-                background-color: {THEME_CARD_ALT};
+                border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT};
+                background: {build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT};
             }}
             #skinPreview {{
-                background-color: {THEME_WINDOW};
+                background: transparent;
                 border-radius: 12px;
-                border: 1px dashed {THEME_BORDER_SOFT};
+                border: none;
             }}
             #skinPreview[empty="true"] {{
                 color: {THEME_MUTED}; font-size: 11px; letter-spacing: 1px;
             }}
             #exitTile {{
-                background-color: {THEME_CARD_ALT};
+                background-color: {theme_rgba(THEME_CARD_ALT, 0.72) if glass_theme else THEME_CARD_ALT};
                 border-radius: 18px;
-                border: 1px solid {THEME_BORDER_SOFT};
+                border: 1px solid {themed_border_color('soft')};
             }}
             #exitTile:hover {{
-                background-color: {THEME_RED};
+                background: {build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT};
+                border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT};
             }}
-            QToolTip {{
-                background-color: {THEME_WINDOW}; color: {THEME_TEXT};
-                border: 1px solid {THEME_BORDER};
-                border-radius: 4px; padding: 4px 8px; font-size: 12px;
-            }}
+            {build_tooltip_rule()}
         """)
 
         self.resize(1200, 750)
@@ -2851,54 +3095,52 @@ class WeaponPopup(QDialog):
         return tile
 
 
-class ToggleSwitch(QCheckBox):
+class ToggleSwitch(SuperQtToggleSwitch):
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(parent=parent)
         self.setFixedSize(40, 22)
         self.setCursor(Qt.PointingHandCursor)
-        self._position = 3.0
-        self.animation = QPropertyAnimation(self, b"position")
-        self.animation.setEasingCurve(QEasingCurve.InOutQuad)
-        self.animation.setDuration(150)
-        self.stateChanged.connect(self.setup_animation)
+        self.setAnimationDuration(150)
+        self.switchWidth = 32
+        self.switchHeight = 18
+        self.handleSize = 16
+        self.apply_theme_colors()
 
-    @Property(float)
-    def position(self):
-        return self._position
+    def setEnabled(self, enabled):
+        super().setEnabled(enabled)
+        self.apply_theme_colors()
 
-    @position.setter
-    def position(self, pos):
-        self._position = pos
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in {QEvent.EnabledChange, QEvent.PaletteChange, QEvent.StyleChange}:
+            self.apply_theme_colors()
+
+    def apply_theme_colors(self):
+        glass_theme = is_glass_theme()
+
+        if glass_theme:
+            if not self.isEnabled():
+                on_color = make_qcolor(THEME_ACCENT, 0.44)
+                off_color = make_qcolor(THEME_CARD_ALT, 0.34)
+                handle_color = make_qcolor("#ffffff", 0.45)
+            else:
+                on_color = make_qcolor(THEME_ACCENT, 0.72)
+                off_color = make_qcolor(THEME_PANEL, 0.62)
+                handle_color = make_qcolor("#ffffff", 0.96)
+        else:
+            if not self.isEnabled():
+                on_color = make_qcolor(THEME_BORDER)
+                off_color = make_qcolor(THEME_BORDER_SOFT)
+                handle_color = make_qcolor("#607086")
+            else:
+                on_color = make_qcolor(THEME_ACCENT)
+                off_color = make_qcolor(THEME_CARD_ALT)
+                handle_color = make_qcolor(THEME_TEXT)
+
+        self.onColor = on_color
+        self.offColor = off_color
+        self.handleColor = handle_color
         self.update()
-
-    def setup_animation(self, value):
-        self.animation.stop()
-        if value:
-            self.animation.setEndValue(21.0)
-        else:
-            self.animation.setEndValue(3.0)
-        self.animation.start()
-
-    def hitButton(self, pos):
-        return self.contentsRect().contains(pos)
-
-    def paintEvent(self, event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        p.setPen(Qt.NoPen)
-
-        if not self.isEnabled():
-            p.setBrush(QColor(THEME_BORDER_SOFT))
-        elif self.isChecked():
-            p.setBrush(QColor(THEME_ACCENT))
-        else:
-            p.setBrush(QColor(THEME_CARD_ALT))
-
-        p.drawRoundedRect(0, 0, self.width(), self.height(), 11, 11)
-
-        p.setBrush(QColor("#607086") if not self.isEnabled() else QColor(THEME_TEXT))
-        p.drawEllipse(int(self._position), 3, 16, 16)
-        p.end()
 
 
 class ValorantStatsWindow(QMainWindow):
@@ -3018,11 +3260,17 @@ class ValorantStatsWindow(QMainWindow):
         self.edit_loadouts_button.setObjectName("editloadoutsButton")
 
         self.refresh_button = QPushButton()
-        self.refresh_button.setIcon(QIcon(resource_path("assets/refresh.png")))
+        self.refresh_button.setIcon(
+            create_qtawesome_icon(
+                REFRESH_ICON_NAME,
+                color=THEME_TEXT,
+                disabled_color="#607086",
+            )
+        )
         self.refresh_button.setCursor(Qt.PointingHandCursor)
         self.refresh_button.setObjectName("refreshButton")
         self.refresh_button.clicked.connect(self.run_valo_stats)
-        self.offline_icon = QPixmap(resource_path("assets/offline.png"))
+        self.offline_icon = create_qtawesome_icon(OFFLINE_ICON_NAME, color=THEME_TEXT)
         self.presence_mode_indicator = QLabel()
         self.presence_mode_indicator.setObjectName("headerStatusIcon")
         self.presence_mode_indicator.setAlignment(Qt.AlignCenter)
@@ -3108,20 +3356,37 @@ class ValorantStatsWindow(QMainWindow):
         left_panel, self.left_scroll_area, self.left_layout = self.build_team_panel("red")
         right_panel, self.right_scroll_area, self.right_layout = self.build_team_panel("blue")
 
-        main_splitter = QSplitter(Qt.Horizontal)
-        main_splitter.addWidget(left_panel)
-        main_splitter.addWidget(right_panel)
-        main_splitter.setChildrenCollapsible(False)
-        main_splitter.setHandleWidth(4)
-        main_splitter.setSizes([750, 750])
+        team_columns = QWidget()
+        team_columns.setObjectName("teamColumns")
+        team_columns_layout = QHBoxLayout(team_columns)
+        team_columns_layout.setContentsMargins(0, 0, 0, 0)
+        team_columns_layout.setSpacing(0)
+
+        divider_container = QWidget()
+        divider_container.setObjectName("teamDividerContainer")
+        divider_container.setFixedWidth(18)
+        divider_layout = QVBoxLayout(divider_container)
+        divider_layout.setContentsMargins(7, 48, 8, 48)
+        divider_layout.setSpacing(0)
+
+        divider = QFrame()
+        divider.setObjectName("teamDivider")
+        divider.setFixedWidth(3)
+
+        divider_layout.addWidget(divider, 1)
+
+        team_columns_layout.addWidget(left_panel, 1)
+        team_columns_layout.addWidget(divider_container)
+        team_columns_layout.addWidget(right_panel, 1)
 
         layout = QVBoxLayout()
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(10)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         layout.addWidget(header_frame)
-        layout.addWidget(main_splitter, 1)
+        layout.addWidget(team_columns, 1)
 
         container = QWidget()
+        container.setObjectName("appShell")
         container.setLayout(layout)
         self.setCentralWidget(container)
 
@@ -3138,6 +3403,7 @@ class ValorantStatsWindow(QMainWindow):
         self.party_tracker.subscribe(self.on_party_data_updated)
         self.queue_snipe_service = QueueSnipeService(self.party_tracker)
         self._queue_snipe_presence_callback = self.queue_snipe_service.handle_presence_update
+
         self.party_tracker.subscribe(self._queue_snipe_presence_callback)
         self.party_detection_enabled = True
         self.party_group_colours = [
@@ -3196,6 +3462,62 @@ class ValorantStatsWindow(QMainWindow):
         self.apply_restored_queue_snipe_state(initial_queue_snipe_enabled, initial_queue_snipe_friend)
         self.apply_restored_presence_mode(initial_presence_mode)
         self._suspend_agent_lock_state_save = False
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if not get_active_theme_style_profile().get("decorative_background"):
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+
+        light_specs = (
+            (
+                self.width() * 0.16,
+                self.height() * 0.1,
+                max(self.width() * 0.38, 320),
+                (
+                    (0.0, make_qcolor(THEME_ACCENT, 0.24)),
+                    (0.36, make_qcolor(THEME_CYAN, 0.11)),
+                    (1.0, make_qcolor(THEME_WINDOW, 0.0)),
+                ),
+            ),
+            (
+                self.width() * 0.88,
+                self.height() * 0.2,
+                max(self.width() * 0.28, 240),
+                (
+                    (0.0, make_qcolor(THEME_GOLD, 0.12)),
+                    (0.42, make_qcolor(THEME_ACCENT, 0.09)),
+                    (1.0, make_qcolor(THEME_WINDOW, 0.0)),
+                ),
+            ),
+            (
+                self.width() * 0.5,
+                self.height() * 0.92,
+                max(self.width() * 0.52, 420),
+                (
+                    (0.0, make_qcolor(THEME_PANEL, 0.18)),
+                    (0.38, make_qcolor(THEME_ACCENT, 0.08)),
+                    (1.0, make_qcolor(THEME_WINDOW, 0.0)),
+                ),
+            ),
+        )
+
+        for center_x, center_y, radius, stops in light_specs:
+            gradient = QRadialGradient(center_x, center_y, radius)
+            for stop, color in stops:
+                gradient.setColorAt(stop, color)
+            painter.setBrush(gradient)
+            painter.drawEllipse(
+                int(center_x - radius),
+                int(center_y - radius),
+                int(radius * 2),
+                int(radius * 2),
+            )
+
+        painter.end()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -3684,13 +4006,41 @@ class ValorantStatsWindow(QMainWindow):
             return
 
         if hasattr(self, "offline_icon") and not self.offline_icon.isNull():
-            scaled_icon = self.offline_icon.scaled(18, 18, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            scaled_icon = self.offline_icon.pixmap(QSize(18, 18))
             self.presence_mode_indicator.setPixmap(scaled_icon)
             self.presence_mode_indicator.setText("")
             return
 
         self.presence_mode_indicator.setPixmap(QPixmap())
         self.presence_mode_indicator.setText("OFF")
+
+    def apply_toggle_switch_theme(self):
+        for toggle_name in (
+            "auto_lock_switch",
+            "map_lock_switch",
+            "queue_snipe_switch",
+            "presence_mode_switch",
+        ):
+            toggle = getattr(self, toggle_name, None)
+            if toggle is not None:
+                toggle.apply_theme_colors()
+
+    def apply_theme_icons(self):
+        if hasattr(self, "refresh_button") and self.refresh_button is not None:
+            self.refresh_button.setIcon(
+                create_qtawesome_icon(
+                    REFRESH_ICON_NAME,
+                    color=THEME_TEXT,
+                    disabled_color="#607086",
+                )
+            )
+
+        self.offline_icon = create_qtawesome_icon(OFFLINE_ICON_NAME, color=THEME_TEXT)
+        self.update_presence_mode_indicator()
+
+    def apply_theme_dependent_widgets(self):
+        self.apply_toggle_switch_theme()
+        self.apply_theme_icons()
 
     def set_standard_agent_selection(self, agent_name):
         self.last_standard_agent_text = agent_name
@@ -3908,12 +4258,7 @@ class ValorantStatsWindow(QMainWindow):
         if loading_window is not None:
             loading_window.apply_theme_styles()
 
-        if hasattr(self, "auto_lock_switch"):
-            self.auto_lock_switch.update()
-        if hasattr(self, "map_lock_switch"):
-            self.map_lock_switch.update()
-        if hasattr(self, "queue_snipe_switch"):
-            self.queue_snipe_switch.update()
+        self.apply_theme_dependent_widgets()
 
         if persist:
             self.persist_agent_lock_state()
@@ -4342,6 +4687,22 @@ class ValorantStatsWindow(QMainWindow):
         layout.addWidget(value_label, alignment=Qt.AlignCenter)
         return wrapper, value_label
 
+    def build_rating_change_style(self, background_color, text_color, diameter):
+        border_color = themed_border_color("soft") if is_glass_theme() else background_color
+        background = (
+            theme_rgba(background_color, 0.76)
+            if is_glass_theme()
+            else background_color
+        )
+        return (
+            f"background-color: {background};"
+            f"color: {text_color};"
+            f"border-radius: {diameter // 2}px;"
+            f"border: 1px solid {border_color};"
+            "font-weight: 700;"
+            "font-size: 11px;"
+        )
+
     def create_skin_button(self, player):
         skins = player.get("skins") or {}
         button = QPushButton()
@@ -4349,6 +4710,11 @@ class ValorantStatsWindow(QMainWindow):
         button.setObjectName("compactSkinButton")
 
         button.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        preview_width = 140
+        preview_height = 36
+        preview_slot_width = 65
+        preview_gap = 10
+        button.setFixedSize(160, 44)
 
         if skins:
             player_name = str(player.get("name", "Unknown"))
@@ -4365,35 +4731,41 @@ class ValorantStatsWindow(QMainWindow):
             v_pixmap = self.get_skin_pixmap(vandal_id, allow_load=False) if vandal_id else None
             p_pixmap = self.get_skin_pixmap(phantom_id, allow_load=False) if phantom_id else None
 
-            canvas = QPixmap(140, 28)
+            canvas = QPixmap(preview_width, preview_height)
             canvas.fill(Qt.transparent)
             painter = QPainter(canvas)
             painter.setRenderHint(QPainter.Antialiasing)
             painter.setRenderHint(QPainter.SmoothPixmapTransform)
 
             if v_pixmap:
-                scaled_v = v_pixmap.scaled(65, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                x_v = (65 - scaled_v.width()) // 2
-                y_v = (28 - scaled_v.height()) // 2
+                scaled_v = v_pixmap.scaled(preview_slot_width, 30, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                x_v = (preview_slot_width - scaled_v.width()) // 2
+                y_v = (preview_height - scaled_v.height()) // 2
                 painter.drawPixmap(x_v, y_v, scaled_v)
             else:
                 painter.setPen(QColor(THEME_MUTED))
-                painter.drawText(0, 0, 65, 28, Qt.AlignCenter, "-")
+                painter.drawText(0, 0, preview_slot_width, preview_height, Qt.AlignCenter, "-")
 
             if p_pixmap:
-                scaled_p = p_pixmap.scaled(65, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                x_p = 75 + (65 - scaled_p.width()) // 2
-                y_p = (28 - scaled_p.height()) // 2
+                scaled_p = p_pixmap.scaled(preview_slot_width, 30, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                x_p = preview_slot_width + preview_gap + (preview_slot_width - scaled_p.width()) // 2
+                y_p = (preview_height - scaled_p.height()) // 2
                 painter.drawPixmap(x_p, y_p, scaled_p)
             else:
                 painter.setPen(QColor(THEME_MUTED))
-                painter.drawText(75, 0, 65, 28, Qt.AlignCenter, "-")
+                painter.drawText(
+                    preview_slot_width + preview_gap,
+                    0,
+                    preview_slot_width,
+                    preview_height,
+                    Qt.AlignCenter,
+                    "-",
+                )
 
             painter.end()
 
             button.setIcon(QIcon(canvas))
-            button.setIconSize(QSize(140, 28))
-            button.setFixedWidth(160)
+            button.setIconSize(QSize(preview_width, preview_height))
         else:
             button.setText("Loadout unavailable")
             button.setEnabled(False)
@@ -4553,31 +4925,40 @@ class ValorantStatsWindow(QMainWindow):
 
         info_column = QVBoxLayout()
         info_column.setContentsMargins(0, 0, 0, 0)
-        info_column.setSpacing(6)
+        info_column.setSpacing(0)
 
         name_row = QHBoxLayout()
-        name_row.setSpacing(12)
+        name_row.setContentsMargins(0, 0, 0, 0)
+        name_row.setSpacing(8)
 
         player_name = str(player.get("name", "Unknown"))
 
         name_label = QLabel()
         name_label.setObjectName("playerName")
+        name_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        name_label.setContentsMargins(0, 0, 0, 0)
+        name_label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        name_label.setFixedHeight(28)
         name_label.setTextFormat(Qt.RichText)
         name_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         name_label.setOpenExternalLinks(True)
         name_label.setText(
             f"<a href='{self.build_tracker_url(player_name)}' style='text-decoration: none;'>{escape(player_name)}</a>"
         )
-        name_row.addWidget(name_label)
+        name_row.addWidget(name_label, 0, Qt.AlignVCenter)
 
         vtl_label = QLabel()
+        vtl_label.setAlignment(Qt.AlignCenter)
+        vtl_label.setContentsMargins(0, 0, 0, 0)
+        vtl_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        vtl_label.setFixedHeight(18)
         vtl_label.setTextFormat(Qt.RichText)
         vtl_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         vtl_label.setOpenExternalLinks(True)
         vtl_url = f"https://vtl.lol/id/{player.get('puuid')}"
         vtl_label.setText(f"<a href='{vtl_url}' style='text-decoration: none; font-size: 13px;'>🔗</a>")
         vtl_label.setToolTip("View on VTL.lol")
-        name_row.addWidget(vtl_label)
+        name_row.addWidget(vtl_label, 0, Qt.AlignVCenter)
 
         name_row.addStretch()
 
@@ -4668,10 +5049,10 @@ class ValorantStatsWindow(QMainWindow):
                 bg_color = "#7f7f7f"
                 text_color = THEME_TEXT
 
-            circle_label.setStyleSheet(
-                f"background-color: {bg_color}; color: {text_color}; border-radius: 16px; font-weight: 700; font-size: 11px;")
+            circle_label.setStyleSheet(self.build_rating_change_style(bg_color, text_color, 32))
 
         info_column.addLayout(meta_bar)
+        info_column.addSpacing(6)
 
         stats_row = QHBoxLayout()
         stats_row.setSpacing(5)
@@ -4741,9 +5122,7 @@ class ValorantStatsWindow(QMainWindow):
                 bg_color = "#7f7f7f"
                 text_color = THEME_TEXT
 
-            circle_label.setStyleSheet(
-                f"background-color: {bg_color}; color: {text_color}; border-radius: 16px; font-weight: 700; font-size: 11px;"
-            )
+            circle_label.setStyleSheet(self.build_rating_change_style(bg_color, text_color, 34))
             rating_changes_row.addWidget(circle_label)
 
         left_rank_col.addLayout(rating_changes_row)
@@ -4892,18 +5271,20 @@ class ValorantStatsWindow(QMainWindow):
     def apply_theme(self):
         base_style = (
             f"QMainWindow {{"
-            f" background-color: {THEME_WINDOW};"
+            f" background: {build_surface_fill('main', secondary_surface='panel', tertiary_color=THEME_WINDOW)};"
             f"}}"
             f"QWidget {{"
             f" color: {THEME_TEXT};"
             f" font-size: 13px;"
             f"}}"
+            f"QWidget#appShell {{"
+            f" background: {build_surface_fill('main', secondary_surface='panel', tertiary_color=THEME_WINDOW)};"
+            f"}}"
             f"QFrame#headerFrame {{"
-            f" background: qlineargradient(x1:0, y1:0, x2:1, y2:1,"
-            f"  stop:0 {THEME_MAIN}, stop:1 {THEME_PANEL});"
-            f" border-radius: 22px;"
-            f" border: 1px solid {THEME_BORDER};"
-            f" padding: 3px;"
+            f" background: transparent;"
+            f" border-radius: 0px;"
+            f" border: none;"
+            f" padding: 0px;"
             f"}}"
             f"QProgressBar#loadingBar {{"
             f" border: none; background: {THEME_CARD};"
@@ -4933,9 +5314,9 @@ class ValorantStatsWindow(QMainWindow):
             f" min-width: 160px;"
             f"}}"
             f"QFrame#compactPanel {{"
-            f" background-color: {THEME_MAIN};"
-            f" border-radius: 22px;"
-            f" border: 1px solid {THEME_BORDER_SOFT};"
+            f" background: transparent;"
+            f" border-radius: 0px;"
+            f" border: none;"
             f"}}"
             f"QFrame#compactRow {{"
             f" background-color: {THEME_CARD};"
@@ -4980,7 +5361,7 @@ class ValorantStatsWindow(QMainWindow):
             f" font-size: 12px;"
             f"}}"
             f"QLabel#playerName {{"
-            f" font-size: 18px;"
+            f" font-size: 20px;"
             f" font-weight: 700;"
             f" color: {THEME_TEXT};"
             f"}}"
@@ -5162,9 +5543,165 @@ class ValorantStatsWindow(QMainWindow):
             f" background: none;"
             f" width: 0px;"
             f"}}"
+            f"QWidget#teamColumns {{"
+            f" background: transparent;"
+            f"}}"
+            f"QWidget#teamDividerContainer {{"
+            f" background: transparent;"
+            f"}}"
+            f"QFrame#teamDivider {{"
+            f" background-color: {THEME_BORDER_SOFT};"
+            f" border-radius: 1px;"
+            f"}}"
         )
 
+        if is_glass_theme():
+            profile = get_active_theme_style_profile()
+            glass_style = (
+                f"QMainWindow {{"
+                f" background: {build_surface_fill('main', secondary_surface='panel', tertiary_color=THEME_WINDOW, alpha=0.98)};"
+                f"}}"
+                f"QWidget {{"
+                    f" background: transparent;"
+                f"}}"
+                f"QWidget#appShell {{"
+                f" background: {build_surface_fill('main', secondary_surface='panel', tertiary_color=THEME_WINDOW, alpha=0.98)};"
+                f"}}"
+                f"QFrame#headerFrame {{"
+                f" background: transparent;"
+                f" border-radius: 0px;"
+                f" border: none;"
+                f" padding: 0px;"
+                f"}}"
+                f"QFrame#agentBlock {{"
+                f" background: {build_surface_fill('panel', secondary_surface='card')};"
+                f" border: 1px solid {themed_border_color('soft')};"
+                f"}}"
+                f"QFrame#metaChip {{"
+                f" background: {build_surface_fill('card', secondary_surface='panel')};"
+                f" border: 1px solid {themed_border_color('soft')};"
+                f"}}"
+                f"QFrame#compactPanel {{"
+                f" background: transparent;"
+                f" border: none;"
+                f"}}"
+                f"QFrame#compactRow {{"
+                f" background: {build_surface_fill('card', secondary_surface='panel')};"
+                f" border: 1px solid {themed_border_color('soft')};"
+                f"}}"
+                f"QFrame#compactRow:hover {{"
+                f" background: {build_surface_fill('card_alt', secondary_surface='card')};"
+                f" border: 1px solid {themed_border_color('highlight')};"
+                f"}}"
+                f"QFrame#compactRowUser {{"
+                f" background: {build_surface_fill('card_alt', secondary_surface='panel', alpha=0.86)};"
+                f" border: 1px solid {themed_border_color('accent')};"
+                f"}}"
+                f"QFrame#compactRowUser:hover {{"
+                f" background: {build_surface_fill('panel', secondary_surface='card')};"
+                f" border: 1px solid {themed_border_color('highlight')};"
+                f"}}"
+                f"QFrame#compactStat {{"
+                f" background: {build_surface_fill('panel', secondary_surface='card')};"
+                f" border: 1px solid {theme_rgba('#ffffff', 0.1)};"
+                f"}}"
+                f"QLabel#agentBadge {{"
+                f" background-color: {theme_rgba(THEME_ACCENT, 0.16)};"
+                f" color: {THEME_CYAN};"
+                f" border: 1px solid {theme_rgba('#ffffff', 0.12)};"
+                f"}}"
+                f"QLabel#playerLevelBadge {{"
+                f" background-color: {theme_rgba(THEME_CYAN, 0.9)};"
+                f" border: 1px solid {theme_rgba('#ffffff', 0.14)};"
+                f"}}"
+                f"QPushButton {{"
+                f" background-color: {theme_rgba(THEME_CARD_ALT, profile.get('button_alpha', 0.7))};"
+                f" border: 1px solid {themed_border_color('control')};"
+                f"}}"
+                f"QPushButton:hover {{"
+                f" background-color: {theme_rgba(THEME_CARD_ALT, profile.get('button_hover_alpha', 0.88))};"
+                f" border: 1px solid {themed_border_color('highlight')};"
+                f"}}"
+                f"QPushButton:pressed {{"
+                f" background-color: {theme_rgba(THEME_PANEL, profile.get('button_pressed_alpha', 0.96))};"
+                f"}}"
+                f"QPushButton:disabled {{"
+                f" background-color: {theme_rgba(THEME_WINDOW, 0.48)};"
+                f" border: 1px solid {theme_rgba('#ffffff', 0.08)};"
+                f"}}"
+                f"QPushButton#accentButton {{"
+                f" background-color: {theme_rgba(THEME_ACCENT, 0.84)};"
+                f" color: #071320;"
+                f" border: 1px solid {theme_rgba('#ffffff', 0.18)};"
+                f"}}"
+                f"QPushButton#accentButton:hover {{"
+                f" background-color: {theme_rgba(THEME_ACCENT_HOVER, 0.92)};"
+                f"}}"
+                f"QPushButton#accentButton:pressed {{"
+                f" background-color: {theme_rgba(THEME_ACCENT_PRESSED, 0.96)};"
+                f"}}"
+                f"QPushButton#secondaryButton {{"
+                f" background-color: {theme_rgba(THEME_CARD, 0.72)};"
+                f"}}"
+                f"QPushButton#dodgeButton {{"
+                f" background-color: {theme_rgba(THEME_RED, 0.82)};"
+                f" border: 1px solid {theme_rgba('#ffffff', 0.14)};"
+                f"}}"
+                f"QPushButton#dodgeButton:hover {{"
+                f" background-color: {theme_rgba(THEME_RED_HOVER, 0.9)};"
+                f"}}"
+                f"QPushButton#dodgeButton:pressed {{"
+                f" background-color: {theme_rgba(THEME_RED_PRESSED, 0.94)};"
+                f"}}"
+                f"QPushButton#refreshButton {{"
+                f" background: {build_surface_fill('card', secondary_surface='panel')};"
+                f" border: 1px solid {theme_rgba('#ffffff', 0.14)};"
+                f"}}"
+                f"QPushButton#refreshButton:hover {{"
+                f" background: {build_surface_fill('card_alt', secondary_surface='card')};"
+                f"}}"
+                f"QLabel#headerStatusIcon {{"
+                f" background: {build_surface_fill('card', secondary_surface='panel')};"
+                f" border: 1px solid {theme_rgba('#ffffff', 0.14)};"
+                f" color: {THEME_TEXT};"
+                f"}}"
+                f"QPushButton#compactSkinButton {{"
+                f" background: {build_surface_fill('panel', secondary_surface='card')};"
+                f" border: 1px solid {theme_rgba('#ffffff', 0.1)};"
+                f"}}"
+                f"QPushButton#compactSkinButton:hover {{"
+                f" background: {build_surface_fill('card_alt', secondary_surface='card')};"
+                f"}}"
+                f"QPushButton#agentSelectButton {{"
+                f" background: {build_surface_fill('card_alt', secondary_surface='card')};"
+                f" border: 1px solid {theme_rgba('#ffffff', 0.16)};"
+                f"}}"
+                f"QPushButton#agentSelectButton:hover {{"
+                f" background: {build_surface_fill('card', secondary_surface='panel')};"
+                f" border: 1px solid {themed_border_color('highlight')};"
+                f"}}"
+                f"QComboBox {{"
+                f" background: {build_surface_fill('card_alt', secondary_surface='card')};"
+                f" border: 1px solid {theme_rgba('#ffffff', 0.16)};"
+                f"}}"
+                f"QComboBox QAbstractItemView {{"
+                f" background: {build_surface_fill('panel', secondary_surface='card', alpha=0.94)};"
+                f" color: {THEME_TEXT};"
+                f" border: 1px solid {themed_border_color('soft')};"
+                f" selection-background-color: {theme_rgba(THEME_ACCENT, 0.28)};"
+                f"}}"
+                f"{build_scrollbar_rules('vertical', margin='18px 6px 18px 6px')}"
+                f"{build_scrollbar_rules('horizontal', margin='6px 18px 6px 18px')}"
+                f"QFrame#teamDivider {{"
+                f" background: {theme_rgba('#ffffff', 0.16)};"
+                f" border-radius: 1px;"
+                f"}}"
+            )
+            base_style += glass_style
+
         self.setStyleSheet(base_style)
+        self.apply_theme_dependent_widgets()
+        self.update()
 
     def instalock_agent(self):
         if self.lock_agent_button.isEnabled():
@@ -5394,31 +5931,24 @@ class UpdatePopup(QDialog):
         outer.setContentsMargins(40, 40, 40, 40)
         outer.addWidget(container)
 
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(50)
-        shadow.setOffset(0, 12)
-        shadow.setColor(QColor(0, 0, 0, 180))
-        container.setGraphicsEffect(shadow)
-
+        apply_popup_shadow(container)
+        glass_theme = is_glass_theme()
         self.setStyleSheet(f"""
-            #popupCard {{
-                background-color: {THEME_MAIN};
-                border-radius: 22px;
-                border: 1px solid {THEME_BORDER_SOFT};
-            }}
+            {build_popup_card_rule()}
             #title {{ color: {THEME_TEXT}; font-size: 22px; font-weight: 600; }}
             #subtitle {{ color: {THEME_MUTED}; font-size: 14px; }}
             QPushButton {{
-                background-color: {THEME_CARD_ALT};
-                border: none; color: {THEME_TEXT}; font-size: 14px;
+                background-color: {theme_rgba(THEME_CARD_ALT, 0.72) if glass_theme else THEME_CARD_ALT};
+                border: {'1px solid ' + themed_border_color('control') if glass_theme else 'none'}; color: {THEME_TEXT}; font-size: 14px;
                 font-weight: 700; border-radius: 12px;
             }}
-            QPushButton:hover {{ background-color: {THEME_BORDER}; }}
+            QPushButton:hover {{ background-color: {theme_rgba(THEME_CARD_ALT, 0.86) if glass_theme else THEME_BORDER}; }}
             QPushButton#accentButton {{
-                background-color: {THEME_ACCENT};
+                background-color: {theme_rgba(THEME_ACCENT, 0.84) if glass_theme else THEME_ACCENT};
+                color: {'#071320' if glass_theme else THEME_TEXT};
             }}
             QPushButton#accentButton:hover {{
-                background-color: {THEME_ACCENT_HOVER};
+                background-color: {theme_rgba(THEME_ACCENT_HOVER, 0.92) if glass_theme else THEME_ACCENT_HOVER};
             }}
         """)
 

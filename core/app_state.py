@@ -18,6 +18,7 @@ VALID_THEME_NAMES = {
     "glacier",
     "rosewood",
     "horizon",
+    "liquidglass",
 }
 
 
