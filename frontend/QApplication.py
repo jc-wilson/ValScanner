@@ -139,6 +139,9 @@ THEME_COLOR_KEYS = (
     "red_pressed",
     "gold",
     "cyan",
+    "flagged_row",
+    "flagged_row_hover",
+    "flagged_border",
 )
 
 
@@ -166,6 +169,9 @@ THEME_DEFINITIONS = {
         "red_pressed": "#B73A4C",
         "gold": "#f0b35a",
         "cyan": "#7ae6ff",
+        "flagged_row": "#5a123f",
+        "flagged_row_hover": "#7a1b58",
+        "flagged_border": "#ff5db1",
     },
     "sandstorm": {
         "label": "Depth",
@@ -190,6 +196,9 @@ THEME_DEFINITIONS = {
         "red_pressed": "#B73A4C",
         "gold": "#D8BE7A",
         "cyan": "#A7D9EE",
+        "flagged_row": "#5b1027",
+        "flagged_row_hover": "#7a1935",
+        "flagged_border": "#ffd166",
     },
     "amethyst": {
         "label": "Nebula",
@@ -214,6 +223,9 @@ THEME_DEFINITIONS = {
         "red_pressed": "#B73A4C",
         "gold": "#efc16f",
         "cyan": "#7fd7ff",
+        "flagged_row": "#0d5c4f",
+        "flagged_row_hover": "#117667",
+        "flagged_border": "#7affd4",
     },
     "emberglass": {
         "label": "Storm",
@@ -238,6 +250,9 @@ THEME_DEFINITIONS = {
         "red_pressed": "#B73A4C",
         "gold": "#CDB178",
         "cyan": "#A5CEDA",
+        "flagged_row": "#213b8f",
+        "flagged_row_hover": "#2b4caf",
+        "flagged_border": "#ffd36b",
     },
     "bailey": {
         "label": "Bailey",
@@ -262,6 +277,9 @@ THEME_DEFINITIONS = {
         "red_pressed": "#B73A4C",
         "gold": "#d6ae5d",
         "cyan": "#86c8be",
+        "flagged_row": "#5a1549",
+        "flagged_row_hover": "#762062",
+        "flagged_border": "#ff85d1",
     },
     "glacier": {
         "label": "Bloom",
@@ -286,6 +304,9 @@ THEME_DEFINITIONS = {
         "red_pressed": "#B73A4C",
         "gold": "#E2B37A",
         "cyan": "#A9D4DC",
+        "flagged_row": "#0f5a4d",
+        "flagged_row_hover": "#157262",
+        "flagged_border": "#f7ff7a",
     },
     "rosewood": {
         "label": "Citrus",
@@ -310,6 +331,9 @@ THEME_DEFINITIONS = {
         "red_pressed": "#B73A4C",
         "gold": "#DFA33E",
         "cyan": "#6EB5C7",
+        "flagged_row": "#7ce7ff",
+        "flagged_row_hover": "#a0f0ff",
+        "flagged_border": "#0e5870",
     },
     "horizon": {
         "label": "Forest",
@@ -334,6 +358,9 @@ THEME_DEFINITIONS = {
         "red_pressed": "#B73A4C",
         "gold": "#B19B67",
         "cyan": "#769FAC",
+        "flagged_row": "#ffd166",
+        "flagged_row_hover": "#ffe08f",
+        "flagged_border": "#785300",
     },
     "liquidglass": {
         "label": "Liquid",
@@ -358,6 +385,9 @@ THEME_DEFINITIONS = {
         "red_pressed": "#B73A4C",
         "gold": "#f6d28c",
         "cyan": "#b9f4ff",
+        "flagged_row": "#6a1238",
+        "flagged_row_hover": "#86184a",
+        "flagged_border": "#ffd56b",
     },
 }
 
@@ -429,6 +459,9 @@ THEME_RED_HOVER = ""
 THEME_RED_PRESSED = ""
 THEME_GOLD = ""
 THEME_CYAN = ""
+THEME_FLAGGED_ROW = ""
+THEME_FLAGGED_ROW_HOVER = ""
+THEME_FLAGGED_BORDER = ""
 ACTIVE_THEME_STYLE_PROFILE = dict(DEFAULT_THEME_STYLE_PROFILE)
 INITIAL_ASSET_GROUPS = ("agents", "ranks", "maps")
 SPECIAL_BUDDY_UUID = "a57aa3d0-4ad0-b06a-6c54-338cb3ea6b41"
@@ -3223,7 +3256,7 @@ class ValorantStatsWindow(QMainWindow):
         self.agent_select_btn = QPushButton(initial_agent)
         self.agent_select_btn.setObjectName("agentSelectButton")
         self.agent_select_btn.setCursor(Qt.PointingHandCursor)
-        self.agent_select_btn.setMinimumWidth(110)
+        self.agent_select_btn.setMinimumWidth(120)
         self.agent_select_btn.clicked.connect(self.open_agent_popup)
         self.agent = self.uuid_handler.agent_converter_reversed(initial_agent)
 
@@ -3343,6 +3376,7 @@ class ValorantStatsWindow(QMainWindow):
         self._player_cosmetic_prefetch_generation = 0
         self._player_cosmetic_prefetch_task = None
         self.map_agent_selection = dict(persisted_state.get("map_agent_selection", {}))
+        self.flagged_players = dict(persisted_state.get("flagged_players", {}))
         self.last_standard_agent_text = initial_agent
         self.last_standard_agent_value = self.resolve_standard_agent_value(initial_agent)
 
@@ -3444,6 +3478,7 @@ class ValorantStatsWindow(QMainWindow):
         ]
         self.party_icon = QPixmap(resource_path("assets/group.png"))
         self.valscanner_logo = QPixmap(resource_path("assets/logoone.png"))
+        self.flag_icon = QPixmap(resource_path("assets/flag-solid.png"))
         self.update_presence_mode_indicator()
         self._party_refresh_scheduled = False
         self.startup_task = None
@@ -3963,6 +3998,10 @@ class ValorantStatsWindow(QMainWindow):
             "map_lock_enabled": self.map_lock_switch.isChecked(),
             "queue_snipe_enabled": self.queue_snipe_switch.isChecked() and self.queue_snipe_selected_friend is not None,
             "queue_snipe_selected_friend": dict(self.queue_snipe_selected_friend) if self.queue_snipe_selected_friend else None,
+            "flagged_players": {
+                str(puuid): dict(details) if isinstance(details, dict) else details
+                for puuid, details in self.flagged_players.items()
+            },
             "map_agent_selection": dict(self.map_agent_selection or {}),
         }
 
@@ -3977,6 +4016,7 @@ class ValorantStatsWindow(QMainWindow):
         self.current_theme_name = normalize_theme_name(normalized_state.get("selected_theme"))
         self.presence_mode = normalize_presence_mode(normalized_state.get("presence_mode"))
         self.map_agent_selection = dict(normalized_state.get("map_agent_selection", {}))
+        self.flagged_players = dict(normalized_state.get("flagged_players", {}))
         self.queue_snipe_selected_friend = QueueSnipeService.normalize_friend(
             normalized_state.get("queue_snipe_selected_friend")
         )
@@ -4870,6 +4910,20 @@ class ValorantStatsWindow(QMainWindow):
     def player_has_vomit_emoji(self, player):
         return self.player_matches_puuid_set(player, VOMIT_EMOJI_PUUIDS)
 
+    def player_is_flagged(self, player):
+        player_puuid = str(player.get("puuid", "") or "").strip()
+        return bool(player_puuid) and player_puuid in self.flagged_players
+
+    def get_flag_tooltip_for_player(self, player):
+        player_puuid = str(player.get("puuid", "") or "").strip()
+        flagged_entry = self.flagged_players.get(player_puuid)
+        if isinstance(flagged_entry, dict):
+            reason_text = str(flagged_entry.get("reason", "") or "").strip()
+            if reason_text:
+                return reason_text
+            return "Flagged player"
+        return "Toggle flagged player"
+
     def create_valscanner_logo_indicator(self, target_height=18):
         if self.valscanner_logo.isNull():
             return None
@@ -4887,6 +4941,49 @@ class ValorantStatsWindow(QMainWindow):
         indicator.setFixedSize(scaled_logo.size())
         indicator.setToolTip("ValScanner")
         return indicator
+
+    def create_flag_indicator(self, target_height=18, tooltip_text="Toggle flagged player"):
+        if self.flag_icon.isNull():
+            return None
+
+        scaled_flag = self.flag_icon.scaled(
+            target_height,
+            target_height,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
+        indicator = QLabel()
+        indicator.setObjectName("flagIndicator")
+        indicator.setAlignment(Qt.AlignCenter)
+        indicator.setPixmap(scaled_flag)
+        indicator.setFixedSize(scaled_flag.size())
+        indicator.setToolTip(str(tooltip_text or ""))
+        indicator.setCursor(Qt.PointingHandCursor)
+        return indicator
+
+    def flag_player_by_puuid(self, puuid):
+        normalized_puuid = str(puuid or "").strip()
+        if not normalized_puuid:
+            return
+
+        if normalized_puuid in self.flagged_players:
+            self.flagged_players.pop(normalized_puuid, None)
+            self.persist_agent_lock_state()
+            self.safe_load_players(getattr(self.valo_rank, "frontend_data", None) or {})
+            return
+
+        reason_text = ReasonInputPopup(self).get_reason_text()
+        if reason_text is None:
+            return
+
+        existing_entry = self.flagged_players.get(normalized_puuid)
+        if not isinstance(existing_entry, dict):
+            existing_entry = {}
+
+        existing_entry["reason"] = reason_text
+        self.flagged_players[normalized_puuid] = existing_entry
+        self.persist_agent_lock_state()
+        self.safe_load_players(getattr(self.valo_rank, "frontend_data", None) or {})
 
     def create_name_row_emoji_indicator(self, emoji_text, tooltip, target_height=18):
         indicator = QLabel(emoji_text)
@@ -4948,7 +5045,9 @@ class ValorantStatsWindow(QMainWindow):
 
     def create_player_row(self, player):
         row = QFrame()
-        if player.get("puuid") == self.puuid:
+        if self.player_is_flagged(player):
+            row.setObjectName("compactRowFlagged")
+        elif player.get("puuid") == self.puuid:
             row.setObjectName("compactRowUser")
         else:
             row.setObjectName("compactRow")
@@ -5023,14 +5122,6 @@ class ValorantStatsWindow(QMainWindow):
         )
         name_row.addWidget(name_label, 0, Qt.AlignVCenter)
 
-        if self.player_has_rose_emoji(player):
-            rose_indicator = self.create_name_row_emoji_indicator("🌹", "Rose")
-            name_row.addWidget(rose_indicator, 0, Qt.AlignVCenter)
-
-        if self.player_has_vomit_emoji(player):
-            vomit_indicator = self.create_name_row_emoji_indicator("🤮", "Vomit")
-            name_row.addWidget(vomit_indicator, 0, Qt.AlignVCenter)
-
         vtl_label = QLabel()
         vtl_label.setAlignment(Qt.AlignCenter)
         vtl_label.setContentsMargins(0, 0, 0, 0)
@@ -5043,6 +5134,31 @@ class ValorantStatsWindow(QMainWindow):
         vtl_label.setText(f"<a href='{vtl_url}' style='text-decoration: none; font-size: 13px;'>🔗</a>")
         vtl_label.setToolTip("View on VTL.lol")
         name_row.addWidget(vtl_label, 0, Qt.AlignVCenter)
+
+        flag_indicator = self.create_flag_indicator(
+            vtl_label.height(),
+            tooltip_text=self.get_flag_tooltip_for_player(player),
+        )
+        if flag_indicator is not None:
+            player_puuid = str(player.get("puuid", "") or "").strip()
+
+            def on_flag_click(event, puuid=player_puuid):
+                if event.button() == Qt.LeftButton:
+                    self.flag_player_by_puuid(puuid)
+                    event.accept()
+                    return
+                QLabel.mousePressEvent(flag_indicator, event)
+
+            flag_indicator.mousePressEvent = on_flag_click
+            name_row.addWidget(flag_indicator, 0, Qt.AlignVCenter)
+
+        if self.player_has_rose_emoji(player):
+            rose_indicator = self.create_name_row_emoji_indicator("🌹", "Rose")
+            name_row.addWidget(rose_indicator, 0, Qt.AlignVCenter)
+
+        if self.player_has_vomit_emoji(player):
+            vomit_indicator = self.create_name_row_emoji_indicator("🤮", "Vomit")
+            name_row.addWidget(vomit_indicator, 0, Qt.AlignVCenter)
 
         if self.player_has_valscanner_logo(player):
             valscanner_logo_indicator = self.create_valscanner_logo_indicator(vtl_label.height())
@@ -5436,6 +5552,15 @@ class ValorantStatsWindow(QMainWindow):
             f"QFrame#compactRow:hover {{"
             f" border: 1px solid {THEME_BORDER};"
             f"}}"
+            f"QFrame#compactRowFlagged {{"
+            f" background-color: {THEME_FLAGGED_ROW};"
+            f" border-radius: 16px;"
+            f" border: 1px solid {THEME_FLAGGED_BORDER};"
+            f"}}"
+            f"QFrame#compactRowFlagged:hover {{"
+            f" background-color: {THEME_FLAGGED_ROW_HOVER};"
+            f" border: 1px solid {THEME_FLAGGED_BORDER};"
+            f"}}"
             f"QFrame#compactRowUser {{"
             f" background-color: {THEME_CARD_ALT};"
             f" border-radius: 16px;"
@@ -5703,6 +5828,14 @@ class ValorantStatsWindow(QMainWindow):
                 f"QFrame#compactRow:hover {{"
                 f" background: {build_surface_fill('card_alt', secondary_surface='card')};"
                 f" border: 1px solid {themed_border_color('highlight')};"
+                f"}}"
+                f"QFrame#compactRowFlagged {{"
+                f" background-color: {theme_rgba(THEME_FLAGGED_ROW, 0.92)};"
+                f" border: 1px solid {theme_rgba(THEME_FLAGGED_BORDER, 0.98)};"
+                f"}}"
+                f"QFrame#compactRowFlagged:hover {{"
+                f" background-color: {theme_rgba(THEME_FLAGGED_ROW_HOVER, 0.98)};"
+                f" border: 1px solid {theme_rgba(THEME_FLAGGED_BORDER, 1.0)};"
                 f"}}"
                 f"QFrame#compactRowUser {{"
                 f" background: {build_surface_fill('card_alt', secondary_surface='panel', alpha=0.86)};"
@@ -5995,6 +6128,85 @@ class ValorantStatsWindow(QMainWindow):
 
         self.gamemode_value.setText(gamemode)
         self.server_value.setText(server)
+
+
+class ReasonInputPopup(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Reason")
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setModal(True)
+
+        container = QWidget(self)
+        container.setObjectName("popupCard")
+        container.setMinimumWidth(420)
+
+        main_layout = QVBoxLayout(container)
+        main_layout.setContentsMargins(28, 28, 28, 24)
+        main_layout.setSpacing(14)
+
+        title = QLabel("Reason")
+        title.setObjectName("title")
+        title.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(title)
+
+        self.reason_input = QLineEdit()
+        self.reason_input.setObjectName("reasonInput")
+        self.reason_input.setPlaceholderText("Enter reason")
+        self.reason_input.returnPressed.connect(self.accept)
+        main_layout.addWidget(self.reason_input)
+
+        ok_btn = QPushButton("OK")
+        ok_btn.setObjectName("accentButton")
+        ok_btn.setCursor(Qt.PointingHandCursor)
+        ok_btn.setFixedHeight(42)
+        ok_btn.clicked.connect(self.accept)
+        main_layout.addWidget(ok_btn)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(24, 24, 24, 24)
+        outer.addWidget(container)
+
+        apply_popup_shadow(container)
+        glass_theme = is_glass_theme()
+        self.setStyleSheet(f"""
+            {build_popup_card_rule()}
+            #title {{ color: {THEME_TEXT}; font-size: 22px; font-weight: 600; }}
+            QLineEdit#reasonInput {{
+                background: {build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT};
+                border-radius: 12px;
+                padding: 10px 12px;
+                color: {THEME_TEXT};
+                border: 1px solid {themed_border_color('control') if glass_theme else THEME_BORDER};
+                font-size: 14px;
+            }}
+            QLineEdit#reasonInput:focus {{
+                border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT};
+            }}
+            QPushButton#accentButton {{
+                background-color: {THEME_ACCENT};
+                border: none;
+                color: {THEME_WINDOW if should_use_light_lock_agent_text(getattr(parent, 'current_theme_name', None)) else THEME_TEXT};
+                border-radius: 14px;
+                font-size: 14px;
+                font-weight: 700;
+            }}
+            QPushButton#accentButton:hover {{
+                background-color: {THEME_ACCENT_HOVER};
+            }}
+            QPushButton#accentButton:pressed {{
+                background-color: {THEME_ACCENT_PRESSED};
+            }}
+        """)
+
+        QTimer.singleShot(0, self.reason_input.setFocus)
+
+    def get_reason_text(self):
+        if self.exec() == QDialog.Accepted:
+            return self.reason_input.text()
+        return None
+
 
 class UpdatePopup(QDialog):
     def __init__(self, latest_version, parent=None):

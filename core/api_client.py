@@ -356,19 +356,21 @@ class ValoRank:
                                     "WinsByTier"]:
                                     if int(tier) > 20:
                                         tier = int(tier) + 3
-                                    if int(tier) > peak_rank:
+                                    if int(tier) >= peak_rank:
                                         peak_rank = int(tier)
                                         peak_act = season
                             else:
                                 for tier in valorant_mmr["QueueSkills"]["competitive"]["SeasonalInfoBySeasonID"][season][
                                     "WinsByTier"]:
-                                    if int(tier) > peak_rank:
+                                    if int(tier) >= peak_rank:
                                         peak_rank = int(tier)
                                         peak_act = season
                         except TypeError:
                             continue
 
                     peak_act_final = self.uuid_handler.season_converter(peak_act)
+                    if len(peak_act_final) > 6:
+                        peak_act_final == "N/A"
 
                     if valorant_mmr["LatestCompetitiveUpdate"]["SeasonID"] == self.current_act:
                         self.mmr[puuid] = {

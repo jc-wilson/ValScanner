@@ -13,6 +13,7 @@ from core.http_session import SharedSession
 _SKIN_ASSET_INDEX = None
 _BUDDY_ASSET_INDEX = None
 
+
 def get_external_path(relative_path):
     """Always points to the folder NEXT to the .exe, or the Project Root in dev."""
     if getattr(sys, 'frozen', False):
@@ -124,24 +125,79 @@ def _download_asset_jobs(download_jobs, threads):
             pass
 
 
+def _load_pixmap_from_file(path, width=None, height=None):
+    pixmap = QPixmap(path)
+    if pixmap.isNull():
+        return None
+    if width is not None and height is not None:
+        return pixmap.scaled(width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    return pixmap
+
+
+def _load_local_pixmaps(cache_dir, normalize_keys=False, width=None, height=None):
+    pixmaps = {}
+    if not os.path.isdir(cache_dir):
+        return pixmaps
+
+    valid_extensions = {".png", ".jpg", ".jpeg", ".webp"}
+    for entry in os.scandir(cache_dir):
+        if not entry.is_file():
+            continue
+
+        stem, extension = os.path.splitext(entry.name)
+        if extension.lower() not in valid_extensions:
+            continue
+
+        key = _normalize_asset_id(stem) if normalize_keys else stem
+        if not key:
+            continue
+
+        pixmap = _load_pixmap_from_file(entry.path, width=width, height=height)
+        if pixmap is not None:
+            pixmaps[key] = pixmap
+
+    return pixmaps
+
+
+async def _fetch_valorant_api_data(url, label):
+    try:
+        session = SharedSession.get()
+        async with session.get(url) as resp:
+            if resp.status != 200:
+                print(f"Failed to fetch {label} from Valorant API (status {resp.status})")
+                return []
+            payload = await resp.json(content_type=None)
+            return payload.get("data", [])
+    except Exception as exc:
+        print(f"Failed to fetch {label} from Valorant API: {exc}")
+        return []
+
+
 async def _ensure_asset_files(asset_ids, index_loader, path_builder, label, threads=12):
     normalized_ids = [_normalize_asset_id(asset_id) for asset_id in asset_ids if _normalize_asset_id(asset_id)]
     if not normalized_ids:
         return {}
 
-    index = index_loader()
     os.makedirs(os.path.dirname(path_builder(normalized_ids[0])), exist_ok=True)
 
     file_map = {}
-    download_jobs = []
+    missing_ids = []
     for asset_id in dict.fromkeys(normalized_ids):
         path = path_builder(asset_id)
         file_map[asset_id] = path
         if os.path.exists(path):
             continue
+        missing_ids.append(asset_id)
+
+    if not missing_ids:
+        return file_map
+
+    index = index_loader()
+    download_jobs = []
+    for asset_id in missing_ids:
         url = index.get(asset_id)
         if url:
-            download_jobs.append((url, path))
+            download_jobs.append((url, file_map[asset_id]))
 
     if download_jobs:
         print(f"Downloading {len(download_jobs)} uncached {label} assets...")
@@ -174,20 +230,14 @@ def load_skin_pixmap(asset_id, cache_dir=None):
     path = skin_asset_path(asset_id, cache_dir)
     if not os.path.exists(path):
         return None
-    pixmap = QPixmap(path)
-    if pixmap.isNull():
-        return None
-    return pixmap
+    return _load_pixmap_from_file(path)
 
 
 def load_buddy_pixmap(asset_id, cache_dir=None):
     path = buddy_asset_path(asset_id, cache_dir)
     if not os.path.exists(path):
         return None
-    pixmap = QPixmap(path)
-    if pixmap.isNull():
-        return None
-    return pixmap
+    return _load_pixmap_from_file(path)
 
 
 async def download_and_cache_agent_icons(cache_dir=None):
@@ -195,17 +245,14 @@ async def download_and_cache_agent_icons(cache_dir=None):
         cache_dir = get_external_path("assets/agents")
     os.makedirs(cache_dir, exist_ok=True)
 
-    print("Fetching agent list from Valorant API...")
-    session = SharedSession.get()
-    async with session.get("https://valorant-api.com/v1/agents") as resp:
-        if resp.status == 200:
-            agents = await resp.json(content_type=None)
-            agents = agents["data"]
-        else:
-            print("Failed to fetch agent icons from Valorant API")
+    icons = _load_local_pixmaps(cache_dir, width=134, height=134)
+    agents = await _fetch_valorant_api_data("https://valorant-api.com/v1/agents", "agent list")
+    if not agents:
+        print(f"Loaded {len(icons)} local agent icons (cached in {cache_dir})")
+        return icons
 
-    icons = {}
-
+    file_map = {}
+    download_jobs = []
     for agent in agents:
         if not agent.get("isPlayableCharacter", False):
             continue
@@ -217,81 +264,112 @@ async def download_and_cache_agent_icons(cache_dir=None):
 
         safe_name = re.sub(r'[\\/*?:"<>|]', "_", name)
         file_path = os.path.join(cache_dir, f"{safe_name}.png")
+        file_map[name] = file_path
 
-        if not os.path.exists(file_path):
-            print(f"⬇️ Downloading {name} icon...")
-            img_data = requests.get(icon_url).content
-            with open(file_path, "wb") as f:
-                f.write(img_data)
+        if name in icons:
+            continue
+        if os.path.exists(file_path):
+            pixmap = _load_pixmap_from_file(file_path, width=134, height=134)
+            if pixmap is not None:
+                icons[name] = pixmap
+            continue
 
-        pixmap = QPixmap(file_path)
+        download_jobs.append((icon_url, file_path))
 
-        icons[name] = pixmap.scaled(
-            134, 134,
-            Qt.KeepAspectRatio,
-            Qt.SmoothTransformation
-        )
+    if download_jobs:
+        print(f"Downloading {len(download_jobs)} uncached agent icons...")
+        await asyncio.to_thread(_download_asset_jobs, download_jobs, 12)
+
+    for name, file_path in file_map.items():
+        if name in icons or not os.path.exists(file_path):
+            continue
+        pixmap = _load_pixmap_from_file(file_path, width=134, height=134)
+        if pixmap is not None:
+            icons[name] = pixmap
 
     print(f"Loaded {len(icons)} agent icons (cached in {cache_dir})")
     return icons
+
 
 async def download_and_cache_map_icons(cache_dir=None):
     if cache_dir is None:
         cache_dir = get_external_path("assets/maps")
     os.makedirs(cache_dir, exist_ok=True)
 
-    print("Fetching map icons from Valorant API...")
-    session = SharedSession.get()
-    async with session.get("https://valorant-api.com/v1/maps") as resp:
-        if resp.status == 200:
-            maps = await resp.json(content_type=None)
-            maps = maps["data"]
+    icons = _load_local_pixmaps(cache_dir, normalize_keys=True)
+    maps = await _fetch_valorant_api_data("https://valorant-api.com/v1/maps", "map icons")
+    if not maps:
+        print(f"Loaded {len(icons)} local map icons (cached in {cache_dir})")
+        return icons
 
-    icons = {}
+    excluded_maps = {
+        "1f10dab3-4294-3827-fa35-c2aa00213cf3",
+        "5914d1e0-40c4-cfdd-6b88-eba06347686c",
+        "a38a3f9a-4042-844c-8970-a3ac2f7ce93d",
+        "a264de0f-4a04-9c78-c97a-a6b192ce6e86",
+        "a9009649-421f-d5d5-f80c-0cbe02c125bb",
+        "ee613ee9-28b7-4beb-9666-08db13bb2244",
+    }
 
-    for map in maps:
-        if map["uuid"] in ["1f10dab3-4294-3827-fa35-c2aa00213cf3", "5914d1e0-40c4-cfdd-6b88-eba06347686c", "a38a3f9a-4042-844c-8970-a3ac2f7ce93d",
-                           "a264de0f-4a04-9c78-c97a-a6b192ce6e86", "a9009649-421f-d5d5-f80c-0cbe02c125bb", "ee613ee9-28b7-4beb-9666-08db13bb2244"]:
+    file_map = {}
+    download_jobs = []
+    for map_data in maps:
+        map_uuid = _normalize_asset_id(map_data.get("uuid"))
+        if map_uuid in excluded_maps:
             continue
-        uuid = map["uuid"]
-        icon_url = map["listViewIconTall"]
+
+        icon_url = map_data.get("listViewIconTall")
         if not icon_url:
             print("failed to retrieve icon url")
             continue
 
-        safe_name = re.sub(r'[\\/*?:"<>|]', "_", uuid)
+        safe_name = re.sub(r'[\\/*?:"<>|]', "_", map_uuid)
         file_path = os.path.join(cache_dir, f"{safe_name}.png")
+        file_map[map_uuid] = file_path
 
-        # Download only if not already cached
-        if not os.path.exists(file_path):
-            print(f"⬇️ Downloading {uuid} icon...")
-            img_data = requests.get(icon_url).content
-            with open(file_path, "wb") as f:
-                f.write(img_data)
+        if map_uuid in icons:
+            continue
+        if os.path.exists(file_path):
+            pixmap = _load_pixmap_from_file(file_path)
+            if pixmap is not None:
+                icons[map_uuid] = pixmap
+            continue
 
-        # Load QPixmap from local file
-        pixmap = QPixmap(file_path)
-        icons[uuid] = pixmap
+        download_jobs.append((icon_url, file_path))
 
-    print(f"Loaded {len(icons)} rank icons (cached in {cache_dir})")
+    if download_jobs:
+        print(f"Downloading {len(download_jobs)} uncached map icons...")
+        await asyncio.to_thread(_download_asset_jobs, download_jobs, 12)
+
+    for map_uuid, file_path in file_map.items():
+        if map_uuid in icons or not os.path.exists(file_path):
+            continue
+        pixmap = _load_pixmap_from_file(file_path)
+        if pixmap is not None:
+            icons[map_uuid] = pixmap
+
+    print(f"Loaded {len(icons)} map icons (cached in {cache_dir})")
     return icons
+
 
 async def download_and_cache_rank_icons(cache_dir=None):
     if cache_dir is None:
         cache_dir = get_external_path("assets/ranks")
     os.makedirs(cache_dir, exist_ok=True)
 
-    print("Fetching rank icons from Valorant API...")
-    session = SharedSession.get()
-    async with session.get("https://valorant-api.com/v1/competitivetiers") as resp:
-        if resp.status == 200:
-            ranks = await resp.json(content_type=None)
-            ranks = ranks["data"][4]["tiers"]
-        else:
-            print("Failed to fetch rank icons from Valorant API")
+    icons = _load_local_pixmaps(cache_dir)
+    rank_sets = await _fetch_valorant_api_data("https://valorant-api.com/v1/competitivetiers", "rank icons")
+    if not rank_sets:
+        print(f"Loaded {len(icons)} local rank icons (cached in {cache_dir})")
+        return icons
 
-    icons = {}
+    if len(rank_sets) <= 4:
+        print(f"Loaded {len(icons)} rank icons (cached in {cache_dir})")
+        return icons
 
+    ranks = rank_sets[4].get("tiers", [])
+    file_map = {}
+    download_jobs = []
     for rank in ranks:
         name = rank["tierName"].capitalize()
         icon_url = rank.get("smallIcon") or rank.get("largeIcon")
@@ -301,85 +379,69 @@ async def download_and_cache_rank_icons(cache_dir=None):
 
         safe_name = re.sub(r'[\\/*?:"<>|]', "_", name)
         file_path = os.path.join(cache_dir, f"{safe_name}.png")
+        file_map[name] = file_path
 
-        # Download only if not already cached
-        if not os.path.exists(file_path):
-            print(f"⬇️ Downloading {name} icon...")
-            img_data = requests.get(icon_url).content
-            with open(file_path, "wb") as f:
-                f.write(img_data)
+        if name in icons:
+            continue
+        if os.path.exists(file_path):
+            pixmap = _load_pixmap_from_file(file_path)
+            if pixmap is not None:
+                icons[name] = pixmap
+            continue
 
-        # Load QPixmap from local file
-        pixmap = QPixmap(file_path)
-        icons[name] = pixmap
+        download_jobs.append((icon_url, file_path))
+
+    if download_jobs:
+        print(f"Downloading {len(download_jobs)} uncached rank icons...")
+        await asyncio.to_thread(_download_asset_jobs, download_jobs, 12)
+
+    for name, file_path in file_map.items():
+        if name in icons or not os.path.exists(file_path):
+            continue
+        pixmap = _load_pixmap_from_file(file_path)
+        if pixmap is not None:
+            icons[name] = pixmap
 
     print(f"Loaded {len(icons)} rank icons (cached in {cache_dir})")
     return icons
+
 
 async def download_and_cache_buddies(cache_dir=None, threads=40):
     if cache_dir is None:
         cache_dir = get_external_path("assets/buddies")
 
-    def download_file(url, path):
-        try:
-            data = requests.get(url, timeout=5).content
-            with open(path, "wb") as f:
-                f.write(data)
-            return True
-        except Exception:
-            return False
-
     os.makedirs(cache_dir, exist_ok=True)
+    pixmaps = _load_local_pixmaps(cache_dir, normalize_keys=True)
+    buddies = await _fetch_valorant_api_data("https://valorant-api.com/v1/buddies", "buddies")
+    if not buddies:
+        print(f"Loaded {len(pixmaps)} total icons.")
+        return pixmaps
 
-    print("Fetching buddies from Valorant API...")
-    session = SharedSession.get()
-
-    async with session.get("https://valorant-api.com/v1/buddies") as resp:
-        if resp.status == 200:
-            buddies = await resp.json()
-            buddies = buddies["data"]
-        else:
-            print("Couldn't retrieve skin icons from valorant-api")
-
-    download_jobs = []  # list of (url, path)
-    file_map = {}  # uuid → local filepath
-
-    # Build full download job list
+    download_jobs = []
+    file_map = {}
     for buddy in buddies:
-
-        # Base skin icon
-        buddy_uuid = buddy["levels"][0]["uuid"]
+        levels = buddy.get("levels", [])
+        buddy_uuid = _normalize_asset_id(levels[0].get("uuid") if levels else "")
         base_icon = buddy.get("displayIcon")
 
         if buddy_uuid and base_icon:
-            base_path = os.path.join(cache_dir, f"{buddy_uuid}.png")
+            base_path = buddy_asset_path(buddy_uuid, cache_dir)
             file_map[buddy_uuid] = base_path
-            if not os.path.exists(base_path):
+            if buddy_uuid not in pixmaps and not os.path.exists(base_path):
                 download_jobs.append((base_icon, base_path))
 
     print(f"{len(download_jobs)} icons to download (uncached).")
-    if len(download_jobs) > 0:
+    if download_jobs:
         print(f"Starting downloads using {threads} threads...")
+        await asyncio.to_thread(_download_asset_jobs, download_jobs, threads)
 
-    # Multithreaded downloads
-    with ThreadPoolExecutor(max_workers=threads) as executor:
-        futures = [
-            executor.submit(download_file, url, path)
-            for url, path in download_jobs
-        ]
-
-        for i, fut in enumerate(as_completed(futures), 1):
-            print(f"✔ {i}/{len(futures)}", end="\r")
-
-    print("\n✅ Download complete. Loading pixmaps...")
-
-    # Load images into QPixmap directly on the main thread.
-    # Avoid yielding here because modal Qt dialogs can spin a nested event loop
-    # and trigger qasync task re-entry while this task is still active.
-    pixmaps = {}
-    for uuid, file_path in file_map.items():
-        if os.path.exists(file_path):
-            pixmaps[uuid] = QPixmap(file_path)
+    print("\nDownload complete. Loading pixmaps...")
+    for buddy_uuid, file_path in file_map.items():
+        if buddy_uuid in pixmaps or not os.path.exists(file_path):
+            continue
+        pixmap = _load_pixmap_from_file(file_path)
+        if pixmap is not None:
+            pixmaps[buddy_uuid] = pixmap
 
     print(f"Loaded {len(pixmaps)} total icons.")
     return pixmaps
@@ -389,75 +451,46 @@ async def download_and_cache_skins(cache_dir=None, threads=40):
     if cache_dir is None:
         cache_dir = get_external_path("assets/skins")
 
-    def download_file(url, path):
-        try:
-            data = requests.get(url, timeout=5).content
-            with open(path, "wb") as f:
-                f.write(data)
-            return True
-        except Exception:
-            return False
-
     os.makedirs(cache_dir, exist_ok=True)
+    pixmaps = _load_local_pixmaps(cache_dir, normalize_keys=True)
+    skins = await _fetch_valorant_api_data("https://valorant-api.com/v1/weapons/skins", "skins + chromas")
+    if not skins:
+        print(f"Loaded {len(pixmaps)} total icons.")
+        return pixmaps
 
-    print("Fetching skins + chromas from Valorant API...")
-    session = SharedSession.get()
-    async with session.get("https://valorant-api.com/v1/weapons/skins") as resp:
-        if resp.status == 200:
-            skins = await resp.json()
-            skins = skins["data"]
-        else:
-            print("Couldn't retrieve skin icons from valorant-api")
-
-    download_jobs = []  # list of (url, path)
-    file_map = {}  # uuid → local filepath
-
-    # Build full download job list
+    download_jobs = []
+    file_map = {}
     for skin in skins:
-
-        # Base skin icon
-        skin_uuid = skin.get("uuid")
+        skin_uuid = _normalize_asset_id(skin.get("uuid"))
         base_icon = skin.get("displayIcon") or skin.get("fullRender")
 
         if skin_uuid and base_icon:
-            base_path = os.path.join(cache_dir, f"{skin_uuid}.png")
+            base_path = skin_asset_path(skin_uuid, cache_dir)
             file_map[skin_uuid] = base_path
-            if not os.path.exists(base_path):
+            if skin_uuid not in pixmaps and not os.path.exists(base_path):
                 download_jobs.append((base_icon, base_path))
 
-        # Chromas
         for chroma in skin.get("chromas", []):
-            chroma_uuid = chroma.get("uuid")
+            chroma_uuid = _normalize_asset_id(chroma.get("uuid"))
             icon = chroma.get("displayIcon") or chroma.get("fullRender")
             if chroma_uuid and icon:
-                chroma_path = os.path.join(cache_dir, f"{chroma_uuid}.png")
+                chroma_path = skin_asset_path(chroma_uuid, cache_dir)
                 file_map[chroma_uuid] = chroma_path
-                if not os.path.exists(chroma_path):
+                if chroma_uuid not in pixmaps and not os.path.exists(chroma_path):
                     download_jobs.append((icon, chroma_path))
 
     print(f"{len(download_jobs)} icons to download (uncached).")
-    if len(download_jobs) > 0:
+    if download_jobs:
         print(f"Starting downloads using {threads} threads...")
+        await asyncio.to_thread(_download_asset_jobs, download_jobs, threads)
 
-    # Multithreaded downloads
-    with ThreadPoolExecutor(max_workers=threads) as executor:
-        futures = [
-            executor.submit(download_file, url, path)
-            for url, path in download_jobs
-        ]
-
-        for i, fut in enumerate(as_completed(futures), 1):
-            print(f"✔ {i}/{len(futures)}", end="\r")
-
-    print("\n✅ Download complete. Loading pixmaps...")
-
-    # Load images into QPixmap directly on the main thread.
-    # Avoid yielding here because modal Qt dialogs can spin a nested event loop
-    # and trigger qasync task re-entry while this task is still active.
-    pixmaps = {}
-    for uuid, file_path in file_map.items():
-        if os.path.exists(file_path):
-            pixmaps[uuid] = QPixmap(file_path)
+    print("\nDownload complete. Loading pixmaps...")
+    for skin_uuid, file_path in file_map.items():
+        if skin_uuid in pixmaps or not os.path.exists(file_path):
+            continue
+        pixmap = _load_pixmap_from_file(file_path)
+        if pixmap is not None:
+            pixmaps[skin_uuid] = pixmap
 
     print(f"Loaded {len(pixmaps)} total icons.")
     return pixmaps

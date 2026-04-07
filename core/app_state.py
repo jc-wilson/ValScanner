@@ -67,6 +67,7 @@ def default_app_state(map_uuids=None, base_path=None):
         "map_lock_enabled": False,
         "queue_snipe_enabled": False,
         "queue_snipe_selected_friend": None,
+        "flagged_players": {},
         "map_agent_selection": {
             map_uuid: ""
             for map_uuid in normalized_map_uuids
@@ -126,6 +127,19 @@ def _normalize_queue_snipe_friend(friend_data):
     }
 
 
+def _normalize_flagged_players(flagged_players):
+    if not isinstance(flagged_players, dict):
+        return {}
+
+    normalized = {}
+    for key, value in flagged_players.items():
+        normalized_key = str(key or "").strip()
+        if not normalized_key:
+            continue
+        normalized[normalized_key] = value
+    return normalized
+
+
 def normalize_app_state(state_data, map_uuids=None, base_path=None):
     raw_state = state_data if isinstance(state_data, dict) else {}
     normalized_map_uuids = _coerce_map_uuids(
@@ -143,6 +157,7 @@ def normalize_app_state(state_data, map_uuids=None, base_path=None):
         "map_lock_enabled": bool(raw_state.get("map_lock_enabled", False)),
         "queue_snipe_enabled": bool(raw_state.get("queue_snipe_enabled", False)),
         "queue_snipe_selected_friend": normalized_queue_snipe_friend,
+        "flagged_players": _normalize_flagged_players(raw_state.get("flagged_players")),
         "map_agent_selection": _normalize_map_agent_selection(
             raw_state.get("map_agent_selection"),
             normalized_map_uuids,
