@@ -5212,7 +5212,7 @@ class ValorantStatsWindow(QMainWindow):
 
         peak_name = str(player.get("peak_rank", "Unknown"))
         peak_rank_display = "N/A" if peak_name.upper() == "UNRANKED" else peak_name
-        peak_icon = None if peak_rank_display == "N/A" else self.rank_icons.get(peak_name)
+        peak_icon = self.rank_icons.get("Unranked") if peak_rank_display == "N/A" else self.rank_icons.get(peak_name)
         if peak_icon:
             peak_icon_label.setPixmap(
                 peak_icon.scaled(compact_rank_icon_size, compact_rank_icon_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
