@@ -3172,6 +3172,12 @@ class ToggleSwitch(SuperQtToggleSwitch):
         super().setEnabled(enabled)
         self.apply_theme_colors()
 
+    def setChecked(self, checked):
+        super().setChecked(checked)
+        if self.signalsBlocked():
+            self._anim.stop()
+            self._set_offset(self._offset_for_checkstate(bool(checked)))
+
     def changeEvent(self, event):
         super().changeEvent(event)
         if event.type() in {QEvent.EnabledChange, QEvent.PaletteChange, QEvent.StyleChange}:
