@@ -4952,12 +4952,12 @@ class ValorantStatsWindow(QMainWindow):
             Qt.KeepAspectRatio,
             Qt.SmoothTransformation,
         )
-        indicator = QLabel()
+        indicator = InstantTooltipLabel()
         indicator.setObjectName("flagIndicator")
         indicator.setAlignment(Qt.AlignCenter)
         indicator.setPixmap(scaled_flag)
         indicator.setFixedSize(scaled_flag.size())
-        indicator.setToolTip(str(tooltip_text or ""))
+        indicator.set_instant_tooltip(str(tooltip_text or ""))
         indicator.setCursor(Qt.PointingHandCursor)
         return indicator
 
@@ -5131,7 +5131,16 @@ class ValorantStatsWindow(QMainWindow):
         vtl_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
         vtl_label.setOpenExternalLinks(True)
         vtl_url = f"https://vtl.lol/id/{player.get('puuid')}"
-        vtl_label.setText(f"<a href='{vtl_url}' style='text-decoration: none; font-size: 13px;'>🔗</a>")
+        vtl_icon_path = resource_path(os.path.join("assets", "vtl.png"))
+        if os.path.exists(vtl_icon_path):
+            vtl_icon_src = QUrl.fromLocalFile(vtl_icon_path).toString()
+            vtl_label.setText(
+                f"<a href='{vtl_url}' style='text-decoration: none;'>"
+                f"<img src='{vtl_icon_src}' width='18' height='18' />"
+                f"</a>"
+            )
+        else:
+            vtl_label.setText(f"<a href='{vtl_url}' style='text-decoration: none; font-size: 13px;'>🔗</a>")
         vtl_label.setToolTip("View on VTL.lol")
         name_row.addWidget(vtl_label, 0, Qt.AlignVCenter)
 
