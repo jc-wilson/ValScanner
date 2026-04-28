@@ -720,6 +720,13 @@ def get_map_display_name(map_uuid):
     return MAP_DISPLAY_NAMES.get(map_uuid, map_uuid)
 
 
+def get_peak_act_display(value):
+    peak_act = str(value or "N/A").strip()
+    if peak_act.upper() == "UNRANKED" or peak_act in ("[]", ""):
+        return "N/A"
+    return peak_act
+
+
 def get_clean_skin_name(raw_name):
     if isinstance(raw_name, list):
         raw_name = raw_name[0] if raw_name else "Unknown Skin"
@@ -5240,10 +5247,7 @@ class ValorantStatsWindow(QMainWindow):
         peak_text = QLabel(peak_rank_display if peak_name not in ("[]", "") else "N/A")
         peak_text.setObjectName("metaValue")
 
-        peak_act_value = str(player.get("peak_act", "N/A"))
-        peak_act_label = QLabel(
-            peak_act_value if peak_act_value not in ("[]", "") else "Act N/A"
-        )
+        peak_act_label = QLabel(get_peak_act_display(player.get("peak_act", "N/A")))
         peak_act_label.setObjectName("metaAux")
 
         meta_bar.addStretch(1)
@@ -5356,8 +5360,7 @@ class ValorantStatsWindow(QMainWindow):
         peak_row.setSpacing(8)
 
         peak_icon_size = 48
-        peak_act_value = str(player.get("peak_act", "N/A"))
-        peak_act_label = QLabel(peak_act_value if peak_act_value not in ("[]", "") else "N/A")
+        peak_act_label = QLabel(get_peak_act_display(player.get("peak_act", "N/A")))
         peak_act_label.setAlignment(Qt.AlignCenter)
         peak_act_font = peak_act_label.font()
         peak_act_font.setBold(True)
