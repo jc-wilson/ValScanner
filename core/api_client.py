@@ -189,20 +189,10 @@ class ValoRank:
                 "name": None,
                 "tag": None
             })
-        puuids = [player.get("puuid") for player in pmi]
 
-        nt = await self.request_json(
-            session,
-            "PUT",
-            f"https://pd.{self.handler.shard}.a.pvp.net/name-service/v2/players",
-            "Party name lookup request",
-            headers={**self.handler.match_id_header, "Content-Type": "application/json"},
-            json_body=puuids,
-        )
-
-        for index, player in enumerate(pmi):
+        for player in pmi:
             self.frontend_data[player["puuid"]] = {
-                "name": f"{nt[index]['GameName']}#{nt[index]['TagLine']}",
+                **self._name_fields_for_puuid(player["puuid"], "N/A"),
                 "agent": "N/A",
                 "level": player.get("level"),
                 "matches": "N/A",
@@ -259,6 +249,34 @@ class ValoRank:
         if not self.party_detection_enabled:
             return self.party_tracker.clear_party_metadata(self.frontend_data)
         return self.party_tracker.enrich_frontend_data(self.frontend_data)
+
+    def _agent_name_for_puuid(self, puuid):
+        character_id = self.ca.get(puuid)
+        if not character_id:
+            return "N/A"
+        return self.uuid_handler.agent_converter(character_id) or "N/A"
+
+    def _placeholder_name_fields(self, agent_name):
+        placeholder = str(agent_name or "N/A")
+        return {
+            "name": placeholder,
+            "game_name": placeholder,
+            "tag": "",
+            "name_source": "agent_placeholder",
+            "xmpp_name_resolved": False,
+        }
+
+    def _name_fields_for_puuid(self, puuid, agent_name):
+        existing = self.frontend_data.get(puuid) if isinstance(self.frontend_data, dict) else None
+        if isinstance(existing, dict) and existing.get("xmpp_name_resolved"):
+            return {
+                "name": existing.get("name") or existing.get("display_name") or str(agent_name or "N/A"),
+                "game_name": existing.get("game_name") or existing.get("name") or str(agent_name or "N/A"),
+                "tag": existing.get("tag", ""),
+                "name_source": existing.get("name_source") or "xmpp",
+                "xmpp_name_resolved": True,
+            }
+        return self._placeholder_name_fields(agent_name)
 
     async def valo_stats(self, prematch_id=None, match_id=None, map_instalock=None):
         if prematch_id:
@@ -447,17 +465,8 @@ class ValoRank:
                     )
 
                     if riot_name["Total"] == 0:
-                        nt = await self.request_json(
-                            session,
-                            "PUT",
-                            f"https://pd.{self.handler.shard}.a.pvp.net/name-service/v2/players",
-                            f"Name lookup request for {puuid}",
-                            headers={**self.handler.match_id_header, "Content-Type": "application/json"},
-                            json_body=[puuid],
-                        )
-
-                        print(
-                            f"{nt[0]['GameName']}#{nt[0]['TagLine']} ({self.uuid_handler.agent_converter(self.ca[puuid])}) has not played a game in the last 30 days")
+                        agent_name = self._agent_name_for_puuid(puuid)
+                        print(f"{puuid} ({agent_name}) has not played a game in the last 30 days")
 
                         if self.handler.player_info:
                             for player in self.handler.player_info["Players"]:
@@ -467,8 +476,8 @@ class ValoRank:
                             bor = self.handler.player_info_pre["AllyTeam"]["TeamID"]
 
                         self.frontend_data[puuid] = {
-                            "name": f"{nt[0]['GameName']}#{nt[0]['TagLine']}",
-                            "agent": self.uuid_handler.agent_converter(self.ca[puuid]),
+                            **self._name_fields_for_puuid(puuid, agent_name),
+                            "agent": agent_name,
                             "level": "N/A",
                             "matches": 0,
                             "wl": "N/A",
@@ -501,13 +510,11 @@ class ValoRank:
                     for player in match_stats_name["players"]:
                         if player["subject"] == puuid:
                             ntl.append({
-                                "name": player.get("gameName"),
-                                "tag": player.get("tagLine"),
                                 "level": player.get("accountLevel"),
                             })
 
-                    print(
-                        f"{ntl[0]['name']}#{ntl[0]['tag']} ({self.uuid_handler.agent_converter(self.ca[puuid])}) has not played competitive in the last 30 days/100 matches")
+                    agent_name = self._agent_name_for_puuid(puuid)
+                    print(f"{puuid} ({agent_name}) has not played competitive in the last 30 days/100 matches")
 
                     if self.handler.player_info:
                         for player in self.handler.player_info["Players"]:
@@ -517,8 +524,8 @@ class ValoRank:
                         bor = self.handler.player_info_pre["AllyTeam"]["TeamID"]
 
                     self.frontend_data[puuid] = {
-                        "name": f"{ntl[0]['name']}#{ntl[0]['tag']}",
-                        "agent": self.uuid_handler.agent_converter(self.ca[puuid]),
+                        **self._name_fields_for_puuid(puuid, agent_name),
+                        "agent": agent_name,
                         "level": ntl[0]["level"],
                         "matches": 0,
                         "wl": "N/A",
@@ -577,7 +584,10 @@ class ValoRank:
 
         for index, puuid in enumerate(self.cmp):
             if puuid in self.frontend_data:
-                self.frontend_data[puuid]["agent"] = self.uuid_handler.agent_converter(self.ca[puuid])
+                agent_name = self._agent_name_for_puuid(puuid)
+                self.frontend_data[puuid]["agent"] = agent_name
+                if not self.frontend_data[puuid].get("xmpp_name_resolved"):
+                    self.frontend_data[puuid].update(self._placeholder_name_fields(agent_name))
 
         await self.assign_skins()
         self.apply_party_metadata()
@@ -690,8 +700,6 @@ class ValoRank:
         for player in match_stats_name.get("players", []):
             if player["subject"] == puuid:
                 ntl = {
-                    "name": player.get("gameName"),
-                    "tag": player.get("tagLine"),
                     "level": player.get("accountLevel"),
                 }
                 break
@@ -699,9 +707,10 @@ class ValoRank:
         if ntl is None:
             raise RuntimeError("Match details response did not include the requested player.")
 
+        agent_name = self._agent_name_for_puuid(puuid)
         self.frontend_data[puuid] = {
-            "name": f"{ntl['name']}#{ntl['tag']}",
-            "agent": self.uuid_handler.agent_converter(self.ca[puuid]),
+            **self._name_fields_for_puuid(puuid, agent_name),
+            "agent": agent_name,
             "level": ntl['level'],
             "matches": match_count_kd,
             "wl": str(wl),
@@ -718,7 +727,7 @@ class ValoRank:
         }
 
         print(
-            f"{puuid} {ntl['name']}#{ntl['tag']}'s ({self.uuid_handler.agent_converter(self.ca[puuid])}) level is {ntl['level']} | W/L % in last {match_count_kd} matches: {wl} | ACS in the last {match_count_kd} matches: {str(acs)[:5]} | KD in last {match_count_kd} matches: {str(kd)[0:4]} | HS in last {match_count_kd} matches: hs is: {str(hs)[:4]}% | current rank is: {self.mmr[puuid]['current_data']['currenttierpatched']} | current rr is: {self.mmr[puuid]['current_data']['ranking_in_tier']} | rr changes in last 5 matches: {self.rating_changes[puuid][0]}, {self.rating_changes[puuid][1]}, {self.rating_changes[puuid][2]}, {self.rating_changes[puuid][3]}, {self.rating_changes[puuid][4]} | highest rank was: {self.mmr[puuid]['highest_rank']['patched_tier']} | peak act was: {self.mmr[puuid]['highest_rank']['season']}")
+            f"{puuid} ({agent_name}) level is {ntl['level']} | W/L % in last {match_count_kd} matches: {wl} | ACS in the last {match_count_kd} matches: {str(acs)[:5]} | KD in last {match_count_kd} matches: {str(kd)[0:4]} | HS in last {match_count_kd} matches: hs is: {str(hs)[:4]}% | current rank is: {self.mmr[puuid]['current_data']['currenttierpatched']} | current rr is: {self.mmr[puuid]['current_data']['ranking_in_tier']} | rr changes in last 5 matches: {self.rating_changes[puuid][0]}, {self.rating_changes[puuid][1]}, {self.rating_changes[puuid][2]}, {self.rating_changes[puuid][3]}, {self.rating_changes[puuid][4]} | highest rank was: {self.mmr[puuid]['highest_rank']['patched_tier']} | peak act was: {self.mmr[puuid]['highest_rank']['season']}")
 
     async def load_more_matches(self):
         if not self.cmp or not getattr(self, "modified_header", None) or not self.handler.shard:

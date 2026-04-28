@@ -124,15 +124,38 @@ class PartyTracker:
 
         players = list(frontend_data.values()) if isinstance(frontend_data, dict) else list(frontend_data)
         party_to_players = {}
-        riot_id_to_player = {}
+        player_metadata = {}
+        changed = False
 
         for player in players:
-            riot_id = str(player.get("name", "")).strip()
-            normalized = self.normalize_display_name(riot_id)
-            riot_id_to_player[normalized] = player
-            metadata = self._party_by_riot_id.get(normalized)
-            if metadata:
-                party_to_players.setdefault(metadata["party_id"], []).append(player)
+            puuid = str(player.get("puuid", "") or "").strip()
+            metadata = self._get_player_metadata_by_puuid(puuid)
+            player_metadata[id(player)] = metadata
+
+            if metadata and not player.get("xmpp_name_resolved"):
+                game_name = str(metadata.get("game_name", "") or "").strip()
+                game_tag = str(metadata.get("game_tag", "") or "").strip()
+                if game_name and game_tag:
+                    display_name = f"{game_name}#{game_tag}"
+                    if player.get("name") != display_name:
+                        player["name"] = display_name
+                        changed = True
+                    if player.get("game_name") != game_name:
+                        player["game_name"] = game_name
+                        changed = True
+                    if player.get("tag") != game_tag:
+                        player["tag"] = game_tag
+                        changed = True
+                    if player.get("name_source") != "xmpp":
+                        player["name_source"] = "xmpp"
+                        changed = True
+                    if player.get("xmpp_name_resolved") is not True:
+                        player["xmpp_name_resolved"] = True
+                        changed = True
+
+            party_id = metadata.get("party_id") if metadata else None
+            if party_id:
+                party_to_players.setdefault(party_id, []).append(player)
 
         party_labels = {}
         label_index = 0
@@ -145,10 +168,9 @@ class PartyTracker:
             }
             label_index += 1
 
-        changed = False
-        for normalized, player in riot_id_to_player.items():
-            metadata = self._party_by_riot_id.get(normalized)
-            party_id = metadata["party_id"] if metadata else None
+        for player in players:
+            metadata = player_metadata.get(id(player))
+            party_id = metadata.get("party_id") if metadata else None
             party_state = party_labels.get(party_id)
             label = party_state["label"] if party_state else None
             group_index = party_state["index"] if party_state else None
@@ -168,6 +190,28 @@ class PartyTracker:
                 changed = True
 
         return changed
+
+    def _get_player_metadata_by_puuid(self, puuid: str):
+        puuid = str(puuid or "").strip()
+        if not puuid:
+            return None
+
+        merged = {}
+        known_friend = self._known_friends_by_puuid.get(puuid)
+        if isinstance(known_friend, dict):
+            merged.update(known_friend)
+
+        presence = self._presence_by_puuid.get(puuid)
+        if isinstance(presence, dict):
+            for key, value in presence.items():
+                if value not in (None, ""):
+                    merged[key] = value
+            for key in ("game_name", "game_tag", "display_name", "normalized_riot_id"):
+                value = known_friend.get(key) if isinstance(known_friend, dict) else None
+                if value not in (None, ""):
+                    merged[key] = value
+
+        return merged or None
 
     def normalize_display_name(self, display_name: str) -> str:
         name, tag = _split_riot_id(display_name)
@@ -248,21 +292,24 @@ class PartyTracker:
         identity_match = re.search(r"<id\s+name=['\"]([^'\"]+)['\"]\s+tagline=['\"]([^'\"]+)['\"]", stanza)
         payload_match = re.search(r"<p>([^<]+)</p>", stanza)
         from_match = re.search(r"<presence[^>]+from=['\"]([^'\"]+)['\"]", stanza)
-        if payload_match is None:
-            return False
-
-        payload = _decode_base64_json(payload_match.group(1))
-        if not payload:
-            return False
+        payload = _decode_base64_json(payload_match.group(1)) if payload_match is not None else None
 
         puuid = ""
         pid = ""
+        party_room_id = ""
         if from_match is not None:
             from_value = from_match.group(1)
             if "@" in from_value:
                 puuid = from_value.split("@", 1)[0].strip()
+                if "ares-parties" in from_value:
+                    party_room_id = puuid
+                    puuid = ""
             if "/" in from_value:
                 pid = from_value.rsplit("/", 1)[-1].strip()
+
+        muc_updated = self._process_presence_roster_items(stanza, payload, party_room_id=party_room_id, pid=pid)
+        if not payload:
+            return muc_updated
 
         game_name = ""
         game_tag = ""
@@ -293,7 +340,34 @@ class PartyTracker:
                 "tag": presence.get("game_tag", ""),
             }
 
-        return self._store_presence(presence)
+        return self._store_presence(presence) or muc_updated
+
+    def _process_presence_roster_items(self, stanza: str, payload, party_room_id="", pid="") -> bool:
+        updated = False
+        for item_match in re.finditer(r"<item\b([^>]*)>(.*?)</item>", stanza, flags=re.IGNORECASE | re.DOTALL):
+            attrs = self._parse_xml_attrs(item_match.group(1))
+            friend = self._normalize_roster_item(attrs, item_match.group(2))
+            if not friend:
+                continue
+
+            if self._store_known_friend(friend):
+                updated = True
+
+            presence_payload = dict(payload) if isinstance(payload, dict) else {}
+            if party_room_id:
+                presence_payload.setdefault("partyId", party_room_id)
+
+            presence = self._build_presence_record(
+                payload=presence_payload,
+                puuid=friend.get("puuid", ""),
+                game_name=friend.get("game_name", ""),
+                game_tag=friend.get("game_tag", ""),
+                pid=pid,
+            )
+            if presence and self._store_presence(presence):
+                updated = True
+
+        return updated
 
     def _process_roster_stanza(self, stanza: str) -> bool:
         lowered = stanza.lower()
