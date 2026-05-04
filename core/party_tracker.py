@@ -9,6 +9,10 @@ QUEUEING_PRESENCE_STATES = {
     "STARTING_MATCHMAKING",
     "MATCHMADE_GAME_STARTING",
 }
+INVALID_PARTY_IDS = {
+    "0",
+    "00000000-0000-0000-0000-000000000000",
+}
 
 
 def _normalize_riot_id(name: str, tag: str) -> str:
@@ -46,6 +50,75 @@ def _decode_jwt_payload(token: str):
         return json.loads(decoded)
     except Exception:
         return None
+
+
+def _merge_presence_payloads(*payloads):
+    merged = {}
+    for payload in payloads:
+        if isinstance(payload, dict):
+            merged.update(payload)
+    return merged or None
+
+
+def _normalize_party_id(party_id: Any) -> str:
+    normalized = str(party_id or "").strip()
+    if not normalized:
+        return ""
+    if normalized.lower() in INVALID_PARTY_IDS:
+        return ""
+    if set(normalized) <= {"0", "-"}:
+        return ""
+    return normalized
+
+
+def _coerce_int(value) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _presence_party_size(payload: dict[str, Any]) -> int | None:
+    if not isinstance(payload, dict):
+        return None
+
+    candidates = [
+        payload.get("partySize"),
+    ]
+
+    party_presence = payload.get("partyPresenceData")
+    if isinstance(party_presence, dict):
+        candidates.append(party_presence.get("partySize"))
+
+    party = payload.get("party")
+    if isinstance(party, dict):
+        candidates.append(party.get("currentSize"))
+
+    for candidate in candidates:
+        size = _coerce_int(candidate)
+        if size is not None:
+            return size
+    return None
+
+
+def _payload_marks_solo_party(payload: dict[str, Any]) -> bool:
+    party_size = _presence_party_size(payload)
+    if party_size is not None:
+        return party_size <= 1
+
+    cross_play = payload.get("crossPlayPermissions") if isinstance(payload, dict) else None
+    if isinstance(cross_play, dict) and cross_play.get("isInParty") is False:
+        return True
+    return False
+
+
+def _metadata_party_id(metadata: dict[str, Any]) -> str:
+    if not isinstance(metadata, dict):
+        return ""
+    party_id = _normalize_party_id(metadata.get("party_id"))
+    if party_id and _payload_marks_solo_party(metadata.get("raw") or metadata):
+        return ""
+    return party_id
 
 
 class PartyTracker:
@@ -153,7 +226,7 @@ class PartyTracker:
                         player["xmpp_name_resolved"] = True
                         changed = True
 
-            party_id = metadata.get("party_id") if metadata else None
+            party_id = _metadata_party_id(metadata) if metadata else None
             if party_id:
                 party_to_players.setdefault(party_id, []).append(player)
 
@@ -170,7 +243,7 @@ class PartyTracker:
 
         for player in players:
             metadata = player_metadata.get(id(player))
-            party_id = metadata.get("party_id") if metadata else None
+            party_id = _metadata_party_id(metadata) if metadata else None
             party_state = party_labels.get(party_id)
             label = party_state["label"] if party_state else None
             group_index = party_state["index"] if party_state else None
@@ -290,9 +363,13 @@ class PartyTracker:
             return False
 
         identity_match = re.search(r"<id\s+name=['\"]([^'\"]+)['\"]\s+tagline=['\"]([^'\"]+)['\"]", stanza)
-        payload_match = re.search(r"<p>([^<]+)</p>", stanza)
+        payload_match = re.search(r"<p>([^<]*)</p>", stanza)
+        private_payload_match = re.search(r"<pd>([^<]*)</pd>", stanza)
         from_match = re.search(r"<presence[^>]+from=['\"]([^'\"]+)['\"]", stanza)
-        payload = _decode_base64_json(payload_match.group(1)) if payload_match is not None else None
+        payload = _merge_presence_payloads(
+            _decode_base64_json(private_payload_match.group(1)) if private_payload_match is not None else None,
+            _decode_base64_json(payload_match.group(1)) if payload_match is not None else None,
+        )
 
         puuid = ""
         pid = ""
@@ -447,11 +524,13 @@ class PartyTracker:
         if game_name or game_tag:
             normalized_riot_id = _normalize_riot_id(game_name, game_tag)
 
-        party_id = str(
+        party_id = _normalize_party_id(
             merged_payload.get("partyId")
             or merged_payload.get("party_id")
             or ""
-        ).strip()
+        )
+        if party_id and _payload_marks_solo_party(merged_payload):
+            party_id = ""
         queue_id = str(
             merged_payload.get("queueId")
             or merged_payload.get("queueID")
