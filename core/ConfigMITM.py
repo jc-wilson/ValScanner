@@ -5,6 +5,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import requests
 import urllib3
 
+from core.SharedValues import localhostChatHost
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 """This class crates an HTTP proxy to intercept the communication between the riot client and the riot server
@@ -13,9 +15,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     After logging in, the riot client sends a request to get the chat settings, in which we find  the relevant hosts and:
 
     - Change the chat.port to 35478
-    - Change the chat.host to 127.0.0.1
-    - Change the chat.allow_bad_cert.enabled to allow bad certificates
-    - Change the chat.use_tls.enabled to disable SSl verification
+    - Change the chat.host and affinities to a localhost DNS name with a valid certificate
 
     We then send back the modified response back to the riot client"""
 
@@ -29,6 +29,8 @@ class ConfigMITM:
         self.xmpp_port = xmpp_port
         self._affinityMappingID = 0
         self.affinityMappings = []
+        self.upstream_chat_host = None
+        self.upstream_chat_port = None
         handler = partial(self.RequestHandler, self)
         self.server = HTTPServer((self.host, self.http_port), handler)
 
@@ -91,28 +93,40 @@ class ConfigMITM:
         handler.end_headers()
 
         if handler.path.startswith('/api/v1/config/player') and response.status_code == 200:
-            data = json.loads(response.text)
+            data = self.patch_client_config(json.loads(response.text))
             if 'chat.affinities' in data:
-                for region, ip in data['chat.affinities'].items():
-                    existingMapping = next((m for m in self.affinityMappings if m['riotHost'] == ip), None)
-                    if existingMapping:
-                        data['chat.affinities'][region] = existingMapping['localHost']
-                    else:
-                        newMapping = {
-                            'localHost': f'127.0.0.{self._affinityMappingID + 1}',
-                            'riotHost': ip,
-                            'riotPort': data['chat.port'],
-                        }
-                        self.affinityMappings.append(newMapping)
-                        data['chat.affinities'][region] = newMapping['localHost']
-                        self._affinityMappingID += 1
-
-                data['chat.port'] = self.xmpp_port
-                data['chat.host'] = self.host
-                data['chat.allow_bad_cert.enabled'] = True
-                data['chat.use_tls.enabled'] = False
                 handler.wfile.write(json.dumps(data).encode('utf-8'))
             else:
                 handler.wfile.write(response.content)
         else:
             handler.wfile.write(response.content)
+
+    def patch_client_config(self, data: dict) -> dict:
+        if 'chat.affinities' not in data:
+            return data
+
+        original_host = data.get('chat.host')
+        original_port = data.get('chat.port')
+        if original_host is None and isinstance(data.get('chat.affinities'), dict):
+            original_host = next(iter(data['chat.affinities'].values()), None)
+
+        if original_host is not None and original_port is not None:
+            self.upstream_chat_host = original_host
+            self.upstream_chat_port = original_port
+            self.affinityMappings = [{
+                'localHost': localhostChatHost,
+                'riotHost': original_host,
+                'riotPort': original_port,
+            }]
+
+        for region in list(data['chat.affinities'].keys()):
+            data['chat.affinities'][region] = localhostChatHost
+
+        data['chat.port'] = self.xmpp_port
+        data['chat.host'] = localhostChatHost
+        return data
+
+    def get_upstream_chat_endpoint(self):
+        if self.upstream_chat_host is None or self.upstream_chat_port is None:
+            return None, None
+        return self.upstream_chat_host, self.upstream_chat_port

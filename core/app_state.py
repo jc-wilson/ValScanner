@@ -5,7 +5,7 @@ import tempfile
 
 from core.presence_mode import DEFAULT_PRESENCE_MODE, normalize_presence_mode
 
-APP_STATE_VERSION = 4
+APP_STATE_VERSION = 5
 APP_STATE_RELATIVE_PATH = os.path.join("agent_selection", "app_state.json")
 LEGACY_MAP_SELECTION_RELATIVE_PATH = os.path.join("agent_selection", "map_agent_selection.json")
 DEFAULT_THEME_NAME = "midnight"
@@ -68,6 +68,9 @@ def default_app_state(map_uuids=None, base_path=None):
         "queue_snipe_enabled": False,
         "queue_snipe_selected_friend": None,
         "flagged_players": {},
+        "co_play_history": {
+            "by_user": {},
+        },
         "map_agent_selection": {
             map_uuid: ""
             for map_uuid in normalized_map_uuids
@@ -140,6 +143,62 @@ def _normalize_flagged_players(flagged_players):
     return normalized
 
 
+def _normalize_co_play_history(co_play_history):
+    if not isinstance(co_play_history, dict):
+        return {"by_user": {}}
+
+    raw_by_user = co_play_history.get("by_user")
+    if not isinstance(raw_by_user, dict):
+        return {"by_user": {}}
+
+    normalized_by_user = {}
+    for raw_user_puuid, raw_user_history in raw_by_user.items():
+        user_puuid = str(raw_user_puuid or "").strip()
+        if not user_puuid or not isinstance(raw_user_history, dict):
+            continue
+
+        raw_matches = raw_user_history.get("matches")
+        raw_counts = raw_user_history.get("counts")
+        matches = {}
+        counts = {}
+
+        if isinstance(raw_matches, dict):
+            for raw_match_id, raw_participants in raw_matches.items():
+                match_id = str(raw_match_id or "").strip()
+                if not match_id or not isinstance(raw_participants, list):
+                    continue
+
+                participants = []
+                seen_participants = set()
+                for raw_participant in raw_participants:
+                    participant = str(raw_participant or "").strip()
+                    if not participant or participant in seen_participants:
+                        continue
+                    participants.append(participant)
+                    seen_participants.add(participant)
+                if participants:
+                    matches[match_id] = participants
+
+        if isinstance(raw_counts, dict):
+            for raw_puuid, raw_count in raw_counts.items():
+                puuid = str(raw_puuid or "").strip()
+                if not puuid:
+                    continue
+                try:
+                    count = int(raw_count)
+                except (TypeError, ValueError):
+                    continue
+                if count > 0:
+                    counts[puuid] = count
+
+        normalized_by_user[user_puuid] = {
+            "matches": matches,
+            "counts": counts,
+        }
+
+    return {"by_user": normalized_by_user}
+
+
 def normalize_app_state(state_data, map_uuids=None, base_path=None):
     raw_state = state_data if isinstance(state_data, dict) else {}
     normalized_map_uuids = _coerce_map_uuids(
@@ -158,6 +217,7 @@ def normalize_app_state(state_data, map_uuids=None, base_path=None):
         "queue_snipe_enabled": bool(raw_state.get("queue_snipe_enabled", False)),
         "queue_snipe_selected_friend": normalized_queue_snipe_friend,
         "flagged_players": _normalize_flagged_players(raw_state.get("flagged_players")),
+        "co_play_history": _normalize_co_play_history(raw_state.get("co_play_history")),
         "map_agent_selection": _normalize_map_agent_selection(
             raw_state.get("map_agent_selection"),
             normalized_map_uuids,

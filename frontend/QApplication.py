@@ -32,6 +32,7 @@ import asyncio
 import qasync
 import qtawesome as qta
 import websockets
+import aiohttp
 import ssl
 import base64
 import json
@@ -56,6 +57,14 @@ from core.presence_mode import (
 )
 from core.queue_snipe import QueueSnipeService
 from core.startup_coordinator import AppStartupCoordinator
+from core.remote_policy import check_banlist, check_killswitch
+from core.co_play_history import apply_live_match_co_play_history
+from core.player_icons import (
+    PLAYER_ICONS_URL,
+    PLAYER_ICON_TIMEOUT_SECONDS,
+    normalize_player_icon_rules,
+)
+from core.valorant_api_cache import refresh_valorant_api_jsons
 from core.asset_loader import (
     ensure_skin_asset_files,
     ensure_buddy_asset_files,
@@ -63,7 +72,7 @@ from core.asset_loader import (
     load_buddy_pixmap,
 )
 
-CURRENT_VERSION = "1.11.1"
+CURRENT_VERSION = "1.12"
 UPDATE_CHECK_URL = "https://ValScanner.com/version.json"
 WEBSITE_URL = "https://ValScanner.com/"
 APP_INSTANCE_KEY = "ValScanner.SingleInstance"
@@ -465,22 +474,6 @@ THEME_FLAGGED_BORDER = ""
 ACTIVE_THEME_STYLE_PROFILE = dict(DEFAULT_THEME_STYLE_PROFILE)
 INITIAL_ASSET_GROUPS = ("agents", "ranks", "maps")
 SPECIAL_BUDDY_UUID = "a57aa3d0-4ad0-b06a-6c54-338cb3ea6b41"
-VALSCANNER_LOGO_PUUIDS = {
-    "d0851dcc-43d3-585b-ace8-92b655d40c8e",
-    "2120edeb-2cdd-5beb-8ecb-3377987f25e8",
-    "68259dff-1550-5866-a6a9-7b24b373bce5",
-    "486fc4ee-a111-5a5c-9ed0-3e229e3c3c3f",
-    "1e639ab6-ceee-5c4c-ae58-1ea25c361daf",
-    "820f4269-219b-52b3-9c88-07b5e76351dd",
-}
-ROSE_EMOJI_PUUIDS = {
-    "68259dff-1550-5866-a6a9-7b24b373bce5",
-    "486fc4ee-a111-5a5c-9ed0-3e229e3c3c3f",
-    "1e639ab6-ceee-5c4c-ae58-1ea25c361daf",
-}
-VOMIT_EMOJI_PUUIDS = {
-    "99853431-64d8-5a57-8045-95d8212c1ab9",
-}
 
 
 def normalize_theme_name(theme_name):
@@ -3382,14 +3375,20 @@ class ValorantStatsWindow(QMainWindow):
         self.agent_icons = None
         self.rank_icons = None
         self.buddy_icons = {}
+        self.swords_icon = QPixmap(resource_path("assets/swords.png"))
         self.map_icons = None
         self.skin_icons = {}
         self._current_player_skin_ids = set()
         self._current_player_buddy_ids = set()
         self._player_cosmetic_prefetch_generation = 0
         self._player_cosmetic_prefetch_task = None
+        self.player_icon_rules = {}
+        self.player_icon_pixmaps = {}
+        self._player_icons_state = "not_started"
+        self._player_icons_task = None
         self.map_agent_selection = dict(persisted_state.get("map_agent_selection", {}))
         self.flagged_players = dict(persisted_state.get("flagged_players", {}))
+        self.co_play_history = dict(persisted_state.get("co_play_history", {"by_user": {}}))
         self.last_standard_agent_text = initial_agent
         self.last_standard_agent_value = self.resolve_standard_agent_value(initial_agent)
 
@@ -3490,7 +3489,6 @@ class ValorantStatsWindow(QMainWindow):
             ("#ffe06b", "rgba(255, 224, 107, 0.2)"),
         ]
         self.party_icon = QPixmap(resource_path("assets/group.png"))
-        self.valscanner_logo = QPixmap(resource_path("assets/logoone.png"))
         self.flag_icon = QPixmap(resource_path("assets/flag-solid.png"))
         self.update_presence_mode_indicator()
         self._party_refresh_scheduled = False
@@ -3534,6 +3532,7 @@ class ValorantStatsWindow(QMainWindow):
         self.last_seen = None
 
         self.puuid = None
+        self._remote_policy_checked_puuids = set()
 
         self._latency_start_time = None
         self.apply_restored_agent_lock_state(initial_auto_lock_enabled, initial_map_lock_enabled)
@@ -3785,6 +3784,9 @@ class ValorantStatsWindow(QMainWindow):
     async def bootstrap_startup(self):
         try:
             started = await self.startup_coordinator.initialize()
+            handler = LockfileHandler()
+            if handler.puuid and await self.enforce_remote_ban_policy(handler.puuid):
+                return
             if not started and self.startup_coordinator.restart_required:
                 await self.prompt_restart_for_party_detection()
             else:
@@ -3830,6 +3832,22 @@ class ValorantStatsWindow(QMainWindow):
         self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
         self.sync_party_detection_tool_states()
         await self.refresh_data()
+
+    async def enforce_remote_ban_policy(self, puuid):
+        normalized_puuid = str(puuid or "").strip().lower()
+        if not normalized_puuid or normalized_puuid in self._remote_policy_checked_puuids:
+            return False
+
+        decision = await check_banlist(normalized_puuid)
+        if not decision.blocked:
+            if decision.checked:
+                self._remote_policy_checked_puuids.add(normalized_puuid)
+            return False
+
+        QMessageBox.critical(self, "ValScanner Unavailable", decision.reason)
+        await self.request_close()
+        QApplication.quit()
+        return True
 
     def closeEvent(self, event: QCloseEvent):
         if self._allow_native_close:
@@ -3881,6 +3899,10 @@ class ValorantStatsWindow(QMainWindow):
         if self._player_cosmetic_prefetch_task and not self._player_cosmetic_prefetch_task.done():
             self._player_cosmetic_prefetch_task.cancel()
         self._player_cosmetic_prefetch_task = None
+
+        if self._player_icons_task and not self._player_icons_task.done():
+            self._player_icons_task.cancel()
+        self._player_icons_task = None
 
         running = ", ".join(running_processes) or "Riot Client / Valorant"
         QMessageBox.information(
@@ -3942,6 +3964,7 @@ class ValorantStatsWindow(QMainWindow):
             '_rank_icons_task',
             '_map_icons_task',
             '_player_cosmetic_prefetch_task',
+            '_player_icons_task',
             '_background_helper_task',
         )
         for task_name in task_names:
@@ -4015,6 +4038,7 @@ class ValorantStatsWindow(QMainWindow):
                 str(puuid): dict(details) if isinstance(details, dict) else details
                 for puuid, details in self.flagged_players.items()
             },
+            "co_play_history": dict(self.co_play_history or {"by_user": {}}),
             "map_agent_selection": dict(self.map_agent_selection or {}),
         }
 
@@ -4030,6 +4054,7 @@ class ValorantStatsWindow(QMainWindow):
         self.presence_mode = normalize_presence_mode(normalized_state.get("presence_mode"))
         self.map_agent_selection = dict(normalized_state.get("map_agent_selection", {}))
         self.flagged_players = dict(normalized_state.get("flagged_players", {}))
+        self.co_play_history = dict(normalized_state.get("co_play_history", {"by_user": {}}))
         self.queue_snipe_selected_friend = QueueSnipeService.normalize_friend(
             normalized_state.get("queue_snipe_selected_friend")
         )
@@ -4402,6 +4427,8 @@ class ValorantStatsWindow(QMainWindow):
                     continue
 
                 self.puuid = handler.puuid
+                if await self.enforce_remote_ban_policy(self.puuid):
+                    return
                 self.queue_snipe_service.set_local_self_puuid(self.puuid)
 
                 auth = base64.b64encode(f"riot:{handler.password}".encode()).decode()
@@ -4910,18 +4937,125 @@ class ValorantStatsWindow(QMainWindow):
         indicator.setToolTip(buddy_uuid)
         return indicator
 
+    def create_coplay_indicator(self, count, reference_button):
+        try:
+            count = int(count)
+        except (TypeError, ValueError):
+            return None
+        if count <= 0 or self.swords_icon.isNull():
+            return None
+
+        reference_button.ensurePolished()
+        target_height = max(
+            reference_button.sizeHint().height(),
+            reference_button.minimumSizeHint().height(),
+            28,
+        )
+        icon_size = max(16, target_height - 12)
+
+        indicator = QWidget()
+        indicator.setObjectName("coPlayIndicator")
+        indicator.setFixedHeight(target_height)
+
+        layout = QHBoxLayout(indicator)
+        layout.setContentsMargins(5, 0, 7, 0)
+        layout.setSpacing(4)
+
+        icon_label = QLabel()
+        icon_label.setAlignment(Qt.AlignCenter)
+        icon_label.setPixmap(
+            self.swords_icon.scaled(icon_size, icon_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        )
+        icon_label.setFixedSize(icon_size, icon_size)
+
+        count_label = QLabel(str(count))
+        count_label.setObjectName("coPlayIndicatorCount")
+        count_label.setAlignment(Qt.AlignCenter)
+
+        layout.addWidget(icon_label, 0, Qt.AlignVCenter)
+        layout.addWidget(count_label, 0, Qt.AlignVCenter)
+        indicator.setToolTip(f"Played together {count} time{'s' if count != 1 else ''}")
+        indicator.setFixedWidth(indicator.sizeHint().width())
+        return indicator
+
     def player_matches_puuid_set(self, player, puuid_set):
         normalized_puuid = str(player.get("puuid") or "").strip().lower()
         return normalized_puuid in puuid_set
 
-    def player_has_valscanner_logo(self, player):
-        return self.player_matches_puuid_set(player, VALSCANNER_LOGO_PUUIDS)
+    def schedule_remote_player_icons_load(self):
+        if self._player_icons_state != "not_started":
+            return
 
-    def player_has_rose_emoji(self, player):
-        return self.player_matches_puuid_set(player, ROSE_EMOJI_PUUIDS)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
 
-    def player_has_vomit_emoji(self, player):
-        return self.player_matches_puuid_set(player, VOMIT_EMOJI_PUUIDS)
+        self._player_icons_state = "loading"
+        self._player_icons_task = loop.create_task(self.load_remote_player_icons())
+        self._player_icons_task.add_done_callback(
+            lambda task: QTimer.singleShot(0, lambda: self._on_player_icons_loaded(task))
+        )
+
+    async def load_remote_player_icons(self):
+        session = SharedSession.get()
+        timeout = aiohttp.ClientTimeout(total=PLAYER_ICON_TIMEOUT_SECONDS)
+        async with session.get(PLAYER_ICONS_URL, timeout=timeout) as response:
+            if response.status != 200:
+                raise RuntimeError(f"{PLAYER_ICONS_URL} returned HTTP {response.status}")
+            payload = await response.json(content_type=None)
+
+        icon_rules = self.normalize_player_icon_rules(payload)
+        icon_pixmaps = {}
+        for puuid, rule in icon_rules.items():
+            icon_url = rule.get("icon")
+            try:
+                async with session.get(icon_url, timeout=timeout) as response:
+                    if response.status != 200:
+                        continue
+                    image_data = await response.read()
+            except Exception:
+                continue
+
+            pixmap = QPixmap()
+            if pixmap.loadFromData(image_data):
+                icon_pixmaps[puuid] = pixmap
+
+        return icon_rules, icon_pixmaps
+
+    def normalize_player_icon_rules(self, payload):
+        return normalize_player_icon_rules(payload)
+
+    def _on_player_icons_loaded(self, task):
+        try:
+            icon_rules, icon_pixmaps = task.result()
+        except asyncio.CancelledError:
+            return
+        except Exception as exc:
+            print(f"Remote player icon load failed: {exc}")
+            self._player_icons_state = "failed"
+            self._player_icons_task = None
+            return
+
+        self.player_icon_rules = icon_rules
+        self.player_icon_pixmaps = icon_pixmaps
+        self._player_icons_state = "loaded"
+        self._player_icons_task = None
+
+        if self.player_icon_pixmaps:
+            self.safe_load_players(getattr(self.valo_rank, "frontend_data", None) or {})
+
+    def player_icon_for_player(self, player):
+        normalized_puuid = str(player.get("puuid") or "").strip().lower()
+        if not normalized_puuid:
+            return None
+
+        pixmap = self.player_icon_pixmaps.get(normalized_puuid)
+        if pixmap is None:
+            return None
+
+        rule = self.player_icon_rules.get(normalized_puuid, {})
+        return pixmap, str(rule.get("tooltip") or "Player icon")
 
     def player_is_flagged(self, player):
         player_puuid = str(player.get("puuid", "") or "").strip()
@@ -4937,22 +5071,47 @@ class ValorantStatsWindow(QMainWindow):
             return "Flagged player"
         return "Toggle flagged player"
 
-    def create_valscanner_logo_indicator(self, target_height=18):
-        if self.valscanner_logo.isNull():
+    def build_player_clipboard_name(self, player):
+        game_name = str(player.get("game_name", "") or "").strip()
+        game_tag = str(player.get("tag", "") or player.get("game_tag", "") or "").strip()
+        display_name = str(player.get("name", "") or player.get("display_name", "") or "Unknown").strip()
+
+        if game_name and game_tag:
+            return f"{game_name}#{game_tag}"
+        return display_name or "Unknown"
+
+    def create_copy_name_indicator(self, player, target_height=18):
+        copy_icon_path = resource_path(os.path.join("assets", "copy-regular.png"))
+        if not os.path.exists(copy_icon_path):
             return None
 
-        scaled_logo = self.valscanner_logo.scaled(
+        copy_name = self.build_player_clipboard_name(player)
+        copy_icon = QPixmap(copy_icon_path)
+        if copy_icon.isNull():
+            return None
+
+        scaled_icon = copy_icon.scaled(
             target_height,
             target_height,
             Qt.KeepAspectRatio,
             Qt.SmoothTransformation,
         )
-        indicator = QLabel()
-        indicator.setObjectName("valscannerLogoIndicator")
+        indicator = InstantTooltipLabel()
+        indicator.setObjectName("copyNameIndicator")
         indicator.setAlignment(Qt.AlignCenter)
-        indicator.setPixmap(scaled_logo)
-        indicator.setFixedSize(scaled_logo.size())
-        indicator.setToolTip("ValScanner")
+        indicator.setPixmap(scaled_icon)
+        indicator.setFixedSize(scaled_icon.size())
+        indicator.set_instant_tooltip(f"Copy {copy_name}")
+        indicator.setCursor(Qt.PointingHandCursor)
+
+        def on_copy_click(event, text=copy_name):
+            if event.button() == Qt.LeftButton:
+                QApplication.clipboard().setText(text)
+                event.accept()
+                return
+            QLabel.mousePressEvent(indicator, event)
+
+        indicator.mousePressEvent = on_copy_click
         return indicator
 
     def create_flag_indicator(self, target_height=18, tooltip_text="Toggle flagged player"):
@@ -4972,6 +5131,29 @@ class ValorantStatsWindow(QMainWindow):
         indicator.setFixedSize(scaled_flag.size())
         indicator.set_instant_tooltip(str(tooltip_text or ""))
         indicator.setCursor(Qt.PointingHandCursor)
+        return indicator
+
+    def create_remote_player_icon_indicator(self, player, target_height=18):
+        icon_data = self.player_icon_for_player(player)
+        if icon_data is None:
+            return None
+
+        pixmap, tooltip = icon_data
+        scaled_icon = pixmap.scaled(
+            target_height,
+            target_height,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
+        if scaled_icon.isNull():
+            return None
+
+        indicator = QLabel()
+        indicator.setObjectName("remotePlayerIconIndicator")
+        indicator.setAlignment(Qt.AlignCenter)
+        indicator.setPixmap(scaled_icon)
+        indicator.setFixedSize(scaled_icon.size())
+        indicator.setToolTip(tooltip)
         return indicator
 
     def flag_player_by_puuid(self, puuid):
@@ -4997,15 +5179,6 @@ class ValorantStatsWindow(QMainWindow):
         self.flagged_players[normalized_puuid] = existing_entry
         self.persist_agent_lock_state()
         self.safe_load_players(getattr(self.valo_rank, "frontend_data", None) or {})
-
-    def create_name_row_emoji_indicator(self, emoji_text, tooltip, target_height=18):
-        indicator = QLabel(emoji_text)
-        indicator.setObjectName("nameRowEmojiIndicator")
-        indicator.setAlignment(Qt.AlignCenter)
-        indicator.setFixedSize(max(target_height, 20), target_height)
-        indicator.setStyleSheet("font-size: 16px;")
-        indicator.setToolTip(tooltip)
-        return indicator
 
     def build_party_overlay(self, player):
         group_index = player.get("party_group_index")
@@ -5135,6 +5308,10 @@ class ValorantStatsWindow(QMainWindow):
         )
         name_row.addWidget(name_label, 0, Qt.AlignVCenter)
 
+        copy_indicator = self.create_copy_name_indicator(player)
+        if copy_indicator is not None:
+            name_row.addWidget(copy_indicator, 0, Qt.AlignVCenter)
+
         vtl_label = QLabel()
         vtl_label.setAlignment(Qt.AlignCenter)
         vtl_label.setContentsMargins(0, 0, 0, 0)
@@ -5174,18 +5351,9 @@ class ValorantStatsWindow(QMainWindow):
             flag_indicator.mousePressEvent = on_flag_click
             name_row.addWidget(flag_indicator, 0, Qt.AlignVCenter)
 
-        if self.player_has_rose_emoji(player):
-            rose_indicator = self.create_name_row_emoji_indicator("🌹", "Rose")
-            name_row.addWidget(rose_indicator, 0, Qt.AlignVCenter)
-
-        if self.player_has_vomit_emoji(player):
-            vomit_indicator = self.create_name_row_emoji_indicator("🤮", "Vomit")
-            name_row.addWidget(vomit_indicator, 0, Qt.AlignVCenter)
-
-        if self.player_has_valscanner_logo(player):
-            valscanner_logo_indicator = self.create_valscanner_logo_indicator(vtl_label.height())
-            if valscanner_logo_indicator is not None:
-                name_row.addWidget(valscanner_logo_indicator, 0, Qt.AlignVCenter)
+        remote_icon_indicator = self.create_remote_player_icon_indicator(player, vtl_label.height())
+        if remote_icon_indicator is not None:
+            name_row.addWidget(remote_icon_indicator, 0, Qt.AlignVCenter)
 
         name_row.addStretch()
 
@@ -5199,6 +5367,9 @@ class ValorantStatsWindow(QMainWindow):
 
         skin_button = self.create_skin_button(player)
         meta_bar.addWidget(skin_button)
+        coplay_indicator = self.create_coplay_indicator(player.get("co_play_count"), skin_button)
+        if coplay_indicator is not None:
+            meta_bar.addWidget(coplay_indicator, 0, Qt.AlignVCenter)
         if self.player_has_buddy_equipped(player, SPECIAL_BUDDY_UUID):
             buddy_indicator = self.create_buddy_indicator(SPECIAL_BUDDY_UUID, skin_button)
             if buddy_indicator is not None:
@@ -6063,10 +6234,14 @@ class ValorantStatsWindow(QMainWindow):
                 return
             if prematch_id or match_id or map_instalock:
                 await self.valo_rank.valo_stats(prematch_id=prematch_id, match_id=match_id, map_instalock=map_instalock)
+                if self.update_co_play_history_after_live_match():
+                    self.persist_agent_lock_state()
             elif party_id:
                 await self.valo_rank.lobby_load(party_id=party_id)
             else:
                 await self.valo_rank.valo_stats()
+                if self.update_co_play_history_after_live_match():
+                    self.persist_agent_lock_state()
             print("? Data fetched. Refreshing table...")
             self.safe_load_players(self.valo_rank.frontend_data)
             self.update_metadata()
@@ -6080,6 +6255,20 @@ class ValorantStatsWindow(QMainWindow):
         finally:
             self.refresh_button.setEnabled(True)
 
+    def update_co_play_history_after_live_match(self):
+        handler = getattr(self.valo_rank, "handler", None)
+        player_info = getattr(handler, "player_info", None)
+        if not player_info:
+            return False
+
+        return apply_live_match_co_play_history(
+            getattr(self.valo_rank, "frontend_data", None) or {},
+            self.co_play_history,
+            self.puuid,
+            getattr(handler, "in_match", None) or getattr(handler, "match_id", None),
+            player_info,
+        )
+
     def load_players(self, players):
         self.left_players = []
         self.right_players = []
@@ -6089,6 +6278,7 @@ class ValorantStatsWindow(QMainWindow):
             self.populate_team_layout(self.left_scroll_area, self.left_layout, [], "STARTING SIDE: DEFENSE")
             self.populate_team_layout(self.right_scroll_area, self.right_layout, [], "STARTING SIDE: ATTACK")
             self.update_metadata()
+            QTimer.singleShot(0, self.schedule_remote_player_icons_load)
             return
 
         player_iterable = players.values() if isinstance(players, dict) else players
@@ -6115,6 +6305,7 @@ class ValorantStatsWindow(QMainWindow):
         )
         self.update_metadata()
         QTimer.singleShot(0, self.refresh_player_row_heights)
+        QTimer.singleShot(0, self.schedule_remote_player_icons_load)
 
     def populate_team_layout(self, scroll_area, layout, players, empty_message):
         self.clear_layout(layout)
@@ -6336,10 +6527,19 @@ def create_activation_server(server_name):
 
 
 async def main():
+    killswitch_decision = await check_killswitch()
+    if killswitch_decision.blocked:
+        QMessageBox.critical(None, "ValScanner Unavailable", killswitch_decision.reason)
+        return None
+
+    await refresh_valorant_api_jsons()
     check_for_updates()
 
     window = ValorantStatsWindow([])
     await window.startup_coordinator.ensure_riot_with_mitm()
+    handler = LockfileHandler()
+    if handler.puuid and await window.enforce_remote_ban_policy(handler.puuid):
+        return None
     await window.bootstrap_startup()
     await window.wait_for_initial_assets()
     window.finish_initial_window_setup()
@@ -6360,9 +6560,10 @@ if __name__ == "__main__":
     asyncio.set_event_loop(loop)
 
     window = loop.run_until_complete(main())
-    window.attach_activation_server(activation_server, APP_INSTANCE_KEY)
-    with loop:
-        loop.run_forever()
+    if window is not None:
+        window.attach_activation_server(activation_server, APP_INSTANCE_KEY)
+        with loop:
+            loop.run_forever()
 
 
 

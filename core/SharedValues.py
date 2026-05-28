@@ -4,3 +4,5 @@ affinityMappings = None
 xmppPort = 35478
 host = '127.0.0.1'
 port = 35479
+localhostChatHost = 'deceive-localhost.molenzwiebel.xyz'
+localhostPfxUrl = 'https://mln.cx/deceive/localhost.pfx'

@@ -7,6 +7,7 @@ from pathlib import Path
 from core.ConfigMITM import ConfigMITM
 from core.SharedValues import host, port, xmppPort
 from core.XMPPMitm import XmppMITM
+from core.certificate_helper import get_localhost_server_ssl_context
 from core.presence_mode import normalize_presence_mode
 
 DEFAULT_RIOT_CLIENT_PATH = Path(r"C:\Riot Games\Riot Client\RiotClientServices.exe")
@@ -105,6 +106,11 @@ class RiotMitmService:
                 self.xmpp_mitm.set_presence_mode(self._presence_mode, broadcast=False)
             return
 
+        try:
+            server_ssl_context = await asyncio.to_thread(get_localhost_server_ssl_context)
+        except Exception as exc:
+            raise RuntimeError("Unable to prepare the local XMPP TLS certificate.") from exc
+
         self._log_stream = InMemoryLogStream()
         await self._log_stream.write(json.dumps({
             "type": "ValScanner-xmpp-logger-python",
@@ -115,7 +121,12 @@ class RiotMitmService:
         self._config_thread = threading.Thread(target=self.config_mitm.start, daemon=True)
         self._config_thread.start()
 
-        self.xmpp_mitm = XmppMITM(self.xmpp_port, self.config_mitm, self._log_stream)
+        self.xmpp_mitm = XmppMITM(
+            self.xmpp_port,
+            self.config_mitm,
+            self._log_stream,
+            server_ssl_context=server_ssl_context,
+        )
         self.xmpp_mitm.set_presence_mode(self._presence_mode, broadcast=False)
         await self.xmpp_mitm.start()
         self._started = True

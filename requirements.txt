@@ -5,6 +5,7 @@ asyncio==3.4.3
 attrs==25.4.0
 certifi==2025.10.5
 charset-normalizer==3.4.4
+cryptography>=42.0.0
 frozenlist==1.8.0
 idna==3.11
 msgspec==0.19.0

@@ -10,8 +10,8 @@ from core.party_tracker import PartyTracker
 from core.presence_mode import PRESENCE_MODE_OFFLINE, normalize_presence_mode
 
 """This class creates connections to the previously in ConfigMITM modified chat-servers and logs the communication between that
-    First it creates a local socket to listen for incoming requests on port 35478 (the previously modified port) to determine which chat server to connect to
-    As soon as a request comes in, it saves the host it now communicates on (ipv4LocalHost) and finds the relevant chat socket in the mappings to connect to it
+    First it creates a local TLS socket to listen for incoming requests on port 35478 (the previously modified port).
+    As soon as a request comes in, it connects to the original Riot chat socket saved by ConfigMITM.
     After connecting to the chat socket, it starts logging all the incoming and outgoing traffic"""
 
 
@@ -307,10 +307,11 @@ def _build_fake_player_presence(version: str | None = None, available: bool = Tr
 
 
 class XmppMITM:
-    def __init__(self, xmpp_port=int, config_mitm=object, log_stream=object):
+    def __init__(self, xmpp_port=int, config_mitm=object, log_stream=object, server_ssl_context=None):
         self.port = xmpp_port
         self.config_mitm = config_mitm
         self.log_stream = log_stream
+        self.server_ssl_context = server_ssl_context
         self.socketID = 0
         self.server = None
         self.party_tracker = PartyTracker.get()
@@ -330,7 +331,12 @@ class XmppMITM:
         """Starts the XMPP server to listen to all hosts on port 35478 -> None"""
 
         print("Starting XMPP server...")
-        self.server = await asyncio.start_server(self.handle_client, "0.0.0.0", self.port)
+        self.server = await asyncio.start_server(
+            self.handle_client,
+            "0.0.0.0",
+            self.port,
+            ssl=self.server_ssl_context,
+        )
         print("Started XMPP Server!")
         self._shutting_down = False
         self._serve_task = asyncio.create_task(self.server.serve_forever())
@@ -404,13 +410,11 @@ class XmppMITM:
             await self._wait_for_close(client_writer)
             return
 
-        server_addr = client_writer.get_extra_info("sockname")
-        ipv4LocalHost = server_addr[0]
         peer_addr = client_writer.get_extra_info("peername")
-        mapping = next((m for m in self.config_mitm.affinityMappings if m["localHost"] == ipv4LocalHost), None)
-        if mapping is None:
-            print(f"[XMPPMitm] Unknown host local={ipv4LocalHost} peer={peer_addr}")
-            await self.log_message(f"Unknown host {ipv4LocalHost}")
+        riot_host, riot_port = self.config_mitm.get_upstream_chat_endpoint()
+        if riot_host is None or riot_port is None:
+            print(f"[XMPPMitm] Missing upstream chat endpoint peer={peer_addr}")
+            await self.log_message("Missing upstream chat endpoint")
             client_writer.close()
             await client_writer.wait_closed()
             return
@@ -420,25 +424,28 @@ class XmppMITM:
         await self.log_message(json.dumps({
             "type": "open-valorant",
             "time": datetime.now().timestamp(),
-            "host": mapping["riotHost"],
-            "port": mapping["riotPort"],
+            "host": riot_host,
+            "port": riot_port,
             "socketID": current_socket_id,
         }))
         print(
-            f"[XMPPMitm] socket={current_socket_id} accepted local={ipv4LocalHost} peer={peer_addr} "
-            f"mapped_host={mapping['riotHost']} mapped_port={mapping['riotPort']}"
+            f"[XMPPMitm] socket={current_socket_id} accepted peer={peer_addr} "
+            f"upstream_host={riot_host} upstream_port={riot_port}"
         )
 
         try:
             riot_reader, riot_writer = await asyncio.open_connection(
-                mapping["riotHost"], mapping["riotPort"], ssl=ssl.create_default_context()
+                riot_host,
+                riot_port,
+                ssl=ssl.create_default_context(),
+                server_hostname=riot_host,
             )
         except Exception as exc:
             await self.log_message(json.dumps({
                 "type": "xmpp-connect-error",
                 "time": datetime.now().timestamp(),
-                "host": mapping["riotHost"],
-                "port": mapping["riotPort"],
+                "host": riot_host,
+                "port": riot_port,
                 "socketID": current_socket_id,
                 "error": str(exc),
             }))
