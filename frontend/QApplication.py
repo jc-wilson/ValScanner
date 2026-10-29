@@ -1,36 +1,30 @@
-﻿from html import escape
-import hashlib
-import math
+from html import escape
+from urllib.parse import quote
 import time
-import tempfile
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow,
     QVBoxLayout, QGridLayout, QHBoxLayout, QWidget, QLabel, QPushButton,
     QComboBox, QFrame, QSplitter, QScrollArea, QDialog,
     QGraphicsDropShadowEffect, QSizePolicy, QProgressBar,
-    QGraphicsOpacityEffect, QLineEdit, QMessageBox
+    QGraphicsOpacityEffect, QLineEdit, QMessageBox, QDoubleSpinBox
 )
-from PySide6.QtCore import Qt, QEvent, QTimer, QSize, QUrl, QPoint, QRectF, QRect
+from PySide6.QtCore import Qt, QEvent, QTimer, QSize, QUrl, QPoint
 from PySide6.QtGui import (
     QPixmap,
-    QImage,
     QIcon,
     QFontDatabase,
     QFont,
     QFontMetrics,
     QColor,
     QPainter,
-    QBrush,
     QCloseEvent,
     QDesktopServices,
     QCursor,
     QPen,
-    QLinearGradient,
     QRadialGradient,
 )
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
-from PySide6.QtQuickWidgets import QQuickWidget
 import sys
 import os
 import random
@@ -44,12 +38,9 @@ import base64
 import json
 import requests
 from superqt import QToggleSwitch as SuperQtToggleSwitch
-from core.app_state import (
-    DEFAULT_THEME_SURFACE_MODE,
-    load_app_state,
-    normalize_theme_surface_mode,
-    save_app_state,
-)
+from core.app_identity import APP_NAME, APP_INSTANCE_KEY, APP_ICON_PATH
+from core.app_state import get_external_path
+from core.app_state import APP_STATE_VERSION, load_app_state, save_app_state, DEFAULT_INSTALOCK_DELAY_SECONDS, MAX_INSTALOCK_DELAY_SECONDS
 from core.api_client import ValoRank
 from core.dodge_button import dodge
 from core.instalock_agent import instalock_agent
@@ -57,8 +48,10 @@ from core.map_instalock_agent import map_instalock_agent
 from core.valorant_uuid import UUIDHandler
 from core.local_api import LockfileHandler
 from core.owned_agents import OwnedAgents
+from core.agent_selection import SELECTION_TOKENS, normalize_random_selections, random_agent_pool
 from core.owned_skins import OwnedSkins
 from core.player_loadout import PlayerLoadout
+from core.weapons import WEAPON_ORDER, PRESET_WEAPON_ORDER, preset_to_weapon_skins
 from core.http_session import SharedSession
 from core.party_tracker import PartyTracker
 from core.presence_mode import (
@@ -68,34 +61,24 @@ from core.presence_mode import (
 )
 from core.queue_snipe import QueueSnipeService
 from core.startup_coordinator import AppStartupCoordinator
-from core.remote_policy import check_banlist, check_killswitch, check_xmpp_killswitch
 from core.co_play_history import apply_live_match_co_play_history
 from core.player_icons import (
     PLAYER_ICONS_URL,
     PLAYER_ICON_TIMEOUT_SECONDS,
     normalize_player_icon_rules,
 )
-from core.frontend_state import FrontendWindowState
-from core.delayed_hydration import should_run_delayed_hydration
-from core.player_display import PlayerDisplayFormatter
-from core.player_card_display import SPECIAL_BUDDY_UUID, build_player_card_display
 from core.valorant_api_cache import refresh_valorant_api_jsons
+from core.resource_cache import seed_runtime_resources
 from core.asset_loader import (
     ensure_skin_asset_files,
     ensure_buddy_asset_files,
     load_skin_pixmap,
     load_buddy_pixmap,
 )
-try:
-    from frontend.qml_bridge import PlayerCardBridge, QmlProbeBridge, ThemePopupBridge, TopBarBridge
-except ModuleNotFoundError:
-    from qml_bridge import PlayerCardBridge, QmlProbeBridge, ThemePopupBridge, TopBarBridge
 
-CURRENT_VERSION = "1.12.4"
+CURRENT_VERSION = "1.12.3"
 UPDATE_CHECK_URL = "https://ValScanner.com/version.json"
 WEBSITE_URL = "https://ValScanner.com/"
-APP_INSTANCE_KEY = "ValScanner.SingleInstance"
-PLAYER_ROW_RENDERER_ENV = "VALSCANNER_PLAYER_ROW_RENDERER"
 CLOSE_ICON_NAME = "fa6s.xmark"
 REFRESH_ICON_NAME = "fa6s.arrows-rotate"
 OFFLINE_ICON_NAME = "fa6s.user-slash"
@@ -119,26 +102,24 @@ MAP_DISPLAY_NAMES = {
     "de28aa9b-4cbe-1003-320e-6cb3ec309557": "Glitch",
     "e2ad5c54-4114-a870-9641-8ea21279579a": "Icebox",
     "fd267378-4d1d-484f-ff52-77821ed10dc2": "Pearl",
-    "756da597-416b-c0f2-f47b-afbdf28670bc": "Summit"
 }
 # Edit these lists to move maps between popup sections.
 MAP_SECTION_MAPS = {
     "Competitive": [
+        "b529448b-4d60-346e-e89e-00a4c527a405",
         "2fe4ed3a-450a-948b-6d6b-e89a78e680a9",
         "2bee0dc9-4ffe-519b-1cbd-7fbe763a6047",
+        "2c9d57ec-4431-9c5e-2939-8f9ef6dd5cba",
         "2fb9a4fd-47b8-4e7d-a969-74b4046ebd53",
         "d960549e-485c-e861-8d71-aa9d1aed12a2",
-        "756da597-416b-c0f2-f47b-afbdf28670bc",
-        "92584fbe-486a-b1b2-9faa-39b0f486b498",
-        "7eaecc1b-4337-bbf6-6ab9-04b8f06b3319"
+        "fd267378-4d1d-484f-ff52-77821ed10dc2",
     ],
     "Standard": [
         "224b0a95-48b9-f703-1bd8-67aca101a61f",
-        "fd267378-4d1d-484f-ff52-77821ed10dc2",
-        "2c9d57ec-4431-9c5e-2939-8f9ef6dd5cba",
+        "7eaecc1b-4337-bbf6-6ab9-04b8f06b3319",
+        "92584fbe-486a-b1b2-9faa-39b0f486b498",
         "1c18ab1f-420d-0d8b-71d0-77ad3c439115",
         "e2ad5c54-4114-a870-9641-8ea21279579a",
-        "b529448b-4d60-346e-e89e-00a4c527a405"
     ],
     "Team Deathmatch": [
         "2c09d728-42d5-30d8-43dc-96a05cc7ee9d",
@@ -285,8 +266,8 @@ THEME_DEFINITIONS = {
         "flagged_row_hover": "#2b4caf",
         "flagged_border": "#ffd36b",
     },
-    "sage": {
-        "label": "Sage",
+    "bailey": {
+        "label": "Bailey",
         "swatch_a": "#7ea67f",
         "swatch_b": "#c79a4b",
         "main": "#507153",
@@ -467,7 +448,7 @@ LIGHT_LOCK_AGENT_TEXT_THEMES = {
     "midnight",
     "sandstorm",
     "amethyst",
-    "sage",
+    "bailey",
     "glacier",
     "liquidglass",
 }
@@ -494,10 +475,8 @@ THEME_FLAGGED_ROW = ""
 THEME_FLAGGED_ROW_HOVER = ""
 THEME_FLAGGED_BORDER = ""
 ACTIVE_THEME_STYLE_PROFILE = dict(DEFAULT_THEME_STYLE_PROFILE)
-ACTIVE_THEME_SURFACE_MODE = DEFAULT_THEME_SURFACE_MODE
 INITIAL_ASSET_GROUPS = ("agents", "ranks", "maps")
-BACKGROUND_PIXMAP_CACHE = {}
-BACKGROUND_DITHER_PIXMAP = None
+SPECIAL_BUDDY_UUID = "a57aa3d0-4ad0-b06a-6c54-338cb3ea6b41"
 
 
 def normalize_theme_name(theme_name):
@@ -505,27 +484,9 @@ def normalize_theme_name(theme_name):
     return normalized if normalized in THEME_DEFINITIONS else DEFAULT_THEME_NAME
 
 
-def get_theme_style_profile(theme_name=None, surface_mode=None):
+def get_theme_style_profile(theme_name=None):
     profile = dict(DEFAULT_THEME_STYLE_PROFILE)
     profile.update(THEME_STYLE_PROFILES.get(normalize_theme_name(theme_name), {}))
-    normalized_mode = normalize_theme_surface_mode(
-        ACTIVE_THEME_SURFACE_MODE if surface_mode is None else surface_mode
-    )
-    if normalized_mode == "opaque":
-        profile["glass"] = False
-        profile["decorative_background"] = False
-        for alpha_key in (
-            "surface_alpha_main",
-            "surface_alpha_panel",
-            "surface_alpha_card",
-            "surface_alpha_alt",
-            "surface_alpha_window",
-            "button_alpha",
-            "button_hover_alpha",
-            "button_pressed_alpha",
-            "tooltip_alpha",
-        ):
-            profile[alpha_key] = 1.0
     return profile
 
 
@@ -533,14 +494,12 @@ def get_theme_definition(theme_name=None):
     return THEME_DEFINITIONS[normalize_theme_name(theme_name)]
 
 
-def apply_theme_palette(theme_name=None, surface_mode=None):
-    global ACTIVE_THEME_STYLE_PROFILE, ACTIVE_THEME_SURFACE_MODE
-    if surface_mode is not None:
-        ACTIVE_THEME_SURFACE_MODE = normalize_theme_surface_mode(surface_mode)
+def apply_theme_palette(theme_name=None):
+    global ACTIVE_THEME_STYLE_PROFILE
     palette = get_theme_definition(theme_name)
     for color_key in THEME_COLOR_KEYS:
         globals()[f"THEME_{color_key.upper()}"] = palette[color_key]
-    ACTIVE_THEME_STYLE_PROFILE = get_theme_style_profile(theme_name, ACTIVE_THEME_SURFACE_MODE)
+    ACTIVE_THEME_STYLE_PROFILE = get_theme_style_profile(theme_name)
     return normalize_theme_name(theme_name)
 
 
@@ -549,10 +508,6 @@ apply_theme_palette(DEFAULT_THEME_NAME)
 
 def get_active_theme_style_profile():
     return ACTIVE_THEME_STYLE_PROFILE
-
-
-def get_active_theme_surface_mode():
-    return ACTIVE_THEME_SURFACE_MODE
 
 
 def should_use_light_lock_agent_text(theme_name):
@@ -577,142 +532,6 @@ def make_qcolor(color_value, alpha=None):
 def theme_rgba(color_value, alpha):
     color = make_qcolor(color_value, alpha=alpha)
     return f"rgba({color.red()}, {color.green()}, {color.blue()}, {color.alpha()})"
-
-
-def clamp_value(value, lower=0.0, upper=1.0):
-    return max(lower, min(upper, value))
-
-
-def color_to_rgb(color_value):
-    color = make_qcolor(color_value)
-    return color.redF(), color.greenF(), color.blueF()
-
-
-def mix_rgb(first, second, amount):
-    amount = clamp_value(amount)
-    inverse = 1.0 - amount
-    return (
-        first[0] * inverse + second[0] * amount,
-        first[1] * inverse + second[1] * amount,
-        first[2] * inverse + second[2] * amount,
-    )
-
-
-def rgb_to_qcolor(rgb, alpha=1.0):
-    color = QColor(
-        int(clamp_value(rgb[0]) * 255),
-        int(clamp_value(rgb[1]) * 255),
-        int(clamp_value(rgb[2]) * 255),
-    )
-    color.setAlphaF(clamp_value(alpha))
-    return color
-
-
-def deterministic_noise(x, y):
-    value = (x * 374761393 + y * 668265263 + (x ^ y) * 2246822519) & 0xFFFFFFFF
-    value = (value ^ (value >> 13)) * 1274126177
-    value = value ^ (value >> 16)
-    return ((value & 0xFF) / 255.0) - 0.5
-
-
-def get_background_dither_pixmap():
-    global BACKGROUND_DITHER_PIXMAP
-    if BACKGROUND_DITHER_PIXMAP is not None:
-        return BACKGROUND_DITHER_PIXMAP
-
-    size = 128
-    image = QImage(size, size, QImage.Format_ARGB32)
-    image.fill(Qt.transparent)
-    for y in range(size):
-        for x in range(size):
-            value = deterministic_noise(x, y)
-            alpha = 5 if abs(value) > 0.1 else 3
-            color = QColor(255, 255, 255, alpha) if value > 0 else QColor(0, 0, 0, alpha)
-            image.setPixelColor(x, y, color)
-
-    BACKGROUND_DITHER_PIXMAP = QPixmap.fromImage(image)
-    return BACKGROUND_DITHER_PIXMAP
-
-
-def get_background_pixmap(width, height, decorative_background):
-    global BACKGROUND_PIXMAP_CACHE
-    width = max(1, int(width))
-    height = max(1, int(height))
-    render_width = min(width, 520)
-    render_height = max(1, round(height * (render_width / width)))
-    cache_key = (
-        render_width,
-        render_height,
-        bool(decorative_background),
-        THEME_MAIN,
-        THEME_PANEL,
-        THEME_WINDOW,
-        THEME_ACCENT,
-        THEME_CYAN,
-        THEME_GOLD,
-    )
-    cached = BACKGROUND_PIXMAP_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
-
-    if len(BACKGROUND_PIXMAP_CACHE) > 4:
-        BACKGROUND_PIXMAP_CACHE.clear()
-
-    main = color_to_rgb(THEME_MAIN)
-    panel = color_to_rgb(THEME_PANEL)
-    window = color_to_rgb(THEME_WINDOW)
-    accent = color_to_rgb(THEME_ACCENT)
-    cyan = color_to_rgb(THEME_CYAN)
-    gold = color_to_rgb(THEME_GOLD)
-
-    pixmap = QPixmap(render_width, render_height)
-    pixmap.fill(make_qcolor(THEME_WINDOW))
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.Antialiasing)
-    painter.setPen(Qt.NoPen)
-
-    base_gradient = QLinearGradient(0, 0, render_width, render_height)
-    base_gradient.setColorAt(0.0, rgb_to_qcolor(window))
-    base_gradient.setColorAt(0.16, rgb_to_qcolor(mix_rgb(window, main, 0.25)))
-    base_gradient.setColorAt(0.32, rgb_to_qcolor(mix_rgb(window, main, 0.55)))
-    base_gradient.setColorAt(0.5, rgb_to_qcolor(main))
-    base_gradient.setColorAt(0.66, rgb_to_qcolor(mix_rgb(main, panel, 0.35)))
-    base_gradient.setColorAt(0.82, rgb_to_qcolor(mix_rgb(main, panel, 0.68)))
-    base_gradient.setColorAt(1.0, rgb_to_qcolor(panel))
-    painter.fillRect(0, 0, render_width, render_height, base_gradient)
-
-    if decorative_background:
-        light_specs = (
-            (render_width * 0.14, render_height * 0.04, max(render_width * 0.56, 190), accent, 0.16),
-            (render_width * 0.28, render_height * 0.58, max(render_width * 0.78, 260), cyan, 0.07),
-            (render_width * 0.86, render_height * 0.16, max(render_width * 0.46, 160), gold, 0.06),
-            (render_width * 0.68, render_height * 0.94, max(render_width * 0.66, 230), panel, 0.1),
-        )
-        for center_x, center_y, radius, light_color, alpha in light_specs:
-            light = QRadialGradient(center_x, center_y, radius)
-            light.setColorAt(0.0, rgb_to_qcolor(light_color, alpha))
-            light.setColorAt(0.35, rgb_to_qcolor(light_color, alpha * 0.55))
-            light.setColorAt(0.68, rgb_to_qcolor(light_color, alpha * 0.16))
-            light.setColorAt(0.88, rgb_to_qcolor(light_color, alpha * 0.04))
-            light.setColorAt(1.0, rgb_to_qcolor(light_color, 0.0))
-            painter.setBrush(light)
-            painter.drawEllipse(
-                int(center_x - radius),
-                int(center_y - radius),
-                int(radius * 2),
-                int(radius * 2),
-            )
-
-    vignette = QRadialGradient(render_width * 0.5, render_height * 0.48, max(render_width, render_height) * 0.72)
-    vignette.setColorAt(0.0, QColor(0, 0, 0, 0))
-    vignette.setColorAt(0.72, QColor(0, 0, 0, 10))
-    vignette.setColorAt(1.0, QColor(0, 0, 0, 32))
-    painter.setBrush(vignette)
-    painter.drawRect(0, 0, render_width, render_height)
-    painter.end()
-
-    BACKGROUND_PIXMAP_CACHE[cache_key] = pixmap
-    return pixmap
 
 
 def get_surface_color(surface_name):
@@ -845,7 +664,19 @@ def resource_path(relative_path):
         base_path = os.path.dirname(sys.executable)
     else:
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base_path, relative_path)
+    external_path = os.path.join(base_path, relative_path)
+    if os.path.exists(external_path) or not getattr(sys, "frozen", False):
+        return external_path
+    bundled_path = os.path.join(sys._MEIPASS, relative_path)
+    return bundled_path if os.path.exists(bundled_path) else external_path
+
+
+def application_icon():
+    icon = QIcon(resource_path(APP_ICON_PATH))
+    if icon.isNull():
+        return qta.icon("fa6s.cube", color="#4da3ff")
+    return icon
+
 
 def create_qtawesome_icon(icon_name, color=None, disabled_color=None):
     icon_kwargs = {
@@ -860,11 +691,15 @@ def create_qtawesome_icon(icon_name, color=None, disabled_color=None):
         return QIcon()
 
 def configure_close_button(button, icon_size=20):
-    close_icon = QIcon(resource_path(os.path.join("assets", "xmark-solid.png")))
-    button.setText("")
+    close_icon = create_qtawesome_icon(
+        CLOSE_ICON_NAME,
+        color=THEME_TEXT,
+        disabled_color=THEME_MUTED,
+    )
     if close_icon.isNull():
-        button.setIcon(QIcon())
+        button.setText("X")
     else:
+        button.setText("")
         button.setIcon(close_icon)
         button.setIconSize(QSize(icon_size, icon_size))
     button.setToolTip("Close")
@@ -873,19 +708,6 @@ def configure_close_button(button, icon_size=20):
 def get_agent_asset_path(agent_name):
     filename = str(agent_name).replace("/", "_")
     return resource_path(os.path.join("assets", "agents", f"{filename}.png"))
-
-def get_asset_icon_path(filename):
-    return resource_path(os.path.join("assets", str(filename or "")))
-
-
-def qml_player_icon_cache_path(puuid, cache_dir=None):
-    normalized_puuid = str(puuid or "").strip().lower()
-    if not normalized_puuid:
-        return ""
-
-    cache_dir = cache_dir or os.path.join(tempfile.gettempdir(), "valscanner_qml_player_icons")
-    digest = hashlib.sha256(normalized_puuid.encode("utf-8")).hexdigest()[:24]
-    return os.path.join(cache_dir, f"{digest}.png")
 
 def discover_map_asset_uuids():
     maps_dir = resource_path(os.path.join("assets", "maps"))
@@ -900,7 +722,7 @@ def discover_map_asset_uuids():
     return sorted(map_uuids)
 
 def get_map_selection_path():
-    return resource_path(MAP_AGENT_SELECTION_RELATIVE_PATH)
+    return get_external_path(MAP_AGENT_SELECTION_RELATIVE_PATH)
 
 def get_map_display_name(map_uuid):
     return MAP_DISPLAY_NAMES.get(map_uuid, map_uuid)
@@ -1012,47 +834,6 @@ class InstantTooltipPopup(QLabel):
         self.raise_()
 
 
-class BreathingDotsWidget(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._phase = 0.0
-        self.setFixedSize(140, 140)
-        self.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._advance_animation)
-        self._timer.start(33)
-
-    def _advance_animation(self):
-        self._phase = (self._phase + 0.12) % math.tau
-        self.update()
-
-    def paintEvent(self, event):
-        super().paintEvent(event)
-
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(Qt.NoPen)
-
-        center_y = self.height() / 2
-        spacing = 22
-        base_radius = 6
-        start_x = (self.width() - spacing * 2) / 2
-
-        for index in range(3):
-            breath = (math.sin(self._phase + index * 0.85) + 1) / 2
-            radius = base_radius + breath * 2.5
-            color = make_qcolor(THEME_MUTED or "#93a4bb")
-            color.setAlphaF(0.42 + breath * 0.48)
-
-            center_x = start_x + index * spacing
-            painter.setBrush(color)
-            painter.drawEllipse(QRectF(center_x - radius, center_y - radius, radius * 2, radius * 2))
-
-        painter.end()
-
-
 class PlayerRowContentFrame(QFrame):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1115,7 +896,7 @@ def ensure_map_agent_selection_data():
 class StartupLoadingWindow(QDialog):
     def __init__(self):
         super().__init__(None)
-        self.setWindowTitle("ValScanner Loading")
+        self.setWindowTitle(f"{APP_NAME} Loading")
         self.setModal(False)
         self.setWindowFlags(
             Qt.Dialog
@@ -1138,7 +919,7 @@ class StartupLoadingWindow(QDialog):
 
         self.logo_label = QLabel()
         self.logo_label.setAlignment(Qt.AlignCenter)
-        logo_pixmap = QPixmap(resource_path("assets/logoone.png"))
+        logo_pixmap = application_icon().pixmap(132, 132)
         if not logo_pixmap.isNull():
             self.logo_label.setPixmap(
                 logo_pixmap.scaled(132, 132, Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -1519,15 +1300,7 @@ class SkinSelectorPopup(QDialog):
 
 
 class LoadoutsPopup(QDialog):
-    WEAPON_ORDER = [
-        "Classic", "Bandit", "Shorty", "Frenzy", "Ghost", "Sheriff",
-        "Stinger", "Spectre",
-        "Bucky", "Judge",
-        "Bulldog", "Guardian", "Phantom", "Vandal",
-        "Marshal", "Outlaw", "Operator",
-        "Ares", "Odin",
-        "Knife",
-    ]
+    WEAPON_ORDER = WEAPON_ORDER
 
     def __init__(self, skins, all_skins, skin_pixmap_resolver, buddy_pixmap_resolver, uuid_handler, parent=None):
         super().__init__(parent)
@@ -1540,30 +1313,9 @@ class LoadoutsPopup(QDialog):
 
         self.current_preset = None
 
-        self.weapon_list_indices = {
-            "Odin": 0,
-            "Ares": 1,
-            "Vandal": 2,
-            "Bulldog": 3,
-            "Phantom": 4,
-            "Judge": 5,
-            "Bucky": 6,
-            "Frenzy": 7,
-            "Classic": 8,
-            "Ghost": 9,
-            "Sheriff": 10,
-            "Shorty": 11,
-            "Operator": 12,
-            "Guardian": 13,
-            "Marshal": 14,
-            "Spectre": 15,
-            "Stinger": 16,
-            "Knife": 17,
-            "Outlaw": 18,
-            "Bandit": 19
-        }
+        self.weapon_list_indices = {name: idx for idx, name in enumerate(PRESET_WEAPON_ORDER)}
 
-        self.selected_skins_list = [None] * 20
+        self.selected_skins_list = [None] * len(PRESET_WEAPON_ORDER)
 
         for weapon, idx in self.weapon_list_indices.items():
             skin_val = self.skins.get(weapon)
@@ -1574,36 +1326,46 @@ class LoadoutsPopup(QDialog):
 
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setFixedSize(1920, 1080)
+        screen = QApplication.primaryScreen()
+        bounds = screen.availableGeometry() if screen else None
+        self.popup_width = min(1760, bounds.width() - 48) if bounds else 1760
+        self.popup_height = min(960, bounds.height() - 48) if bounds else 960
+        self.setFixedSize(self.popup_width, self.popup_height)
 
         container = QWidget(self)
         container.setObjectName("popupCard")
-        container.setFixedSize(1920, 1080)
+        container.setFixedSize(self.popup_width, self.popup_height)
 
-        main_layout = QHBoxLayout(container)
+        main_layout = QVBoxLayout(container)
         main_layout.setContentsMargins(38, 38, 38, 38)
         main_layout.setSpacing(20)
 
+        panels_layout = QHBoxLayout()
+        panels_layout.setSpacing(20)
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
-        left_layout.setAlignment(Qt.AlignTop)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(12)
 
         self.title_label = QLabel("Your Loadout")
         self.title_label.setObjectName("title")
         left_layout.addWidget(self.title_label, alignment=Qt.AlignCenter)
 
         self.grid = QGridLayout()
-        self.grid.setSpacing(20)
+        self.grid.setContentsMargins(0, 0, 0, 0)
+        self.grid.setSpacing(12)
         self.grid.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
-        self.tile_width = 240
-        self.tile_height = 150
-
-        self.populate_grid()
-        left_layout.addLayout(self.grid)
+        self.grid_content = QWidget()
+        self.grid_content.setObjectName("weaponGrid")
+        self.grid_content.setMinimumSize(0, 0)
+        self.grid_content.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.grid_content.setLayout(self.grid)
+        self.grid_content.installEventFilter(self)
+        left_layout.addWidget(self.grid_content, 1)
 
         self.preset_actions_layout = QHBoxLayout()
-        self.preset_actions_layout.setContentsMargins(0, 20, 0, 0)
+        self.preset_actions_layout.setContentsMargins(0, 0, 0, 0)
         self.preset_actions_layout.addStretch()
 
         self.cancel_preset_btn = QPushButton("Cancel")
@@ -1635,9 +1397,9 @@ class LoadoutsPopup(QDialog):
         left_layout.addLayout(self.preset_actions_layout)
 
         right_panel = QWidget()
-        right_panel.setFixedWidth(400)
+        right_panel.setFixedWidth(300)
         right_layout = QVBoxLayout(right_panel)
-        right_layout.setAlignment(Qt.AlignTop)
+        right_layout.setContentsMargins(0, 0, 0, 0)
 
         presets_card = QFrame()
         presets_card.setObjectName("presetsCard")
@@ -1648,8 +1410,10 @@ class LoadoutsPopup(QDialog):
         presets_header = QHBoxLayout()
         presets_title = QLabel("Presets")
         presets_title.setObjectName("title")
+        presets_title.setStyleSheet("font-size: 20px; margin-bottom: 0px;")
 
         add_preset_btn = QPushButton("New Preset")
+        add_preset_btn.setFixedWidth(110)
         add_preset_btn.setCursor(Qt.PointingHandCursor)
         add_preset_btn.setObjectName("accentButton")
         add_preset_btn.clicked.connect(self.show_add_preset_input)
@@ -1701,14 +1465,15 @@ class LoadoutsPopup(QDialog):
 
         close_btn = QPushButton("Close")
         close_btn.setObjectName("popupCloseButton")
-        close_btn.setFixedSize(120, 50)
+        close_btn.setFixedHeight(50)
+        close_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         close_btn.setCursor(Qt.PointingHandCursor)
         configure_close_button(close_btn, 20)
         close_btn.clicked.connect(self.close)
-        right_layout.addWidget(close_btn, alignment=Qt.AlignRight | Qt.AlignBottom)
-
-        main_layout.addWidget(left_panel, 3)
-        main_layout.addWidget(right_panel, 1)
+        panels_layout.addWidget(left_panel, 1)
+        panels_layout.addWidget(right_panel)
+        main_layout.addLayout(panels_layout, 1)
+        main_layout.addWidget(close_btn)
 
         apply_popup_shadow(container)
         glass_theme = is_glass_theme()
@@ -1717,8 +1482,14 @@ class LoadoutsPopup(QDialog):
         close_hover = build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT
         self.setStyleSheet(f"""
             {build_popup_card_rule()}
+            QLabel {{ color: {THEME_TEXT}; }}
+            QScrollArea, QScrollArea > QWidget > QWidget, QWidget#weaponGrid {{ background: transparent; border: none; }}
+            QScrollBar:vertical {{ background: transparent; width: 7px; margin: 2px; }}
+            QScrollBar::handle:vertical {{ background: {THEME_MUTED}; border-radius: 3px; min-height: 30px; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
             #presetsCard {{ background: {build_surface_fill("card", secondary_surface="panel") if glass_theme else THEME_CARD}; border-radius: 18px; border: 1px solid {themed_border_color('soft')}; }}
-            #title {{ color: {THEME_TEXT}; font-size: 26px; font-weight: 600; margin-bottom: 20px;}}
+            #title {{ color: {THEME_TEXT}; font-size: 26px; font-weight: 600; margin-bottom: 8px;}}
             #skinLabel {{ color: {THEME_MUTED}; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }}
             QPushButton#skinTile {{ background: {build_surface_fill("card", secondary_surface="panel") if glass_theme else THEME_CARD}; border-radius: 18px; border: 1px solid {themed_border_color('soft')}; }}
             QPushButton#skinTile:hover {{ border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT}; background: {build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT}; }}
@@ -1726,7 +1497,7 @@ class LoadoutsPopup(QDialog):
             #skinPreview[empty="true"] {{ color: {THEME_MUTED}; font-size: 11px; letter-spacing: 1px; }}
             QPushButton {{ background-color: {theme_rgba(THEME_CARD_ALT, profile.get('button_alpha', 0.7)) if glass_theme else THEME_CARD_ALT}; border: {'1px solid ' + themed_border_color('control') if glass_theme else 'none'}; color: {THEME_TEXT}; font-size: 18px; font-weight: 700; border-radius: 16px; }}
             QPushButton:hover {{ background-color: {theme_rgba(THEME_ACCENT, 0.78) if glass_theme else THEME_ACCENT}; }}
-            QPushButton#accentButton {{ background-color: {theme_rgba(THEME_ACCENT, 0.84) if glass_theme else THEME_ACCENT}; border-radius: 8px; font-size: 14px; padding: 6px 12px; color: {'#071018' if glass_theme else THEME_TEXT}; border: {'1px solid ' + themed_border_color('control') if glass_theme else 'none'}; }}
+            QPushButton#accentButton {{ background-color: {theme_rgba(THEME_ACCENT, 0.84) if glass_theme else THEME_ACCENT}; border-radius: 8px; font-size: 12px; padding: 6px 8px; color: {'#071018' if glass_theme else THEME_TEXT}; border: {'1px solid ' + themed_border_color('control') if glass_theme else 'none'}; }}
             QPushButton#accentButton:hover {{ background-color: {theme_rgba(THEME_ACCENT_HOVER, 0.92) if glass_theme else THEME_ACCENT_HOVER}; }}
             QPushButton#popupCloseButton {{ background: {close_background}; border: 1px solid {themed_border_color('soft')}; padding: 0px; }}
             QPushButton#popupCloseButton:hover {{ background: {close_hover}; border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT}; }}
@@ -1750,7 +1521,7 @@ class LoadoutsPopup(QDialog):
             QPushButton#presetDelBtn:hover {{ background-color: {theme_rgba(THEME_RED, 0.88) if glass_theme else THEME_RED}; }}
         """)
 
-        self.loadouts_dir = resource_path("loadouts")
+        self.loadouts_dir = get_external_path("loadouts")
         os.makedirs(self.loadouts_dir, exist_ok=True)
 
         current_loadout_path = os.path.join(self.loadouts_dir, "Current Loadout.json")
@@ -1831,7 +1602,7 @@ class LoadoutsPopup(QDialog):
                 current_skins_data = await handler.sort_current_loadout()
                 skins_dict = current_skins_data.get("Skins", {})
 
-                new_current_loadout = [None] * 20
+                new_current_loadout = [None] * len(PRESET_WEAPON_ORDER)
                 for weapon, idx in self.weapon_list_indices.items():
                     skin_val = skins_dict.get(weapon)
                     if isinstance(skin_val, list) and len(skin_val) > 0:
@@ -1867,10 +1638,8 @@ class LoadoutsPopup(QDialog):
         try:
             with open(filepath, 'r') as f:
                 preset_data = json.load(f)
-            self.selected_skins_list = preset_data
-            for weapon, idx in self.weapon_list_indices.items():
-                if idx < len(preset_data):
-                    self.skins[weapon] = preset_data[idx]
+            self.skins.update(preset_to_weapon_skins(preset_data, self.uuid_handler))
+            self.selected_skins_list = [self.skins.get(name) for name in PRESET_WEAPON_ORDER]
             self.populate_grid()
 
             self.current_preset = name
@@ -1907,10 +1676,46 @@ class LoadoutsPopup(QDialog):
                 widget.setParent(None)
                 widget.deleteLater()
 
-        for index, weapon in enumerate(self.WEAPON_ORDER):
-            row = index // 5
-            column = index % 5
-            self.grid.addWidget(self.build_skin_tile(weapon, self.skins.get(weapon)), row, column)
+        self.weapon_tiles = [self.build_skin_tile(weapon, self.skins.get(weapon))
+                             for weapon in self.WEAPON_ORDER]
+        self.fit_weapon_grid()
+
+    def eventFilter(self, watched, event):
+        if watched is self.grid_content and event.type() == QEvent.Resize:
+            self.fit_weapon_grid()
+        return super().eventFilter(watched, event)
+
+    def fit_weapon_grid(self):
+        tiles = getattr(self, "weapon_tiles", [])
+        if not tiles:
+            return
+
+        width = self.grid_content.width()
+        height = self.grid_content.height()
+        gap = self.grid.spacing()
+        # Use more columns on wide screens and size every row to the available height.
+        columns = min(7, max(4, (width + gap) // 140))
+        rows = (len(tiles) + columns - 1) // columns
+        tile_width = max(1, (width - gap * (columns - 1)) // columns)
+        tile_height = max(1, (height - gap * (rows - 1)) // rows)
+
+        while self.grid.count():
+            self.grid.takeAt(0)
+        for index, tile in enumerate(tiles):
+            row, column = divmod(index, columns)
+            if index == len(tiles) - 1 and column == 0:
+                column = columns // 2
+            tile.setFixedSize(tile_width, tile_height)
+            label = tile.findChild(QLabel, "skinLabel")
+            label_height = max(0, label.heightForWidth(max(1, tile_width - 24))) if label else 0
+            if label:
+                label.setFixedHeight(label_height)
+            preview = tile.findChild(QLabel, "skinPreview")
+            canvas = preview.property("skinPixmap")
+            preview.setPixmap(canvas.scaled(
+                max(1, min(190, tile_width - 24)), max(1, tile_height - 25 - label_height),
+                Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.grid.addWidget(tile, row, column)
 
     def update_equipped_skin(self, weapon, new_skin_id):
         self.skins[weapon] = new_skin_id
@@ -1927,19 +1732,18 @@ class LoadoutsPopup(QDialog):
     def build_skin_tile(self, weapon, skin_id):
         tile = InstantTooltipButton()
         tile.setObjectName("skinTile")
-        tile.setFixedSize(self.tile_width, self.tile_height)
         tile.setCursor(Qt.PointingHandCursor)
         tile.clicked.connect(lambda _, w=weapon: self.show_owned_skins_popup(w))
 
         tile_layout = QVBoxLayout(tile)
-        tile_layout.setContentsMargins(15, 15, 15, 15)
-        tile_layout.setSpacing(10)
-        tile_layout.setAlignment(Qt.AlignCenter)
+        tile_layout.setContentsMargins(12, 10, 12, 10)
+        tile_layout.setSpacing(5)
 
         preview = QLabel()
         preview.setObjectName("skinPreview")
         preview.setAlignment(Qt.AlignCenter)
-        preview.setMinimumSize(150, 88)
+        preview.setMinimumSize(1, 1)
+        preview.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
         preview.setProperty("empty", "false")
         preview.setAttribute(Qt.WA_TransparentForMouseEvents)
 
@@ -1965,10 +1769,11 @@ class LoadoutsPopup(QDialog):
                         skin_name = str(skin_name[0]) if skin_name else "Unknown Skin"
                     tile.set_instant_tooltip(str(skin_name))
                     skin_name = get_clean_skin_name(skin_name)
-
                     skin_label = QLabel(str(skin_name))
                     skin_label.setObjectName("skinLabel")
                     skin_label.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
+                    skin_label.setWordWrap(True)
+                    skin_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
                     skin_label.setAttribute(Qt.WA_TransparentForMouseEvents)
                     tile_layout.addWidget(skin_label)
                 except Exception:
@@ -2004,6 +1809,7 @@ class LoadoutsPopup(QDialog):
                 painter.drawPixmap(x_buddy, y_buddy, scaled_buddy)
 
         painter.end()
+        preview.setProperty("skinPixmap", canvas)
         preview.setPixmap(canvas)
 
         preview.style().unpolish(preview)
@@ -2090,11 +1896,16 @@ class LoadoutsPopup(QDialog):
 
 
 class AgentPopup(QDialog):
-    def __init__(self, agents_list, owned_agents_list, agent_icons, callback, parent=None):
+    def __init__(self, agents_list, owned_agents_list, agent_icons, callback, parent=None,
+                 custom_random_enabled=False, custom_random_selections=None, pool_callback=None):
         super().__init__(parent)
         self.callback = callback
         self.agent_icons = agent_icons
         self.owned_agents_list = owned_agents_list
+        self.pool_callback = pool_callback
+        self.custom_random_enabled = bool(custom_random_enabled)
+        self.custom_random_selections = normalize_random_selections(custom_random_selections)
+        self.agent_tiles = {}
 
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -2114,9 +1925,22 @@ class AgentPopup(QDialog):
         title = QLabel("Select Agent")
         title.setTextFormat(Qt.PlainText)
         title.setObjectName("title")
-        header.addWidget(title, alignment=Qt.AlignCenter)
+        title_row = QHBoxLayout()
+        title_row.addWidget(title)
+        title_row.addStretch()
+        self.custom_random_switch = ToggleSwitch()
+        self.custom_random_switch.setToolTip("Save a shared pool of agents and roles for Random, including maps set to Random.")
+        self.custom_random_switch.setChecked(self.custom_random_enabled)
+        self.custom_random_switch.setVisible(pool_callback is not None)
+        pool_label = QLabel("Custom random")
+        pool_label.setObjectName("subtitle")
+        pool_label.setVisible(pool_callback is not None)
+        title_row.addWidget(pool_label)
+        title_row.addWidget(self.custom_random_switch)
+        header.addLayout(title_row)
 
         subtitle = QLabel("Choose an agent to instalock")
+        self.pool_subtitle = subtitle
         subtitle.setObjectName("subtitle")
         header.addWidget(subtitle, alignment=Qt.AlignCenter)
 
@@ -2131,10 +1955,11 @@ class AgentPopup(QDialog):
         grid.setSpacing(self.grid_spacing)
         grid.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
-        remainder = len(agents_list) % columns
-        has_partial_bottom_row = 0 < remainder < len(agents_list)
-        main_agents = agents_list[:-remainder] if has_partial_bottom_row else agents_list
-        bottom_agents = agents_list[-remainder:] if has_partial_bottom_row else []
+        portrait_agents = [agent for agent in agents_list if agent not in SELECTION_TOKENS]
+        remainder = len(portrait_agents) % columns
+        has_partial_bottom_row = 0 < remainder < len(portrait_agents)
+        main_agents = portrait_agents[:-remainder] if has_partial_bottom_row else portrait_agents
+        bottom_agents = portrait_agents[-remainder:] if has_partial_bottom_row else []
 
         current_row = -1
         for index, agent in enumerate(main_agents):
@@ -2150,7 +1975,16 @@ class AgentPopup(QDialog):
                 grid.addWidget(self.build_agent_tile(agent), bottom_row, start_col + i)
             current_row = bottom_row
 
-        exit_row = current_row + 1
+        role_row = QHBoxLayout()
+        role_row.setSpacing(self.grid_spacing)
+        role_row.addStretch()
+        for token in SELECTION_TOKENS:
+            if token in agents_list:
+                role_row.addWidget(self.build_agent_tile(token))
+        role_row.addStretch()
+        grid.addLayout(role_row, current_row + 1, 0, 1, columns)
+
+        exit_row = current_row + 2
         grid.addWidget(self.build_exit_tile(columns), exit_row, 0, 1, columns)
 
         main_layout.addLayout(grid)
@@ -2179,6 +2013,10 @@ class AgentPopup(QDialog):
                 border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT};
                 background: {build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT};
             }}
+            #agentTile:checked {{
+                border: 2px solid {THEME_ACCENT};
+                background: {build_surface_fill("card_alt", secondary_surface="card") if glass_theme else THEME_CARD_ALT};
+            }}
             #agentTileDisabled {{
                 background: {build_surface_fill("card", secondary_surface="panel") if glass_theme else THEME_CARD};
                 border-radius: 18px;
@@ -2194,9 +2032,13 @@ class AgentPopup(QDialog):
                 border: 1px solid {themed_border_color('highlight') if glass_theme else THEME_ACCENT};
             }}
         """)
+        self.custom_random_switch.toggled.connect(self.on_custom_random_toggled)
+        self.refresh_pool_tiles()
 
     def build_agent_tile(self, agent_name):
         tile = QPushButton()
+        self.agent_tiles[agent_name] = tile
+        tile.setToolTip("All owned agents" if agent_name == "Random" else agent_name)
 
         is_owned = agent_name in self.owned_agents_list
 
@@ -2242,7 +2084,7 @@ class AgentPopup(QDialog):
         return tile
 
     def build_exit_tile(self, cols):
-        tile = QPushButton("")
+        tile = QPushButton("X")
         tile.setObjectName("exitTile")
 
         full_width = (self.tile_width * cols) + (self.grid_spacing * (cols - 1))
@@ -2254,8 +2096,38 @@ class AgentPopup(QDialog):
         return tile
 
     def on_select(self, agent_name):
+        if self.custom_random_enabled and self.pool_callback is not None:
+            if agent_name in self.custom_random_selections:
+                self.custom_random_selections.remove(agent_name)
+            elif agent_name == "Random":
+                self.custom_random_selections = ["Random"]
+            else:
+                self.custom_random_selections = [name for name in self.custom_random_selections if name != "Random"]
+                self.custom_random_selections.append(agent_name)
+            self.refresh_pool_tiles()
+            self.pool_callback(True, list(self.custom_random_selections))
+            return
         self.callback(agent_name)
         self.accept()
+
+    def on_custom_random_toggled(self, enabled):
+        self.custom_random_enabled = bool(enabled)
+        self.refresh_pool_tiles()
+        if self.pool_callback is not None:
+            self.pool_callback(self.custom_random_enabled, list(self.custom_random_selections))
+
+    def refresh_pool_tiles(self):
+        for name, tile in self.agent_tiles.items():
+            tile.setCheckable(self.custom_random_enabled)
+            tile.setChecked(self.custom_random_enabled and name in self.custom_random_selections)
+        if self.custom_random_enabled:
+            count = len(random_agent_pool(self.custom_random_selections, self.owned_agents_list))
+            self.pool_subtitle.setText(
+                f"Pick agents and roles • {count} owned agents in pool • selections save automatically"
+                if count else "Pick at least one owned agent or role to enable random locking"
+            )
+        else:
+            self.pool_subtitle.setText("Choose an agent to instalock")
 
 
 class FriendSelectionPopup(QDialog):
@@ -2515,7 +2387,7 @@ class MapAgentPopup(QDialog):
         scroll_area.setWidget(scroll_content)
         main_layout.addWidget(scroll_area, 1)
 
-        close_btn = QPushButton("")
+        close_btn = QPushButton("X")
         close_btn.setObjectName("popupCloseButton")
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.setFixedHeight(44)
@@ -2760,12 +2632,23 @@ class MapAgentPopup(QDialog):
         return canvas
 
     def open_agent_picker(self, map_uuid):
+        owner = self.parent()
+        pool_callback = getattr(owner, "on_custom_random_changed", None)
+
+        def update_random_pool(enabled, selections):
+            pool_callback(enabled, selections)
+            if enabled:
+                self.on_agent_selected(map_uuid, "Random")
+
         popup = AgentPopup(
             self.agent_options,
             self.owned_agents_list,
             self.agent_icons,
             lambda agent_name, m=map_uuid: self.on_agent_selected(m, agent_name),
             self,
+            custom_random_enabled=getattr(owner, "custom_random_enabled", False),
+            custom_random_selections=getattr(owner, "custom_random_selections", []),
+            pool_callback=update_random_pool if pool_callback is not None else None,
         )
         popup.exec()
 
@@ -2782,19 +2665,10 @@ class MapAgentPopup(QDialog):
 
 
 class ThemePopup(QDialog):
-    def __init__(
-        self,
-        current_theme_name,
-        current_surface_mode,
-        callback,
-        surface_mode_callback,
-        parent=None,
-    ):
+    def __init__(self, current_theme_name, callback, parent=None):
         super().__init__(parent)
         self.callback = callback
-        self.surface_mode_callback = surface_mode_callback
         self.current_theme_name = normalize_theme_name(current_theme_name)
-        self.current_surface_mode = normalize_theme_surface_mode(current_surface_mode)
         self.theme_buttons = {}
 
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
@@ -2808,34 +2682,13 @@ class ThemePopup(QDialog):
         main_layout.setContentsMargins(30, 30, 30, 26)
         main_layout.setSpacing(18)
 
-        header = QHBoxLayout()
-        header.setSpacing(12)
-        header.setAlignment(Qt.AlignTop)
+        header = QVBoxLayout()
+        header.setSpacing(6)
+        header.setAlignment(Qt.AlignCenter)
 
         title = QLabel("Themes")
         title.setObjectName("title")
-
-        surface_mode_group = QWidget()
-        surface_mode_group.setObjectName("surfaceModeGroup")
-        surface_mode_group.setFixedWidth(150)
-        surface_mode_layout = QHBoxLayout(surface_mode_group)
-        surface_mode_layout.setContentsMargins(0, 0, 0, 0)
-        surface_mode_layout.setSpacing(8)
-        surface_mode_layout.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-
-        surface_mode_label = QLabel("Opaque")
-        surface_mode_label.setObjectName("surfaceModeLabel")
-        self.surface_mode_switch = ToggleSwitch()
-        self.surface_mode_switch.setChecked(self.current_surface_mode == "opaque")
-        self.surface_mode_switch.toggled.connect(self.on_surface_mode_toggled)
-        surface_mode_layout.addWidget(surface_mode_label)
-        surface_mode_layout.addWidget(self.surface_mode_switch)
-
-        header_spacer = QWidget()
-        header_spacer.setFixedWidth(surface_mode_group.width())
-        header.addWidget(header_spacer)
-        header.addWidget(title, 1, alignment=Qt.AlignTop | Qt.AlignHCenter)
-        header.addWidget(surface_mode_group, alignment=Qt.AlignTop | Qt.AlignRight)
+        header.addWidget(title, alignment=Qt.AlignCenter)
 
         main_layout.addLayout(header)
 
@@ -2851,7 +2704,7 @@ class ThemePopup(QDialog):
 
         main_layout.addLayout(grid)
 
-        close_btn = QPushButton("")
+        close_btn = QPushButton("X")
         close_btn.setObjectName("exitTile")
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.setFixedHeight(52)
@@ -2941,11 +2794,6 @@ class ThemePopup(QDialog):
             {build_popup_card_rule()}
             #title {{ color: {THEME_TEXT}; font-size: 22px; font-weight: 600; }}
             #subtitle {{ color: {THEME_MUTED}; font-size: 14px; }}
-            #surfaceModeLabel {{
-                color: {THEME_MUTED};
-                font-size: 12px;
-                font-weight: 700;
-            }}
             QPushButton#themeTile {{
                 background: {tile_background};
                 border-radius: 18px;
@@ -2999,7 +2847,6 @@ class ThemePopup(QDialog):
             }}
         """)
         apply_popup_shadow(self._container)
-        self.surface_mode_switch.apply_theme_colors()
         self.refresh_selection_styles()
 
     def refresh_selection_styles(self):
@@ -3009,129 +2856,11 @@ class ThemePopup(QDialog):
             button.style().polish(button)
             button.update()
 
-    def refresh_theme_state(self, theme_name, surface_mode):
-        self.current_theme_name = normalize_theme_name(theme_name)
-        self.current_surface_mode = normalize_theme_surface_mode(surface_mode)
-        self.surface_mode_switch.blockSignals(True)
-        self.surface_mode_switch.setChecked(self.current_surface_mode == "opaque")
-        self.surface_mode_switch.blockSignals(False)
-        self.apply_theme_styles()
-
-    def apply_toggle_switch_theme(self):
-        self.surface_mode_switch.apply_theme_colors()
-
     def select_theme(self, theme_name):
         normalized_theme_name = normalize_theme_name(theme_name)
         self.current_theme_name = normalized_theme_name
         self.callback(normalized_theme_name)
         self.refresh_selection_styles()
-
-    def on_surface_mode_toggled(self, checked):
-        self.current_surface_mode = "opaque" if checked else "transparent"
-        self.surface_mode_callback(self.current_surface_mode)
-        self.apply_theme_styles()
-
-
-class QmlThemePopup(QDialog):
-    def __init__(
-        self,
-        current_theme_name,
-        current_surface_mode,
-        callback,
-        surface_mode_callback,
-        parent=None,
-    ):
-        super().__init__(parent)
-        self.current_theme_name = normalize_theme_name(current_theme_name)
-        self.current_surface_mode = normalize_theme_surface_mode(current_surface_mode)
-        self.callback = callback
-        self.surface_mode_callback = surface_mode_callback
-        self._qml_errors = []
-
-        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.Popup)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-
-        self.bridge = ThemePopupBridge(
-            THEME_DEFINITIONS,
-            THEME_ORDER,
-            self.current_theme_name,
-            self.current_surface_mode,
-            self.select_theme,
-            self.set_surface_mode,
-            self.close,
-            self._build_style_colors(),
-            resource_path(os.path.join("assets", "xmark-solid.png")),
-            normalize_theme_name=normalize_theme_name,
-            normalize_surface_mode=normalize_theme_surface_mode,
-            parent=self,
-        )
-
-        self.qml_widget = QQuickWidget(self)
-        self.qml_widget.setObjectName("qmlThemePopupWidget")
-        resize_mode = getattr(getattr(QQuickWidget, "ResizeMode", QQuickWidget), "SizeRootObjectToView")
-        self.qml_widget.setResizeMode(resize_mode)
-        self.qml_widget.setClearColor(QColor(0, 0, 0, 0))
-        self.qml_widget.rootContext().setContextProperty("bridge", self.bridge)
-        self.qml_widget.statusChanged.connect(self._record_qml_status)
-
-        qml_path = resource_path(os.path.join("frontend", "qml", "ThemePopup.qml"))
-        self.qml_widget.setSource(QUrl.fromLocalFile(qml_path))
-        self._record_qml_status(self.qml_widget.status())
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.qml_widget)
-        self.resize(840, 640)
-
-    def _build_style_colors(self):
-        return {
-            "main": THEME_MAIN,
-            "panel": THEME_PANEL,
-            "card": THEME_CARD,
-            "cardAlt": THEME_CARD_ALT,
-            "border": THEME_BORDER,
-            "borderSoft": THEME_BORDER_SOFT,
-            "text": THEME_TEXT,
-            "muted": THEME_MUTED,
-            "accent": THEME_ACCENT,
-            "accentHover": THEME_ACCENT_HOVER,
-            "window": THEME_WINDOW,
-        }
-
-    def _record_qml_status(self, status):
-        error_status = getattr(getattr(QQuickWidget, "Status", QQuickWidget), "Error")
-        if status != error_status:
-            return
-        self._qml_errors = [error.toString() for error in self.qml_widget.errors()] or ["Unknown QML load error"]
-        for error_message in self._qml_errors:
-            print(f"[QML Theme Popup] {error_message}")
-
-    def has_qml_errors(self):
-        return bool(self._qml_errors)
-
-    def refresh_theme_state(self, theme_name, surface_mode):
-        self.current_theme_name = normalize_theme_name(theme_name)
-        self.current_surface_mode = normalize_theme_surface_mode(surface_mode)
-        self.bridge.refresh_theme_state(
-            self.current_theme_name,
-            self.current_surface_mode,
-            self._build_style_colors(),
-        )
-
-    def apply_theme_styles(self):
-        self.refresh_theme_state(self.current_theme_name, self.current_surface_mode)
-
-    def apply_toggle_switch_theme(self):
-        self.apply_theme_styles()
-
-    def select_theme(self, theme_name):
-        normalized_theme_name = normalize_theme_name(theme_name)
-        self.current_theme_name = normalized_theme_name
-        self.callback(normalized_theme_name)
-
-    def set_surface_mode(self, surface_mode):
-        self.current_surface_mode = normalize_theme_surface_mode(surface_mode)
-        self.surface_mode_callback(self.current_surface_mode)
 
 
 class ToolsPopup(QDialog):
@@ -3345,48 +3074,9 @@ class ToolsPopup(QDialog):
 
         self.open()
 
-    def open_at_rect(self, anchor_widget, x, y, width, height):
-        self.adjustSize()
-        if anchor_widget is not None:
-            anchor_top_left = anchor_widget.mapToGlobal(QPoint(int(x), int(y)))
-            anchor_center = anchor_widget.mapToGlobal(QPoint(int(x + (width / 2)), int(y + (height / 2))))
-            popup_x = anchor_top_left.x() - max(0, (self.width() - int(width)) // 2)
-            popup_y = anchor_top_left.y() + int(height) + 10
-
-            parent_window = anchor_widget.window()
-            parent_geometry = parent_window.frameGeometry() if parent_window is not None else None
-            screen = QApplication.screenAt(anchor_center)
-            if screen is None and parent_window is not None and parent_window.windowHandle() is not None:
-                screen = parent_window.windowHandle().screen()
-
-            bounds = screen.availableGeometry() if screen is not None else None
-            if parent_geometry is not None and not parent_geometry.isNull():
-                if bounds is None:
-                    bounds = parent_geometry
-                else:
-                    bounds = bounds.intersected(parent_geometry)
-                    if bounds.isNull():
-                        bounds = screen.availableGeometry()
-
-            if bounds is not None and not bounds.isNull():
-                popup_x = max(bounds.left() + 12, min(popup_x, bounds.right() - self.width() - 12))
-                popup_y = max(bounds.top() + 12, min(popup_y, bounds.bottom() - self.height() - 12))
-
-            self.move(popup_x, popup_y)
-
-        self.open()
-
 
 class WeaponPopup(QDialog):
-    WEAPON_ORDER = [
-        "Classic", "Bandit", "Shorty", "Frenzy", "Ghost", "Sheriff",
-        "Stinger", "Spectre",
-        "Bucky", "Judge",
-        "Bulldog", "Guardian", "Phantom", "Vandal",
-        "Marshal", "Outlaw", "Operator",
-        "Ares", "Odin",
-        "Knife",
-    ]
+    WEAPON_ORDER = WEAPON_ORDER
 
     def __init__(self, player_name, skins, skin_pixmap_resolver, buddy_pixmap_resolver, uuid_handler, parent=None):
         super().__init__(parent)
@@ -3418,39 +3108,41 @@ class WeaponPopup(QDialog):
 
         main_layout.addLayout(header)
 
-        self.tile_width = 300
-        self.tile_height = 167
-        columns = 5
+        screen = QApplication.primaryScreen()
+        bounds = screen.availableGeometry() if screen else None
+        popup_width = min(1660, bounds.width() - 48) if bounds else 1660
+        popup_height = min(960, bounds.height() - 48) if bounds else 960
+        self.setFixedSize(popup_width, popup_height)
 
-        grid = QGridLayout()
-        grid.setSpacing(20)
-        grid.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+        self.grid = QGridLayout()
+        self.grid.setContentsMargins(0, 0, 0, 0)
+        self.grid.setSpacing(12)
+        self.grid.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
-        current_row = 0
-        for index, weapon in enumerate(self.WEAPON_ORDER):
-            row = index // columns
-            column = index % columns
-            grid.addWidget(self.build_skin_tile(weapon, self.skins.get(weapon)), row, column)
-            current_row = row
+        self.weapon_tiles = [self.build_skin_tile(weapon, self.skins.get(weapon))
+                             for weapon in self.WEAPON_ORDER]
 
-        exit_row = current_row + 1
-        grid.addWidget(self.build_exit_tile(), exit_row, 0, 1, 5)
-
-        main_layout.addLayout(grid)
+        self.grid_content = QWidget()
+        self.grid_content.setObjectName("weaponGrid")
+        self.grid_content.setMinimumSize(0, 0)
+        self.grid_content.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.grid_content.setLayout(self.grid)
+        self.grid_content.installEventFilter(self)
+        main_layout.addWidget(self.grid_content, 1)
+        close_button = self.build_exit_tile()
+        main_layout.addWidget(close_button)
 
         outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(container)
 
         apply_popup_shadow(container)
         glass_theme = is_glass_theme()
         self.setStyleSheet(f"""
             {build_popup_card_rule()}
+            QWidget#weaponGrid {{ background: transparent; border: none; }}
             #title {{ color: {THEME_TEXT}; font-size: 22px; font-weight: 600; }}
             #subtitle {{ color: {THEME_MUTED}; font-size: 14px; }}
-            #weaponLabel {{
-                color: {THEME_MUTED}; font-size: 12px; letter-spacing: 1px;
-                text-transform: uppercase;
-            }}
             #skinLabel {{
                 color: {THEME_TEXT}; font-size: 12px; font-weight: 600; letter-spacing: 1px;
                 text-transform: uppercase;
@@ -3484,22 +3176,50 @@ class WeaponPopup(QDialog):
             {build_tooltip_rule()}
         """)
 
-        self.resize(1200, 750)
+        self.fit_weapon_grid()
+
+    def eventFilter(self, watched, event):
+        if watched is self.grid_content and event.type() == QEvent.Resize:
+            self.fit_weapon_grid()
+        return super().eventFilter(watched, event)
+
+    def fit_weapon_grid(self):
+        width, height = self.grid_content.width(), self.grid_content.height()
+        gap = self.grid.spacing()
+        columns = min(7, max(4, (width + gap) // 140))
+        rows = (len(self.weapon_tiles) + columns - 1) // columns
+        tile_width = max(1, (width - gap * (columns - 1)) // columns)
+        tile_height = max(1, (height - gap * (rows - 1)) // rows)
+        while self.grid.count():
+            self.grid.takeAt(0)
+        for index, tile in enumerate(self.weapon_tiles):
+            row, column = divmod(index, columns)
+            if index == len(self.weapon_tiles) - 1 and column == 0:
+                column = columns // 2
+            tile.setFixedSize(tile_width, tile_height)
+            label = tile.findChild(QLabel, "skinLabel")
+            label_height = max(0, label.heightForWidth(max(1, tile_width - 24)))
+            label.setFixedHeight(label_height)
+            preview = tile.findChild(QLabel, "skinPreview")
+            canvas = preview.property("skinPixmap")
+            preview.setPixmap(canvas.scaled(
+                max(1, min(250, tile_width - 24)), max(1, tile_height - 25 - label_height),
+                Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.grid.addWidget(tile, row, column)
 
     def build_skin_tile(self, weapon, skin_data):
         tile = InstantTooltipFrame()
         tile.setObjectName("skinTile")
-        tile.setFixedSize(self.tile_width, self.tile_height)
 
         tile_layout = QVBoxLayout(tile)
-        tile_layout.setContentsMargins(15, 15, 15, 15)
-        tile_layout.setSpacing(10)
-        tile_layout.setAlignment(Qt.AlignCenter)
+        tile_layout.setContentsMargins(12, 10, 12, 10)
+        tile_layout.setSpacing(5)
 
         preview = QLabel()
         preview.setObjectName("skinPreview")
         preview.setAlignment(Qt.AlignCenter)
-        preview.setMinimumSize(250, 120)
+        preview.setMinimumSize(1, 1)
+        preview.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
         preview.setProperty("empty", "false")
 
         skin_id = skin_data
@@ -3510,46 +3230,46 @@ class WeaponPopup(QDialog):
 
         pixmap = self.skin_pixmap_resolver(skin_id) if skin_id and callable(self.skin_pixmap_resolver) else None
 
-        if skin_id:
-            if self.uuid_handler:
-                try:
-                    skin_name = self.uuid_handler.skin_converter(skin_id)
-                    if isinstance(skin_name, list):
-                        skin_name = str(skin_name[0]) if skin_name else "Unknown Skin"
-                    tile.set_instant_tooltip(str(skin_name))
-                    skin_name = get_clean_skin_name(skin_name)
+        skin_name = weapon
+        if skin_id and self.uuid_handler:
+            try:
+                skin_name = self.uuid_handler.skin_converter(skin_id)
+                if isinstance(skin_name, list):
+                    skin_name = str(skin_name[0]) if skin_name else weapon
+                tile.set_instant_tooltip(str(skin_name))
+                skin_name = get_clean_skin_name(skin_name)
+            except Exception:
+                skin_name = weapon
 
-                    skin_label = QLabel(str(skin_name))
-                    skin_label.setObjectName("skinLabel")
-                    skin_label.setAlignment(QtCore.Qt.AlignCenter | Qt.AlignBottom)
-                    tile_layout.addWidget(skin_label)
-                except Exception:
-                    pass
+        skin_label = QLabel(str(skin_name))
+        skin_label.setObjectName("skinLabel")
+        skin_label.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
+        skin_label.setWordWrap(True)
+        skin_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        tile_layout.addWidget(skin_label)
 
-                canvas = QPixmap(250, 120)
-                canvas.fill(Qt.transparent)
-                painter = QPainter(canvas)
-                painter.setRenderHint(QPainter.Antialiasing)
-                painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        canvas = QPixmap(250, 120)
+        canvas.fill(Qt.transparent)
+        painter = QPainter(canvas)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        if pixmap:
+            scaled_skin = pixmap.scaled(250, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            x_skin = (250 - scaled_skin.width()) // 2
+            y_skin = (120 - scaled_skin.height()) // 2
+            painter.drawPixmap(x_skin, y_skin, scaled_skin)
 
-                if pixmap:
-                    scaled_skin = pixmap.scaled(250, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                    x_skin = (250 - scaled_skin.width()) // 2
-                    y_skin = (120 - scaled_skin.height()) // 2
-                    painter.drawPixmap(x_skin, y_skin, scaled_skin)
-
-                    buddy_pixmap = self.buddy_pixmap_resolver(buddy_id) if buddy_id and callable(self.buddy_pixmap_resolver) else None
-                    if buddy_pixmap:
-                        scaled_buddy = buddy_pixmap.scaled(44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                        x_buddy = 5
-                        y_buddy = 120 - scaled_buddy.height() - 5
-                        painter.drawPixmap(x_buddy, y_buddy, scaled_buddy)
-
-                    preview.setPixmap(canvas)
-                else:
-                    preview.setText("No Skin")
-                    preview.setProperty("empty", "true")
-                painter.end()
+            buddy_pixmap = self.buddy_pixmap_resolver(buddy_id) if buddy_id and callable(self.buddy_pixmap_resolver) else None
+            if buddy_pixmap:
+                scaled_buddy = buddy_pixmap.scaled(44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                painter.drawPixmap(5, 120 - scaled_buddy.height() - 5, scaled_buddy)
+        else:
+            painter.setPen(QColor(THEME_MUTED))
+            painter.drawText(canvas.rect(), Qt.AlignCenter, "No Skin")
+            preview.setProperty("empty", "true")
+        painter.end()
+        preview.setProperty("skinPixmap", canvas)
+        preview.setPixmap(canvas)
 
         preview.style().unpolish(preview)
         preview.style().polish(preview)
@@ -3558,16 +3278,11 @@ class WeaponPopup(QDialog):
         return tile
 
     def build_exit_tile(self):
-        tile = QPushButton("")
+        tile = QPushButton("X")
         tile.setObjectName("exitTile")
 
-        full_width = (self.tile_width * 5) + (20 * 4)
-        tile.setFixedSize(full_width, (int(self.tile_height / 2)))
-
-        layout = QVBoxLayout(tile)
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(10)
-        layout.setAlignment(Qt.AlignCenter)
+        tile.setFixedHeight(42)
+        tile.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         tile.setCursor(Qt.PointingHandCursor)
         configure_close_button(tile, 24)
@@ -3658,39 +3373,24 @@ class ValorantStatsWindow(QMainWindow):
         else:
             print("Failed to load custom font, falling back to default.")
 
-        self.setWindowTitle("ValScanner")
+        self.setWindowTitle(f"{APP_NAME}")
         self.setMinimumSize(1500, 860)
-        self.setWindowIcon(QIcon(resource_path("assets/logoone.png")))
+        self.setWindowIcon(application_icon())
 
         self.map_asset_uuids = discover_map_asset_uuids()
         persisted_state = load_app_state(map_uuids=self.map_asset_uuids)
-        self.window_state = FrontendWindowState(persisted_state)
-        self.player_formatter = PlayerDisplayFormatter(self.window_state.flagged_players)
         initial_theme_name = normalize_theme_name(persisted_state.get("selected_theme"))
-        initial_theme_surface_mode = self.window_state.current_theme_surface_mode
-        self.current_theme_surface_mode = initial_theme_surface_mode
-        self.current_theme_name = apply_theme_palette(initial_theme_name, initial_theme_surface_mode)
-        self.window_state.current_theme_name = self.current_theme_name
-        self.player_row_renderer = self.resolve_player_row_renderer()
-        self._qml_player_rows_available = self.player_row_renderer == "qml"
-        self.qml_bridge = QmlProbeBridge(self.window_state, self)
-        self.qml_bridge.refreshRequested.connect(self.run_valo_stats)
-        self.player_card_bridge = PlayerCardBridge(
-            self.window_state,
-            formatter=self.player_formatter,
-            resource_path_resolver=resource_path,
-            player_icon_resolver=self.qml_player_icon_for_player,
-            style_colors=self.build_player_card_style_colors(),
-            loadout_callback=self.open_qml_player_loadout,
-            flag_callback=self.flag_player_by_puuid,
-            parent=self,
-        )
-        initial_presence_mode = self.window_state.presence_mode
+        self.current_theme_name = apply_theme_palette(initial_theme_name)
+        initial_presence_mode = PRESENCE_MODE_ONLINE
         initial_agent = str(persisted_state.get("selected_standard_agent", "Random") or "Random")
+        self.custom_random_enabled = bool(persisted_state.get("custom_random_enabled", False))
+        self.custom_random_selections = normalize_random_selections(persisted_state.get("custom_random_selections"))
+        if self.custom_random_enabled:
+            initial_agent = "Random"
         initial_auto_lock_enabled = bool(persisted_state.get("auto_lock_enabled", False))
         initial_map_lock_enabled = bool(persisted_state.get("map_lock_enabled", False))
-        initial_queue_snipe_enabled = bool(persisted_state.get("queue_snipe_enabled", False))
-        initial_queue_snipe_friend = self.window_state.queue_snipe_selected_friend
+        initial_queue_snipe_enabled = False
+        initial_queue_snipe_friend = None
         self.presence_mode = initial_presence_mode
         self._suspend_agent_lock_state_save = True
 
@@ -3714,6 +3414,21 @@ class ValorantStatsWindow(QMainWindow):
         self.auto_lock_switch = ToggleSwitch()
         self.auto_lock_switch.setChecked(initial_auto_lock_enabled)
         self.auto_lock_switch.toggled.connect(self.on_auto_lock_toggled)
+
+        self.instalock_delay_label = QLabel("Delay")
+        self.instalock_delay_label.setObjectName("sectionLabel")
+        self.instalock_delay_input = QDoubleSpinBox()
+        self.instalock_delay_input.setObjectName("instalockDelayInput")
+        self.instalock_delay_input.setDecimals(2)
+        self.instalock_delay_input.setRange(0.0, MAX_INSTALOCK_DELAY_SECONDS)
+        self.instalock_delay_input.setSingleStep(0.1)
+        self.instalock_delay_input.setSuffix(" s")
+        self.instalock_delay_input.setFixedWidth(92)
+        self.instalock_delay_input.setKeyboardTracking(False)
+        self.instalock_delay_input.setToolTip("Seconds to wait before auto-locking. 0 locks immediately.")
+        self.instalock_delay_input.setValue(persisted_state.get("instalock_delay_seconds", DEFAULT_INSTALOCK_DELAY_SECONDS))
+        self.valo_rank.instalock_delay_seconds = self.instalock_delay_input.value()
+        self.instalock_delay_input.valueChanged.connect(self.on_instalock_delay_changed)
 
         self.map_lock_label = QLabel("Map Specific")
         self.map_lock_label.setObjectName("sectionLabel")
@@ -3755,7 +3470,6 @@ class ValorantStatsWindow(QMainWindow):
         self.load_more_matches_button.setCursor(Qt.PointingHandCursor)
         self.load_more_matches_button.clicked.connect(self.run_load_more_matches_button)
         self.load_more_matches_button.setObjectName("secondaryButton")
-        self.load_more_matches_button.setEnabled(False)
 
         self.dodge_button = QPushButton("Dodge Game")
         self.dodge_button.setCursor(Qt.PointingHandCursor)
@@ -3782,10 +3496,6 @@ class ValorantStatsWindow(QMainWindow):
         self.presence_mode_indicator.setObjectName("headerStatusIcon")
         self.presence_mode_indicator.setAlignment(Qt.AlignCenter)
         self.presence_mode_indicator.setToolTip("Appear Offline is enabled")
-        self.starting_side_label = QLabel()
-        self.starting_side_label.setObjectName("startingSideLabel")
-        self.starting_side_label.setAlignment(Qt.AlignCenter)
-        self.starting_side_label.setText("")
 
         self.tools_button = QPushButton("Tools")
         self.tools_button.setCursor(Qt.PointingHandCursor)
@@ -3814,9 +3524,6 @@ class ValorantStatsWindow(QMainWindow):
         self.refresh_button.setIconSize(QSize(28, 28))
         self.refresh_button.setFixedSize(refresh_button_size, refresh_button_size)
         self.presence_mode_indicator.setFixedSize(refresh_button_size, refresh_button_size)
-        self.starting_side_label.setFixedHeight(header_button_height)
-        self.starting_side_label.setMinimumWidth(165)
-        self.starting_side_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.agent_icons = None
         self.rank_icons = None
@@ -3832,29 +3539,49 @@ class ValorantStatsWindow(QMainWindow):
         self.player_icon_pixmaps = {}
         self._player_icons_state = "not_started"
         self._player_icons_task = None
-        self.map_agent_selection = self.window_state.map_agent_selection
-        self.flagged_players = self.window_state.flagged_players
-        self.co_play_history = self.window_state.co_play_history
+        self.map_agent_selection = dict(persisted_state.get("map_agent_selection", {}))
+        self.flagged_players = dict(persisted_state.get("flagged_players", {}))
+        self.co_play_history = dict(persisted_state.get("co_play_history", {"by_user": {}}))
         self.last_standard_agent_text = initial_agent
         self.last_standard_agent_value = self.resolve_standard_agent_value(initial_agent)
-        self.get_agent_asset_path = get_agent_asset_path
-        self.get_asset_icon_path = get_asset_icon_path
-        self.top_bar_bridge = TopBarBridge(
-            self,
-            style_colors=self.build_player_card_style_colors(),
-            logo_path=resource_path("assets/logoone.png"),
-            parent=self,
-        )
 
         header_frame = QFrame()
         header_frame.setObjectName("headerFrame")
         self.header_frame = header_frame
 
         header_layout = QHBoxLayout(header_frame)
-        header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(0)
-        self.qml_top_bar_widget = self.create_qml_top_bar_widget()
-        header_layout.addWidget(self.qml_top_bar_widget)
+        header_layout.setContentsMargins(18, 15, 18, 14)
+        header_layout.setSpacing(14)
+
+        header_layout.addWidget(self.gamemode_chip, alignment=Qt.AlignVCenter)
+        header_layout.addWidget(self.server_chip, alignment=Qt.AlignVCenter)
+
+        agent_block = QFrame()
+        agent_block.setObjectName("agentBlock")
+        agent_block.setFixedHeight(agent_block_height)
+        agent_layout = QHBoxLayout(agent_block)
+        agent_layout.setContentsMargins(11, 8, 11, 8)
+        agent_layout.setSpacing(10)
+        agent_layout.addWidget(self.agent_label)
+        agent_layout.addWidget(self.agent_select_btn)
+        agent_layout.addWidget(self.lock_agent_button)
+        agent_layout.addWidget(self.auto_lock_label)
+        agent_layout.addWidget(self.auto_lock_switch)
+        agent_layout.addWidget(self.map_lock_label)
+        agent_layout.addWidget(self.map_lock_switch)
+        agent_layout.addWidget(self.instalock_delay_label)
+        agent_layout.addWidget(self.instalock_delay_input)
+
+        header_layout.addWidget(agent_block, alignment=Qt.AlignVCenter)
+
+        header_layout.addStretch(1)
+
+        header_layout.addWidget(self.dodge_button, alignment=Qt.AlignVCenter)
+        header_layout.addWidget(self.load_more_matches_button, alignment=Qt.AlignVCenter)
+        header_layout.addWidget(self.tools_button, alignment=Qt.AlignVCenter)
+        header_layout.addWidget(self.presence_mode_indicator, alignment=Qt.AlignVCenter)
+
+        header_layout.addWidget(self.refresh_button, alignment=Qt.AlignVCenter)
 
         left_panel, self.left_scroll_area, self.left_layout = self.build_team_panel("red")
         right_panel, self.right_scroll_area, self.right_layout = self.build_team_panel("blue")
@@ -3881,15 +3608,11 @@ class ValorantStatsWindow(QMainWindow):
         team_columns_layout.addWidget(left_panel, 1)
         team_columns_layout.addWidget(divider_container)
         team_columns_layout.addWidget(right_panel, 1)
-        self.qml_probe_widget = self.create_qml_probe_widget()
-        self.qml_player_card_widget = self.create_qml_player_card_widget()
 
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(header_frame)
-        layout.addWidget(self.qml_probe_widget)
-        layout.addWidget(self.qml_player_card_widget)
         layout.addWidget(team_columns, 1)
 
         container = QWidget()
@@ -3900,7 +3623,6 @@ class ValorantStatsWindow(QMainWindow):
         self.apply_theme()
         self.finalize_initial_header_metrics()
         self.lock_header_height()
-        self.puuid = None
         self.load_players(players or [])
         QTimer.singleShot(0, self.sync_startup_theme_metrics)
         QTimer.singleShot(0, self.refresh_player_row_heights)
@@ -3955,23 +3677,16 @@ class ValorantStatsWindow(QMainWindow):
             self,
         )
 
-        self.refreshed_pregame = self.window_state.refreshed_pregame
-        self.refreshed_game = self.window_state.refreshed_game
-        self.instalocked_match_id = self.window_state.instalocked_match_id
-        self.last_update = self.window_state.last_update
-        self._refresh_task = None
-        self._hydration_task = None
-        self._hydration_match_id = self.window_state.hydration_match_id
-        self._hydrated_match_ids = self.window_state.hydrated_match_ids
-        self._hydration_delay_ready_match_ids = set()
-        self._hydration_coregame_ready_match_ids = set()
-        self._hydration_running_match_ids = set()
+        self.refreshed_pregame = None
+        self.refreshed_game = None
+        self.instalocked_match_id = None
+        self.last_update = None
 
-        self.seen_prematch_ids = self.window_state.seen_prematch_ids
-        self.seen_match_ids = self.window_state.seen_match_ids
-        self.last_seen = self.window_state.last_seen
+        self.seen_prematch_ids = set()
+        self.seen_match_ids = set()
+        self.last_seen = None
 
-        self._remote_policy_checked_puuids = set()
+        self.puuid = None
 
         self._latency_start_time = None
         self.apply_restored_agent_lock_state(initial_auto_lock_enabled, initial_map_lock_enabled)
@@ -3979,276 +3694,59 @@ class ValorantStatsWindow(QMainWindow):
         self.apply_restored_presence_mode(initial_presence_mode)
         self._suspend_agent_lock_state_save = False
 
-    def create_qml_probe_widget(self):
-        widget = QQuickWidget(self)
-        widget.setObjectName("qmlProbeWidget")
-        resize_mode = getattr(getattr(QQuickWidget, "ResizeMode", QQuickWidget), "SizeRootObjectToView")
-        widget.setResizeMode(resize_mode)
-        widget.setFixedHeight(132)
-        widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        widget.setClearColor(QColor(0, 0, 0, 0))
-        widget.rootContext().setContextProperty("bridge", self.qml_bridge)
-        widget.statusChanged.connect(lambda status: self.log_qml_probe_errors(widget, status))
-
-        qml_path = resource_path(os.path.join("frontend", "qml", "QmlProbe.qml"))
-        widget.setSource(QUrl.fromLocalFile(qml_path))
-        self.log_qml_probe_errors(widget, widget.status())
-        widget.setVisible(os.environ.get("VALSCANNER_QML_PROBE") == "1")
-        return widget
-
-    def create_qml_top_bar_widget(self):
-        widget = QQuickWidget(self)
-        widget.setObjectName("qmlTopBarWidget")
-        resize_mode = getattr(getattr(QQuickWidget, "ResizeMode", QQuickWidget), "SizeRootObjectToView")
-        widget.setResizeMode(resize_mode)
-        widget.setFixedHeight(96)
-        widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        widget.setClearColor(QColor(0, 0, 0, 0))
-        widget.rootContext().setContextProperty("topBarBridge", self.top_bar_bridge)
-        widget.statusChanged.connect(lambda status: self.log_qml_top_bar_errors(widget, status))
-        self.update_top_bar_background()
-
-        qml_path = resource_path(os.path.join("frontend", "qml", "TopBar.qml"))
-        widget.setSource(QUrl.fromLocalFile(qml_path))
-        self.log_qml_top_bar_errors(widget, widget.status())
-        return widget
-
-    def build_player_card_style_colors(self):
-        return {
-            "main": THEME_MAIN,
-            "window": THEME_WINDOW,
-            "panel": THEME_PANEL,
-            "card": THEME_CARD,
-            "cardAlt": THEME_CARD_ALT,
-            "border": THEME_BORDER,
-            "borderSoft": THEME_BORDER_SOFT,
-            "text": THEME_TEXT,
-            "muted": THEME_MUTED,
-            "accent": THEME_ACCENT,
-            "accentHover": THEME_ACCENT_HOVER,
-            "accentPressed": THEME_ACCENT_PRESSED,
-            "teal": THEME_TEAL,
-            "tealHover": THEME_TEAL_HOVER,
-            "red": THEME_RED,
-            "redHover": THEME_RED_HOVER,
-            "redPressed": THEME_RED_PRESSED,
-            "gold": THEME_GOLD,
-            "cyan": THEME_CYAN,
-            "flaggedRow": THEME_FLAGGED_ROW,
-            "flaggedRowHover": THEME_FLAGGED_ROW_HOVER,
-            "flaggedBorder": THEME_FLAGGED_BORDER,
-        }
-
-    def log_qml_probe_errors(self, widget, status):
-        error_status = getattr(getattr(QQuickWidget, "Status", QQuickWidget), "Error")
-        if status != error_status:
-            return
-        for error in widget.errors():
-            print(f"[QML Probe] {error.toString()}")
-
-    def log_qml_top_bar_errors(self, widget, status):
-        error_status = getattr(getattr(QQuickWidget, "Status", QQuickWidget), "Error")
-        if status != error_status:
-            return
-        errors = widget.errors() or []
-        if not errors:
-            print("[QML TopBar] Unknown QML load error")
-            return
-        for error in errors:
-            print(f"[QML TopBar] {error.toString()}")
-
-    def create_qml_player_card_widget(self):
-        widget = QQuickWidget(self)
-        widget.setObjectName("qmlPlayerCardPrototypeWidget")
-        resize_mode = getattr(getattr(QQuickWidget, "ResizeMode", QQuickWidget), "SizeRootObjectToView")
-        widget.setResizeMode(resize_mode)
-        widget.setFixedHeight(self.MIN_PLAYER_ROW_HEIGHT)
-        widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        widget.setClearColor(QColor(0, 0, 0, 0))
-        widget.rootContext().setContextProperty("playerCardBridge", self.player_card_bridge)
-        widget.statusChanged.connect(lambda status: self.log_qml_player_card_errors(widget, status))
-
-        qml_path = resource_path(os.path.join("frontend", "qml", "PlayerCardPrototype.qml"))
-        widget.setSource(QUrl.fromLocalFile(qml_path))
-        self.log_qml_player_card_errors(widget, widget.status())
-        widget.setVisible(os.environ.get("VALSCANNER_QML_PLAYER_CARD") == "1")
-        return widget
-
-    def resolve_player_row_renderer(self):
-        raw_value = str(os.environ.get(PLAYER_ROW_RENDERER_ENV, "qml") or "qml").strip().lower()
-        if raw_value in {"widget", "qwidget", "qt", "0", "false", "off"}:
-            return "widget"
-        if raw_value not in {"qml", "quick", "1", "true", "on"}:
-            print(f"[PlayerRows] Unknown {PLAYER_ROW_RENDERER_ENV}={raw_value!r}; defaulting to QML rows")
-        return "qml"
-
-    def use_qml_player_rows(self):
-        return self.player_row_renderer == "qml" and self._qml_player_rows_available
-
-    def create_qml_player_row(self, player):
-        row = QFrame()
-        row.setObjectName("qmlPlayerCardRow")
-        row.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        row.setMinimumHeight(self.MIN_PLAYER_ROW_HEIGHT)
-
-        row_layout = QVBoxLayout(row)
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.setSpacing(0)
-
-        widget = QQuickWidget(row)
-        widget.setObjectName("qmlPlayerCardRowWidget")
-        resize_mode = getattr(getattr(QQuickWidget, "ResizeMode", QQuickWidget), "SizeRootObjectToView")
-        widget.setResizeMode(resize_mode)
-        widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        widget.setClearColor(QColor(0, 0, 0, 0))
-        widget.rootContext().setContextProperty("playerCardBridge", self.player_card_bridge)
-        widget.rootContext().setContextProperty(
-            "playerCardData",
-            build_player_card_display(
-                player,
-                formatter=self.player_formatter,
-                flagged_players=self.flagged_players,
-                resource_path_resolver=resource_path,
-                player_icon_resolver=self.qml_player_icon_for_player,
-            ),
-        )
-        widget.statusChanged.connect(
-            lambda status, quick_widget=widget: self.handle_qml_player_row_status(quick_widget, status)
-        )
-
-        qml_path = resource_path(os.path.join("frontend", "qml", "PlayerCardRow.qml"))
-        widget.setSource(QUrl.fromLocalFile(qml_path))
-        if self.qml_player_row_has_errors(widget, widget.status()):
-            self._qml_player_rows_available = False
-            return self.create_player_row(player)
-
-        row_layout.addWidget(widget)
-        return row
-
-    def qml_player_row_has_errors(self, widget, status):
-        error_status = getattr(getattr(QQuickWidget, "Status", QQuickWidget), "Error")
-        if status != error_status:
-            return False
-
-        errors = widget.errors() or []
-        if not errors:
-            print("[QML PlayerCard Row] Unknown QML load error; falling back to QWidget rows")
-            return True
-
-        for error in errors:
-            print(f"[QML PlayerCard Row] {error.toString()}")
-        print("[QML PlayerCard Row] Falling back to QWidget rows")
-        return True
-
-    def handle_qml_player_row_status(self, widget, status):
-        if not self.qml_player_row_has_errors(widget, status):
-            return
-        self._qml_player_rows_available = False
-        if self.player_row_renderer == "qml":
-            QTimer.singleShot(0, lambda: self.load_players(getattr(self.valo_rank, "frontend_data", None) or {}))
-
-    def create_player_row_for_renderer(self, player):
-        if self.use_qml_player_rows():
-            return self.create_qml_player_row(player)
-        return self.create_player_row(player)
-
-    def log_qml_player_card_errors(self, widget, status):
-        error_status = getattr(getattr(QQuickWidget, "Status", QQuickWidget), "Error")
-        if status != error_status:
-            return
-        errors = widget.errors() or []
-        if not errors:
-            print("[QML PlayerCard Prototype] Unknown QML load error")
-            return
-        for error in errors:
-            print(f"[QML PlayerCard Prototype] {error.toString()}")
-
-    def open_qml_player_loadout(self, player_key):
-        player_key = str(player_key or "").strip()
-        if not player_key:
-            return
-
-        for player in list(getattr(self.window_state, "left_players", []) or []) + list(getattr(self.window_state, "right_players", []) or []):
-            if not isinstance(player, dict):
-                continue
-            player_puuid = str(player.get("puuid", "") or "").strip()
-            clipboard_name = self.build_player_clipboard_name(player)
-            if player_key not in (player_puuid, clipboard_name):
-                continue
-
-            skins = player.get("skins") or {}
-            if skins:
-                self.open_skin_popup(str(player.get("name", "Unknown")), skins)
-            return
-
-    def notify_qml_probe_bindings(self):
-        bridge = getattr(self, "qml_bridge", None)
-        if bridge is not None:
-            bridge.notify_bindings()
-        player_card_bridge = getattr(self, "player_card_bridge", None)
-        if player_card_bridge is not None:
-            player_card_bridge.set_style_colors(self.build_player_card_style_colors())
-            player_card_bridge.refresh()
-        self.notify_top_bar_bindings()
-
-    def notify_top_bar_bindings(self):
-        top_bar_bridge = getattr(self, "top_bar_bridge", None)
-        if top_bar_bridge is None:
-            return
-        top_bar_bridge.set_style_colors(self.build_player_card_style_colors())
-        self.update_top_bar_background()
-        top_bar_bridge.notify_bindings()
-
-    def update_top_bar_background(self):
-        top_bar_bridge = getattr(self, "top_bar_bridge", None)
-        if top_bar_bridge is None:
-            return
-
-        top_bar_height = 96
-        if hasattr(self, "qml_top_bar_widget") and self.qml_top_bar_widget is not None:
-            top_bar_height = max(1, self.qml_top_bar_widget.height() or top_bar_height)
-
-        window_width = max(1, self.width() or self.minimumWidth())
-        window_height = max(top_bar_height, self.height() or self.minimumHeight())
-        decorative_background = bool(get_active_theme_style_profile().get("decorative_background"))
-
-        top_bar_pixmap = QPixmap(window_width, top_bar_height)
-        top_bar_pixmap.fill(make_qcolor(THEME_WINDOW))
-
-        painter = QPainter(top_bar_pixmap)
-        painter.setRenderHint(QPainter.SmoothPixmapTransform)
-        painter.setPen(Qt.NoPen)
-        painter.drawPixmap(
-            QRect(0, 0, window_width, window_height),
-            get_background_pixmap(window_width, window_height, decorative_background),
-        )
-        painter.setOpacity(0.5)
-        painter.fillRect(QRect(0, 0, window_width, top_bar_height), QBrush(get_background_dither_pixmap()))
-        painter.end()
-
-        background_path = os.path.join(tempfile.gettempdir(), "valscanner_qml_topbar_background.png")
-        top_bar_pixmap.save(background_path, "PNG")
-        background_url = QUrl.fromLocalFile(background_path)
-        try:
-            background_url.setQuery(str(int(time.time() * 1000)))
-        except Exception:
-            pass
-        top_bar_bridge.set_background_path(background_url.toString())
-
     def paintEvent(self, event):
         super().paintEvent(event)
-        window_rect = self.rect()
-        if window_rect.isEmpty():
+        if not get_active_theme_style_profile().get("decorative_background"):
             return
 
-        decorative_background = bool(get_active_theme_style_profile().get("decorative_background"))
-
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        painter.setRenderHint(QPainter.Antialiasing)
         painter.setPen(Qt.NoPen)
-        painter.drawPixmap(window_rect, get_background_pixmap(self.width(), self.height(), decorative_background))
-        painter.setOpacity(0.5)
-        painter.fillRect(window_rect, QBrush(get_background_dither_pixmap()))
+
+        light_specs = (
+            (
+                self.width() * 0.16,
+                self.height() * 0.1,
+                max(self.width() * 0.38, 320),
+                (
+                    (0.0, make_qcolor(THEME_ACCENT, 0.24)),
+                    (0.36, make_qcolor(THEME_CYAN, 0.11)),
+                    (1.0, make_qcolor(THEME_WINDOW, 0.0)),
+                ),
+            ),
+            (
+                self.width() * 0.88,
+                self.height() * 0.2,
+                max(self.width() * 0.28, 240),
+                (
+                    (0.0, make_qcolor(THEME_GOLD, 0.12)),
+                    (0.42, make_qcolor(THEME_ACCENT, 0.09)),
+                    (1.0, make_qcolor(THEME_WINDOW, 0.0)),
+                ),
+            ),
+            (
+                self.width() * 0.5,
+                self.height() * 0.92,
+                max(self.width() * 0.52, 420),
+                (
+                    (0.0, make_qcolor(THEME_PANEL, 0.18)),
+                    (0.38, make_qcolor(THEME_ACCENT, 0.08)),
+                    (1.0, make_qcolor(THEME_WINDOW, 0.0)),
+                ),
+            ),
+        )
+
+        for center_x, center_y, radius, stops in light_specs:
+            gradient = QRadialGradient(center_x, center_y, radius)
+            for stop, color in stops:
+                gradient.setColorAt(stop, color)
+            painter.setBrush(gradient)
+            painter.drawEllipse(
+                int(center_x - radius),
+                int(center_y - radius),
+                int(radius * 2),
+                int(radius * 2),
+            )
 
         painter.end()
 
@@ -4440,9 +3938,6 @@ class ValorantStatsWindow(QMainWindow):
     async def bootstrap_startup(self):
         try:
             started = await self.startup_coordinator.initialize()
-            handler = LockfileHandler()
-            if handler.puuid and await self.enforce_remote_ban_policy(handler.puuid):
-                return
             if not started and self.startup_coordinator.restart_required:
                 await self.prompt_restart_for_party_detection()
             else:
@@ -4472,12 +3967,12 @@ class ValorantStatsWindow(QMainWindow):
         prompt.setInformativeText(
             f"Currently running: {running}<br><br>"
             "Pressing Yes will close Valorant and Riot Client, then launch Valorant for you.<br><br>"
-            "Pressing No will keep ValScanner open, but Usernames, Party Detection, Appear Offline, and Queue Sniping will stay disabled until ValScanner is restarted.<br><br>"
+            f"Pressing No will keep {APP_NAME} open, but Usernames, Party Detection, Appear Offline, and Queue Sniping will stay disabled until {APP_NAME} is restarted.<br><br>"
             "<div style='border: 3px solid #ff2f2f; background-color: #3b0000; color: #ffffff; padding: 14px; margin-top: 8px;'>"
             "<span style='color: #ff4a4a; font-size: 16px; font-weight: 900;'>WARNING: LAUNCH AT YOUR OWN RISK</span><br><br>"
             "There have been cooldowns and account suspensions reported when launching the game through third-party tools.<br><br>"
-            "By pressing Yes and launching Valorant through ValScanner, you accept full responsibility for any consequences. "
-            "ValScanner and its developer accept no liability for any account cooldowns, restrictions, suspensions, bans, or other penalties."
+            f"By pressing Yes and launching Valorant through {APP_NAME}, you accept full responsibility for any consequences. "
+            f"{APP_NAME} and its developer accept no liability for any account cooldowns, restrictions, suspensions, bans, or other penalties."
             "</div>"
         )
         prompt.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
@@ -4492,7 +3987,7 @@ class ValorantStatsWindow(QMainWindow):
         self.show_loading_window()
         if answer == QMessageBox.Yes:
             await self.startup_coordinator.restart_riot_client()
-            self.set_party_detection_enabled(True)
+            self.set_party_detection_enabled(self.startup_coordinator.party_detection_enabled)
         else:
             await self.startup_coordinator.disable_party_detection()
             self.set_party_detection_enabled(False)
@@ -4502,22 +3997,6 @@ class ValorantStatsWindow(QMainWindow):
         self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
         self.sync_party_detection_tool_states()
         await self.refresh_data()
-
-    async def enforce_remote_ban_policy(self, puuid):
-        normalized_puuid = str(puuid or "").strip().lower()
-        if not normalized_puuid or normalized_puuid in self._remote_policy_checked_puuids:
-            return False
-
-        decision = await check_banlist(normalized_puuid)
-        if not decision.blocked:
-            if decision.checked:
-                self._remote_policy_checked_puuids.add(normalized_puuid)
-            return False
-
-        QMessageBox.critical(self, "ValScanner Unavailable", decision.reason)
-        await self.request_close()
-        QApplication.quit()
-        return True
 
     def closeEvent(self, event: QCloseEvent):
         if self._allow_native_close:
@@ -4542,7 +4021,7 @@ class ValorantStatsWindow(QMainWindow):
     def enter_background_helper_mode(self, running_processes):
         self._background_helper_active = True
         self._close_requested = False
-        self.set_status_message("ValScanner will finish closing after Riot Client exits.")
+        self.set_status_message(f"{APP_NAME} will finish closing after Riot Client exits.")
         if hasattr(self, "queue_snipe_service") and self.queue_snipe_service:
             self.queue_snipe_service.shutdown()
 
@@ -4578,7 +4057,7 @@ class ValorantStatsWindow(QMainWindow):
         QMessageBox.information(
             self,
             "Closing In Background",
-            f"ValScanner will stay in the background until {running} exits so Riot social features keep working.",
+            f"{APP_NAME} will stay in the background until {running} exits so Riot social features keep working.",
         )
         self.hide()
 
@@ -4695,19 +4174,25 @@ class ValorantStatsWindow(QMainWindow):
         )
 
     def build_agent_lock_state_payload(self):
-        return self.window_state.build_saved_payload(
-            selected_theme=self.current_theme_name,
-            theme_surface_mode=self.current_theme_surface_mode,
-            presence_mode=self.presence_mode,
-            selected_standard_agent=self.last_standard_agent_text or "Random",
-            auto_lock_enabled=self.auto_lock_switch.isChecked(),
-            map_lock_enabled=self.map_lock_switch.isChecked(),
-            queue_snipe_enabled=self.queue_snipe_switch.isChecked(),
-            queue_snipe_selected_friend=self.queue_snipe_selected_friend,
-            flagged_players=self.flagged_players,
-            co_play_history=self.co_play_history,
-            map_agent_selection=self.map_agent_selection,
-        )
+        return {
+            "version": APP_STATE_VERSION,
+            "selected_theme": self.current_theme_name,
+            "presence_mode": self.presence_mode,
+            "selected_standard_agent": self.last_standard_agent_text or "Random",
+            "custom_random_enabled": self.custom_random_enabled,
+            "custom_random_selections": list(self.custom_random_selections),
+            "auto_lock_enabled": self.auto_lock_switch.isChecked(),
+            "instalock_delay_seconds": self.instalock_delay_input.value(),
+            "map_lock_enabled": self.map_lock_switch.isChecked(),
+            "queue_snipe_enabled": self.queue_snipe_switch.isChecked() and self.queue_snipe_selected_friend is not None,
+            "queue_snipe_selected_friend": dict(self.queue_snipe_selected_friend) if self.queue_snipe_selected_friend else None,
+            "flagged_players": {
+                str(puuid): dict(details) if isinstance(details, dict) else details
+                for puuid, details in self.flagged_players.items()
+            },
+            "co_play_history": dict(self.co_play_history or {"by_user": {}}),
+            "map_agent_selection": dict(self.map_agent_selection or {}),
+        }
 
     def persist_agent_lock_state(self):
         if getattr(self, "_suspend_agent_lock_state_save", False):
@@ -4717,15 +4202,14 @@ class ValorantStatsWindow(QMainWindow):
             self.build_agent_lock_state_payload(),
             map_uuids=self.map_asset_uuids,
         )
-        self.window_state.apply_normalized_saved_state(normalized_state)
         self.current_theme_name = normalize_theme_name(normalized_state.get("selected_theme"))
-        self.current_theme_surface_mode = self.window_state.current_theme_surface_mode
-        self.presence_mode = self.window_state.presence_mode
-        self.map_agent_selection = self.window_state.map_agent_selection
-        self.flagged_players = self.window_state.flagged_players
-        self.player_formatter.set_flagged_players(self.flagged_players)
-        self.co_play_history = self.window_state.co_play_history
-        self.queue_snipe_selected_friend = self.window_state.queue_snipe_selected_friend
+        self.presence_mode = normalize_presence_mode(normalized_state.get("presence_mode"))
+        self.map_agent_selection = dict(normalized_state.get("map_agent_selection", {}))
+        self.flagged_players = dict(normalized_state.get("flagged_players", {}))
+        self.co_play_history = dict(normalized_state.get("co_play_history", {"by_user": {}}))
+        self.queue_snipe_selected_friend = QueueSnipeService.normalize_friend(
+            normalized_state.get("queue_snipe_selected_friend")
+        )
         if hasattr(self, "queue_snipe_button"):
             self.queue_snipe_button.setText(self.get_queue_snipe_button_text(self.queue_snipe_selected_friend))
         if hasattr(self, "presence_mode_switch"):
@@ -4735,7 +4219,6 @@ class ValorantStatsWindow(QMainWindow):
         self.update_presence_mode_indicator()
         if hasattr(self, "queue_snipe_switch"):
             self.sync_party_detection_tool_states()
-        self.notify_top_bar_bindings()
 
     def apply_restored_agent_lock_state(self, auto_lock_enabled, map_lock_enabled):
         self.auto_lock_switch.blockSignals(True)
@@ -4753,20 +4236,18 @@ class ValorantStatsWindow(QMainWindow):
 
         self.on_auto_lock_toggled(self.auto_lock_switch.isChecked())
         self.on_map_lock_toggled(self.map_lock_switch.isChecked())
-        self.notify_top_bar_bindings()
 
     def apply_restored_queue_snipe_state(self, queue_snipe_enabled, selected_friend):
-        self.queue_snipe_selected_friend = self.window_state.update_queue_snipe_friend(selected_friend)
+        self.queue_snipe_selected_friend = QueueSnipeService.normalize_friend(selected_friend)
         self.queue_snipe_button.setText(self.get_queue_snipe_button_text(self.queue_snipe_selected_friend))
         self.queue_snipe_switch.blockSignals(True)
         self.queue_snipe_switch.setChecked(bool(queue_snipe_enabled) and self.queue_snipe_selected_friend is not None)
         self.queue_snipe_switch.blockSignals(False)
         self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
         self.sync_party_detection_tool_states()
-        self.notify_top_bar_bindings()
 
     def apply_restored_presence_mode(self, presence_mode):
-        self.presence_mode = self.window_state.update_presence_mode(presence_mode)
+        self.presence_mode = normalize_presence_mode(presence_mode)
         self.presence_mode_switch.blockSignals(True)
         self.presence_mode_switch.setChecked(self.presence_mode == PRESENCE_MODE_OFFLINE)
         self.presence_mode_switch.blockSignals(False)
@@ -4774,7 +4255,6 @@ class ValorantStatsWindow(QMainWindow):
         if hasattr(self, "startup_coordinator") and self.startup_coordinator:
             self.startup_coordinator.mitm_service.set_presence_mode(self.presence_mode)
         self.sync_party_detection_tool_states()
-        self.notify_top_bar_bindings()
 
     def update_presence_mode_indicator(self):
         if not hasattr(self, "presence_mode_indicator") or self.presence_mode_indicator is None:
@@ -4783,19 +4263,16 @@ class ValorantStatsWindow(QMainWindow):
         is_offline = normalize_presence_mode(self.presence_mode) == PRESENCE_MODE_OFFLINE
         self.presence_mode_indicator.setVisible(is_offline)
         if not is_offline:
-            self.notify_top_bar_bindings()
             return
 
         if hasattr(self, "offline_icon") and not self.offline_icon.isNull():
             scaled_icon = self.offline_icon.pixmap(QSize(18, 18))
             self.presence_mode_indicator.setPixmap(scaled_icon)
             self.presence_mode_indicator.setText("")
-            self.notify_top_bar_bindings()
             return
 
         self.presence_mode_indicator.setPixmap(QPixmap())
         self.presence_mode_indicator.setText("OFF")
-        self.notify_top_bar_bindings()
 
     def apply_toggle_switch_theme(self):
         for toggle_name in (
@@ -4807,12 +4284,6 @@ class ValorantStatsWindow(QMainWindow):
             toggle = getattr(self, toggle_name, None)
             if toggle is not None:
                 toggle.apply_theme_colors()
-
-        theme_popup = getattr(self, "_theme_popup_dialog", None)
-        if theme_popup is not None and hasattr(theme_popup, "apply_toggle_switch_theme"):
-            theme_popup.apply_toggle_switch_theme()
-        elif theme_popup is not None and hasattr(theme_popup, "surface_mode_switch"):
-            theme_popup.surface_mode_switch.apply_theme_colors()
 
     def apply_theme_icons(self):
         if hasattr(self, "refresh_button") and self.refresh_button is not None:
@@ -4837,29 +4308,29 @@ class ValorantStatsWindow(QMainWindow):
         self.apply_theme_icons()
 
     def set_standard_agent_selection(self, agent_name):
-        self.last_standard_agent_text, self.last_standard_agent_value = (
-            self.window_state.update_standard_agent_selection(agent_name, self.resolve_standard_agent_value)
-        )
+        self.last_standard_agent_text = agent_name
+        self.last_standard_agent_value = self.resolve_standard_agent_value(agent_name)
         if agent_name not in MAP_SPECIFIC_ROLE_TOKENS:
             self.agent = self.last_standard_agent_value
 
         if not self.map_lock_switch.isChecked():
             self.agent_select_btn.setText(agent_name)
         self.persist_agent_lock_state()
-        self.notify_top_bar_bindings()
 
     def restore_standard_agent_selection(self):
         restored_text = self.last_standard_agent_text or "Random"
         self.agent_select_btn.setText(restored_text)
         if restored_text not in MAP_SPECIFIC_ROLE_TOKENS:
             self.agent = self.last_standard_agent_value or self.uuid_handler.agent_converter_reversed(restored_text)
-        self.notify_top_bar_bindings()
+
+    def on_instalock_delay_changed(self, seconds):
+        self.valo_rank.instalock_delay_seconds = seconds
+        self.persist_agent_lock_state()
 
     def on_auto_lock_toggled(self, checked):
         self.map_lock_switch.setEnabled(bool(checked))
         if checked:
             self.persist_agent_lock_state()
-            self.notify_top_bar_bindings()
             return
 
         if self.map_lock_switch.isChecked():
@@ -4868,7 +4339,6 @@ class ValorantStatsWindow(QMainWindow):
             self.map_lock_switch.blockSignals(False)
         self.restore_standard_agent_selection()
         self.persist_agent_lock_state()
-        self.notify_top_bar_bindings()
 
     def on_map_lock_toggled(self, checked):
         if checked and not self.auto_lock_switch.isChecked():
@@ -4876,7 +4346,6 @@ class ValorantStatsWindow(QMainWindow):
             self.map_lock_switch.setChecked(False)
             self.map_lock_switch.blockSignals(False)
             self.persist_agent_lock_state()
-            self.notify_top_bar_bindings()
             return
 
         if checked:
@@ -4884,11 +4353,9 @@ class ValorantStatsWindow(QMainWindow):
         else:
             self.restore_standard_agent_selection()
         self.persist_agent_lock_state()
-        self.notify_top_bar_bindings()
 
     def save_map_agent_selection(self, map_uuid, selection_value):
         self.map_agent_selection[map_uuid] = str(selection_value or "")
-        self.window_state.map_agent_selection = self.map_agent_selection
         self.persist_agent_lock_state()
 
     def on_queue_snipe_toggled(self, checked):
@@ -4896,29 +4363,23 @@ class ValorantStatsWindow(QMainWindow):
             self.queue_snipe_switch.blockSignals(True)
             self.queue_snipe_switch.setChecked(False)
             self.queue_snipe_switch.blockSignals(False)
-            self.notify_top_bar_bindings()
             return
 
         self.sync_party_detection_tool_states()
         self.persist_agent_lock_state()
-        self.notify_top_bar_bindings()
 
     def on_queue_snipe_friend_selected(self, friend_data):
-        self.queue_snipe_selected_friend = self.window_state.update_queue_snipe_friend(friend_data)
+        self.queue_snipe_selected_friend = QueueSnipeService.normalize_friend(friend_data)
         self.queue_snipe_button.setText(self.get_queue_snipe_button_text(self.queue_snipe_selected_friend))
         self.queue_snipe_service.set_selected_friend(self.queue_snipe_selected_friend)
         self.sync_party_detection_tool_states()
         self.persist_agent_lock_state()
-        self.notify_top_bar_bindings()
 
     def on_presence_mode_toggled(self, checked):
-        self.presence_mode = self.window_state.update_presence_mode(
-            PRESENCE_MODE_OFFLINE if checked else PRESENCE_MODE_ONLINE
-        )
+        self.presence_mode = PRESENCE_MODE_OFFLINE if checked else "online"
         if hasattr(self, "startup_coordinator") and self.startup_coordinator:
             self.startup_coordinator.mitm_service.set_presence_mode(self.presence_mode)
         self.persist_agent_lock_state()
-        self.notify_top_bar_bindings()
 
     def open_queue_snipe_popup(self):
         print("[QueueSnipeUI] open_queue_snipe_popup clicked")
@@ -4969,7 +4430,7 @@ class ValorantStatsWindow(QMainWindow):
         error_box = QMessageBox(self)
         error_box.setWindowTitle("Friends Unavailable")
         error_box.setIcon(QMessageBox.Warning)
-        error_box.setText("ValScanner couldn't load your friends list.")
+        error_box.setText(f"{APP_NAME} couldn't load your friends list.")
         error_box.setInformativeText(str(message or "Unknown error."))
         error_box.setStandardButtons(QMessageBox.Ok)
         error_box.setAttribute(Qt.WA_DeleteOnClose, True)
@@ -5002,6 +4463,9 @@ class ValorantStatsWindow(QMainWindow):
             getattr(self, "agent_icons", {}),
             self.on_agent_selected,
             self,
+            custom_random_enabled=self.custom_random_enabled,
+            custom_random_selections=self.custom_random_selections,
+            pool_callback=self.on_custom_random_changed,
         )
         self._agent_popup_dialog.finished.connect(lambda *_: setattr(self, "_agent_popup_dialog", None))
         self._agent_popup_dialog.open()
@@ -5026,7 +4490,7 @@ class ValorantStatsWindow(QMainWindow):
             self.loadouts_button.setEnabled(False)
             asyncio.create_task(self._open_user_loadouts_async())
 
-    def open_tools_popup(self, anchor_rect=None):
+    def open_tools_popup(self):
         tools_popup = getattr(self, "_tools_popup_dialog", None)
         if tools_popup is None:
             return
@@ -5037,15 +4501,6 @@ class ValorantStatsWindow(QMainWindow):
             return
 
         tools_popup.apply_theme_styles()
-        if isinstance(anchor_rect, dict) and hasattr(self, "qml_top_bar_widget"):
-            tools_popup.open_at_rect(
-                self.qml_top_bar_widget,
-                anchor_rect.get("x", 0),
-                anchor_rect.get("y", 0),
-                anchor_rect.get("width", 0),
-                anchor_rect.get("height", 0),
-            )
-            return
         tools_popup.open_near(self.tools_button)
 
     def open_theme_popup(self):
@@ -5055,46 +4510,17 @@ class ValorantStatsWindow(QMainWindow):
             active_popup.activateWindow()
             return
 
-        use_widget_popup = os.environ.get("VALSCANNER_THEME_POPUP_WIDGET") == "1"
-        popup_class = ThemePopup if use_widget_popup else QmlThemePopup
-        popup = popup_class(
-            self.current_theme_name,
-            self.current_theme_surface_mode,
-            self.on_theme_selected,
-            self.on_theme_surface_mode_selected,
-            self,
-        )
-        if not use_widget_popup and hasattr(popup, "has_qml_errors") and popup.has_qml_errors():
-            popup.close()
-            popup.deleteLater()
-            popup = ThemePopup(
-                self.current_theme_name,
-                self.current_theme_surface_mode,
-                self.on_theme_selected,
-                self.on_theme_surface_mode_selected,
-                self,
-            )
-        self._theme_popup_dialog = popup
+        self._theme_popup_dialog = ThemePopup(self.current_theme_name, self.on_theme_selected, self)
         self._theme_popup_dialog.finished.connect(lambda *_: setattr(self, "_theme_popup_dialog", None))
         self._theme_popup_dialog.open()
 
     def on_theme_selected(self, theme_name):
         self.apply_selected_theme(theme_name)
 
-    def on_theme_surface_mode_selected(self, surface_mode):
-        self.apply_selected_theme(self.current_theme_name, surface_mode=surface_mode)
-
-    def apply_selected_theme(self, theme_name, surface_mode=None, persist=True, refresh_players=True):
+    def apply_selected_theme(self, theme_name, persist=True, refresh_players=True):
         normalized_theme_name = normalize_theme_name(theme_name)
-        normalized_surface_mode = normalize_theme_surface_mode(
-            self.current_theme_surface_mode if surface_mode is None else surface_mode
-        )
-        self.current_theme_surface_mode = normalized_surface_mode
-        self.current_theme_name = apply_theme_palette(normalized_theme_name, normalized_surface_mode)
-        self.window_state.current_theme_name = self.current_theme_name
-        self.window_state.current_theme_surface_mode = self.current_theme_surface_mode
+        self.current_theme_name = apply_theme_palette(normalized_theme_name)
         self.apply_theme()
-        self.notify_qml_probe_bindings()
 
         tooltip_popup = InstantTooltipMixin._tooltip_popup
         if tooltip_popup is not None:
@@ -5111,12 +4537,8 @@ class ValorantStatsWindow(QMainWindow):
 
         current_popup = getattr(self, "_theme_popup_dialog", None)
         if current_popup is not None:
-            if hasattr(current_popup, "refresh_theme_state"):
-                current_popup.refresh_theme_state(self.current_theme_name, self.current_theme_surface_mode)
-            else:
-                current_popup.current_theme_name = self.current_theme_name
-                current_popup.current_surface_mode = self.current_theme_surface_mode
-                current_popup.apply_theme_styles()
+            current_popup.current_theme_name = self.current_theme_name
+            current_popup.apply_theme_styles()
 
         tools_popup = getattr(self, "_tools_popup_dialog", None)
         if tools_popup is not None:
@@ -5152,6 +4574,15 @@ class ValorantStatsWindow(QMainWindow):
     def on_agent_selected(self, agent_name):
         self.set_standard_agent_selection(agent_name)
 
+    def on_custom_random_changed(self, enabled, selections):
+        self.custom_random_enabled = bool(enabled)
+        self.custom_random_selections = normalize_random_selections(selections)
+        self.set_standard_agent_selection("Random")
+        self.agent_select_btn.setToolTip(
+            "Random from: " + (", ".join(self.custom_random_selections) or "choose agents in the menu")
+            if enabled else ""
+        )
+
     async def websocket_listener(self):
         while True:
             try:
@@ -5167,8 +4598,6 @@ class ValorantStatsWindow(QMainWindow):
                     continue
 
                 self.puuid = handler.puuid
-                if await self.enforce_remote_ban_policy(self.puuid):
-                    return
                 self.queue_snipe_service.set_local_self_puuid(self.puuid)
 
                 auth = base64.b64encode(f"riot:{handler.password}".encode()).decode()
@@ -5212,7 +4641,7 @@ class ValorantStatsWindow(QMainWindow):
                                 elif self.auto_lock_switch.isChecked():
                                     self.run_valo_stats(prematch_id=prematch_id)
                                     self.last_seen = None
-                                    await asyncio.sleep(6.66)
+                                    await asyncio.sleep(self.instalock_delay_input.value())
                                     self.instalock_agent()
                                 else:
                                     self.run_valo_stats(prematch_id=prematch_id)
@@ -5232,7 +4661,7 @@ class ValorantStatsWindow(QMainWindow):
 
                                 self.seen_match_ids.add(match_id)
                                 print(match_id)
-                                asyncio.create_task(self.refresh_core_game_basics(match_id=match_id))
+                                self.run_valo_stats(match_id=match_id)
                                 self.last_seen = None
 
             except Exception as e:
@@ -5269,7 +4698,7 @@ class ValorantStatsWindow(QMainWindow):
 
     @staticmethod
     def normalize_asset_id(asset_id):
-        return PlayerDisplayFormatter.normalize_asset_id(asset_id)
+        return str(asset_id or "").strip().lower()
 
     def _collect_loadout_cosmetic_ids(self, loadout_skins):
         skin_ids = set()
@@ -5519,7 +4948,11 @@ class ValorantStatsWindow(QMainWindow):
                 self.clear_layout(item.layout())
 
     def build_tracker_url(self, riot_id):
-        return self.player_formatter.build_tracker_url(riot_id)
+        safe_text = quote(str(riot_id), safe="")
+        return (
+            "https://tracker.gg/valorant/profile/riot/"
+            f"{safe_text}"
+        )
 
     def create_stat_widget(self, title, value):
         wrapper = QFrame()
@@ -5623,10 +5056,28 @@ class ValorantStatsWindow(QMainWindow):
         return button
 
     def extract_buddy_id_from_skin_data(self, skin_data):
-        return self.player_formatter.extract_buddy_id_from_skin_data(skin_data)
+        buddy_id = None
+        if isinstance(skin_data, list):
+            buddy_id = skin_data[1] if len(skin_data) > 1 else None
+
+        if isinstance(buddy_id, dict):
+            return buddy_id.get("CharmID", buddy_id.get("CharmLevelID", ""))
+        if isinstance(buddy_id, list):
+            return buddy_id[0] if buddy_id else None
+        return buddy_id
 
     def player_has_buddy_equipped(self, player, buddy_uuid):
-        return self.player_formatter.player_has_buddy_equipped(player, buddy_uuid)
+        target_buddy_id = self.normalize_asset_id(buddy_uuid)
+        if not target_buddy_id:
+            return False
+
+        for skin_data in (player.get("skins") or {}).values():
+            equipped_buddy_id = self.normalize_asset_id(
+                self.extract_buddy_id_from_skin_data(skin_data)
+            )
+            if equipped_buddy_id == target_buddy_id:
+                return True
+        return False
 
     def create_buddy_indicator(self, buddy_uuid, reference_button):
         buddy_pixmap = self.get_buddy_pixmap(buddy_uuid)
@@ -5775,37 +5226,28 @@ class ValorantStatsWindow(QMainWindow):
         rule = self.player_icon_rules.get(normalized_puuid, {})
         return pixmap, str(rule.get("tooltip") or "Player icon")
 
-    def qml_player_icon_for_player(self, player):
-        normalized_puuid = str(player.get("puuid") or "").strip().lower()
-        if not normalized_puuid:
-            return {}
-
-        icon_data = self.player_icon_for_player(player)
-        if icon_data is None:
-            return {}
-
-        pixmap, tooltip = icon_data
-        if pixmap is None or pixmap.isNull():
-            return {}
-
-        icon_path = qml_player_icon_cache_path(normalized_puuid)
-        os.makedirs(os.path.dirname(icon_path), exist_ok=True)
-        if not pixmap.save(icon_path, "PNG"):
-            return {}
-
-        return {
-            "iconPath": icon_path,
-            "tooltip": str(tooltip or "Player icon"),
-        }
-
     def player_is_flagged(self, player):
-        return self.player_formatter.player_is_flagged(player)
+        player_puuid = str(player.get("puuid", "") or "").strip()
+        return bool(player_puuid) and player_puuid in self.flagged_players
 
     def get_flag_tooltip_for_player(self, player):
-        return self.player_formatter.get_flag_tooltip_for_player(player)
+        player_puuid = str(player.get("puuid", "") or "").strip()
+        flagged_entry = self.flagged_players.get(player_puuid)
+        if isinstance(flagged_entry, dict):
+            reason_text = str(flagged_entry.get("reason", "") or "").strip()
+            if reason_text:
+                return reason_text
+            return "Flagged player"
+        return "Toggle flagged player"
 
     def build_player_clipboard_name(self, player):
-        return self.player_formatter.build_player_clipboard_name(player)
+        game_name = str(player.get("game_name", "") or "").strip()
+        game_tag = str(player.get("tag", "") or player.get("game_tag", "") or "").strip()
+        display_name = str(player.get("name", "") or player.get("display_name", "") or "Unknown").strip()
+
+        if game_name and game_tag:
+            return f"{game_name}#{game_tag}"
+        return display_name or "Unknown"
 
     def create_copy_name_indicator(self, player, target_height=18):
         copy_icon_path = resource_path(os.path.join("assets", "copy-regular.png"))
@@ -5999,18 +5441,14 @@ class ValorantStatsWindow(QMainWindow):
             agent_icon_label.setPixmap(
                 agent_icon.scaled(140, 140, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
-            agent_icon_widget = agent_icon_label
-        elif agent_name.strip().upper() == "N/A":
-            agent_icon_widget = BreathingDotsWidget()
         else:
             agent_icon_label.setText(agent_name)
-            agent_icon_widget = agent_icon_label
 
         level_value = player.get("level", "N/A")
         level_label = QLabel(f"{level_value}")
         level_label.setObjectName("playerLevelBadge")
         level_label.setAlignment(Qt.AlignCenter)
-        icon_layout.addWidget(agent_icon_widget, 0, 0)
+        icon_layout.addWidget(agent_icon_label, 0, 0)
         icon_layout.addWidget(level_label, 0, 0, Qt.AlignBottom | Qt.AlignLeft)
 
         row_layout.addWidget(icon_wrapper, 0, Qt.AlignLeft | Qt.AlignVCenter)
@@ -6122,7 +5560,7 @@ class ValorantStatsWindow(QMainWindow):
         else:
             rank_icon_label.setText(rank_name if rank_name not in ("[]", "") else "N/A")
 
-        rank_text = QLabel(self.player_formatter.current_rank_display(player))
+        rank_text = QLabel(rank_name if rank_name not in ("[]", "") else "N/A")
         rank_text.setObjectName("metaValue")
 
         rr_value = str(player.get("rr", "N/A"))
@@ -6135,8 +5573,8 @@ class ValorantStatsWindow(QMainWindow):
         peak_icon_label.setAlignment(Qt.AlignCenter)
 
         peak_name = str(player.get("peak_rank", "Unknown"))
-        peak_rank_display = self.player_formatter.peak_rank_display(player)
-        peak_icon = self.rank_icons.get(self.player_formatter.peak_rank_icon_key(player))
+        peak_rank_display = "N/A" if peak_name.upper() == "UNRANKED" else peak_name
+        peak_icon = self.rank_icons.get("Unranked") if peak_rank_display == "N/A" else self.rank_icons.get(peak_name)
         if peak_icon:
             peak_icon_label.setPixmap(
                 peak_icon.scaled(compact_rank_icon_size, compact_rank_icon_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -6146,30 +5584,34 @@ class ValorantStatsWindow(QMainWindow):
         else:
             peak_icon_label.setText(peak_name)
 
-        peak_text = QLabel(peak_rank_display)
+        peak_text = QLabel(peak_rank_display if peak_name not in ("[]", "") else "N/A")
         peak_text.setObjectName("metaValue")
 
-        peak_act_label = QLabel(self.player_formatter.peak_act_display(player.get("peak_act", "N/A")))
+        peak_act_label = QLabel(get_peak_act_display(player.get("peak_act", "N/A")))
         peak_act_label.setObjectName("metaAux")
 
         meta_bar.addStretch(1)
 
         rating_changes = player.get("rating_change", [])
         for change in rating_changes:
-            change_display = self.player_formatter.rating_change_display(change)
-            text_val = change_display.text
+            text_val = str(change).replace("-", "")
 
             circle_label = QLabel(text_val)
             circle_label.setFixedSize(42, 42)
             circle_label.setAlignment(Qt.AlignCenter)
 
-            if change_display.tone == "positive":
-                bg_color = THEME_TEAL
-                text_color = "#000000"
-            elif change_display.tone == "negative":
-                bg_color = THEME_RED
-                text_color = THEME_TEXT
-            else:
+            try:
+                val = float(change)
+                if val > 0:
+                    bg_color = THEME_TEAL
+                    text_color = "#000000"
+                elif val < 0:
+                    bg_color = THEME_RED
+                    text_color = THEME_TEXT
+                else:
+                    bg_color = "#7f7f7f"
+                    text_color = THEME_TEXT
+            except (ValueError, TypeError):
                 bg_color = "#7f7f7f"
                 text_color = THEME_TEXT
 
@@ -6181,27 +5623,27 @@ class ValorantStatsWindow(QMainWindow):
         stats_row = QHBoxLayout()
         stats_row.setSpacing(5)
 
-        matches_value = self.player_formatter.stat_display_value(player, "matches")
+        matches_value = str(player.get("matches", 0))
         matches_widget, _ = self.create_stat_widget("Games", matches_value)
         stats_row.addWidget(matches_widget)
 
-        wl_value = self.player_formatter.stat_display_value(player, "wl")
+        wl_value = str(player.get("wl", "N/A"))
         wl_widget, wl_label = self.create_stat_widget("W/L", wl_value)
         self.apply_stat_colour(wl_label, wl_value, "wl")
         stats_row.addWidget(wl_widget)
 
-        acs_value = self.player_formatter.stat_display_value(player, "acs")
+        acs_value = str(player.get("acs", "N/A"))
         acs_widget, acs_label = self.create_stat_widget("ACS", acs_value)
         self.apply_stat_colour(acs_label, acs_value, "acs")
         stats_row.addWidget(acs_widget)
 
-        kd_value = self.player_formatter.stat_display_value(player, "kd")
+        kd_value = str(player.get("kd", "N/A"))
         kd_widget, kd_label = self.create_stat_widget("KD", kd_value)
         self.apply_stat_colour(kd_label, kd_value, "kd")
         stats_row.addWidget(kd_widget)
 
         hs_raw = player.get("hs", "N/A")
-        hs_value = self.player_formatter.stat_display_value(player, "hs")
+        hs_value = f"{hs_raw}%" if str(hs_raw) not in ("N/A", "[]") else str(hs_raw)
         hs_widget, hs_label = self.create_stat_widget("HS", hs_value)
         self.apply_stat_colour(hs_label, str(hs_raw), "hs")
         stats_row.addWidget(hs_widget)
@@ -6225,20 +5667,24 @@ class ValorantStatsWindow(QMainWindow):
 
         rating_changes = player.get("rating_change", [])[:3]
         for change in rating_changes:
-            change_display = self.player_formatter.rating_change_display(change)
-            text_val = change_display.text
+            text_val = str(change).replace("-", "")
 
             circle_label = QLabel(text_val)
             circle_label.setFixedSize(42, 42)
             circle_label.setAlignment(Qt.AlignCenter)
 
-            if change_display.tone == "positive":
-                bg_color = THEME_TEAL
-                text_color = "#000000"
-            elif change_display.tone == "negative":
-                bg_color = THEME_RED
-                text_color = THEME_TEXT
-            else:
+            try:
+                val = float(change)
+                if val > 0:
+                    bg_color = THEME_TEAL
+                    text_color = "#000000"
+                elif val < 0:
+                    bg_color = THEME_RED
+                    text_color = THEME_TEXT
+                else:
+                    bg_color = "#7f7f7f"
+                    text_color = THEME_TEXT
+            except (ValueError, TypeError):
                 bg_color = "#7f7f7f"
                 text_color = THEME_TEXT
 
@@ -6254,7 +5700,7 @@ class ValorantStatsWindow(QMainWindow):
         peak_row.setSpacing(8)
 
         peak_icon_size = 48
-        peak_act_label = QLabel(self.player_formatter.peak_act_display(player.get("peak_act", "N/A")))
+        peak_act_label = QLabel(get_peak_act_display(player.get("peak_act", "N/A")))
         peak_act_label.setAlignment(Qt.AlignCenter)
         peak_act_font = peak_act_label.font()
         peak_act_font.setBold(True)
@@ -6269,8 +5715,8 @@ class ValorantStatsWindow(QMainWindow):
         peak_icon_label.setAlignment(Qt.AlignCenter)
         peak_icon_label.setFixedSize(peak_icon_size, peak_icon_size)
         peak_name = str(player.get("peak_rank", "Unknown"))
-        peak_rank_display = self.player_formatter.peak_rank_display(player)
-        peak_icon = self.rank_icons.get(self.player_formatter.peak_rank_icon_key(player))
+        peak_rank_display = "N/A" if peak_name.upper() == "UNRANKED" else peak_name
+        peak_icon = self.rank_icons.get("Unranked") if peak_rank_display == "N/A" else self.rank_icons.get(peak_name)
 
         if peak_icon:
             peak_icon_label.setPixmap(
@@ -6309,7 +5755,7 @@ class ValorantStatsWindow(QMainWindow):
                 rank_icon.scaled(current_rank_icon_size, current_rank_icon_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
         else:
-            current_rank_icon_label.setText(self.player_formatter.current_rank_display(player))
+            current_rank_icon_label.setText(rank_name if rank_name not in ("[]", "") else "N/A")
             current_rank_icon_label.setStyleSheet(f"color: {THEME_MUTED}; font-size: 14px; font-weight: bold;")
 
         right_rank_stack_layout.addWidget(current_rank_icon_label, 0, Qt.AlignHCenter)
@@ -6358,24 +5804,65 @@ class ValorantStatsWindow(QMainWindow):
         outer_layout.addWidget(content_frame)
         return row
     def apply_stat_colour(self, label, value, category):
-        colour = self.player_formatter.stat_colour_category(value, category)
+        colour = None
+        try:
+            if category == "wl":
+                val = float(str(value).replace("%", ""))
+                if val < 47:
+                    colour = "red"
+                elif val < 53:
+                    colour = "gold"
+                elif val < 60:
+                    colour = "limegreen"
+                else:
+                    colour = "cyan"
+            elif category == "acs":
+                val = float(value)
+                if val < 200:
+                    colour = "red"
+                elif val < 225:
+                    colour = "gold"
+                elif val < 250:
+                    colour = "limegreen"
+                else:
+                    colour = "cyan"
+            elif category == "kd":
+                val = float(value)
+                if val < 0.9:
+                    colour = "red"
+                elif val < 1.1:
+                    colour = "gold"
+                elif val < 1.25:
+                    colour = "limegreen"
+                else:
+                    colour = "cyan"
+            elif category == "hs":
+                val = float(value)
+                if val < 20:
+                    colour = "red"
+                elif val < 30:
+                    colour = "gold"
+                elif val < 40:
+                    colour = "limegreen"
+                else:
+                    colour = "cyan"
+        except (TypeError, ValueError):
+            colour = None
+
         if colour:
             label.setStyleSheet(f"color: {colour};")
 
     def apply_theme(self):
-        main_window_background = "transparent"
-        app_shell_background = "transparent"
-
         base_style = (
             f"QMainWindow {{"
-            f" background: {main_window_background};"
+            f" background: {build_surface_fill('main', secondary_surface='panel', tertiary_color=THEME_WINDOW)};"
             f"}}"
             f"QWidget {{"
             f" color: {THEME_TEXT};"
             f" font-size: 13px;"
             f"}}"
             f"QWidget#appShell {{"
-            f" background: {app_shell_background};"
+            f" background: {build_surface_fill('main', secondary_surface='panel', tertiary_color=THEME_WINDOW)};"
             f"}}"
             f"QFrame#headerFrame {{"
             f" background: transparent;"
@@ -6580,15 +6067,6 @@ class ValorantStatsWindow(QMainWindow):
             f" font-size: 10px;"
             f" font-weight: 800;"
             f"}}"
-            f"QLabel#startingSideLabel {{"
-            f" background-color: {THEME_CARD};"
-            f" border-radius: 12px;"
-            f" border: 1px solid {THEME_BORDER};"
-            f" padding: 0px 12px;"
-            f" color: {THEME_TEXT};"
-            f" font-size: 11px;"
-            f" font-weight: 800;"
-            f"}}"
             f"QPushButton#compactSkinButton {{"
             f" background-color: {THEME_PANEL};"
             f" border-radius: 12px;"
@@ -6673,16 +6151,15 @@ class ValorantStatsWindow(QMainWindow):
 
         if is_glass_theme():
             profile = get_active_theme_style_profile()
-            glass_window_background = "transparent"
             glass_style = (
                 f"QMainWindow {{"
-                f" background: {glass_window_background};"
+                f" background: {build_surface_fill('main', secondary_surface='panel', tertiary_color=THEME_WINDOW, alpha=0.98)};"
                 f"}}"
                 f"QWidget {{"
                     f" background: transparent;"
                 f"}}"
                 f"QWidget#appShell {{"
-                f" background: {glass_window_background};"
+                f" background: {build_surface_fill('main', secondary_surface='panel', tertiary_color=THEME_WINDOW, alpha=0.98)};"
                 f"}}"
                 f"QFrame#headerFrame {{"
                 f" background: transparent;"
@@ -6793,11 +6270,6 @@ class ValorantStatsWindow(QMainWindow):
                 f" border: 1px solid {theme_rgba('#ffffff', 0.14)};"
                 f" color: {THEME_TEXT};"
                 f"}}"
-                f"QLabel#startingSideLabel {{"
-                f" background: {build_surface_fill('card', secondary_surface='panel')};"
-                f" border: 1px solid {theme_rgba('#ffffff', 0.14)};"
-                f" color: {THEME_TEXT};"
-                f"}}"
                 f"QPushButton#compactSkinButton {{"
                 f" background: {build_surface_fill('panel', secondary_surface='card')};"
                 f" border: 1px solid {theme_rgba('#ffffff', 0.1)};"
@@ -6839,7 +6311,6 @@ class ValorantStatsWindow(QMainWindow):
     def instalock_agent(self):
         if self.lock_agent_button.isEnabled():
             self.lock_agent_button.setEnabled(False)
-            self.notify_top_bar_bindings()
             asyncio.create_task(self.instalock_agent_async())
 
     async def instalock_agent_async(self):
@@ -6854,30 +6325,21 @@ class ValorantStatsWindow(QMainWindow):
                     await map_instalock_agent(current_map_id, self.valo_rank.handler, delay_seconds=0)
                 return
 
-            if current_text == "Random":
-                rand_agent = random.randint(0, (len(self.owned_agent_handler.all_agents) - 1))
-                agents = self.owned_agent_handler.all_agents
-                self.agent = self.uuid_handler.agent_converter_reversed(agents[rand_agent])
-            elif current_text == "Duelist":
-                rand_agent = random.randint(0, (len(self.owned_agent_handler.owned_duelists) - 1))
-                agents = self.owned_agent_handler.owned_duelists
-                self.agent = self.uuid_handler.agent_converter_reversed(agents[rand_agent])
-            elif current_text == "Initiator":
-                rand_agent = random.randint(0, (len(self.owned_agent_handler.owned_initiators) - 1))
-                agents = self.owned_agent_handler.owned_initiators
-                self.agent = self.uuid_handler.agent_converter_reversed(agents[rand_agent])
-            elif current_text == "Controller":
-                rand_agent = random.randint(0, (len(self.owned_agent_handler.owned_controllers) - 1))
-                agents = self.owned_agent_handler.owned_controllers
-                self.agent = self.uuid_handler.agent_converter_reversed(agents[rand_agent])
-            elif current_text == "Sentinel":
-                rand_agent = random.randint(0, (len(self.owned_agent_handler.owned_sentinels) - 1))
-                agents = self.owned_agent_handler.owned_sentinels
-                self.agent = self.uuid_handler.agent_converter_reversed(agents[rand_agent])
+            if current_text in SELECTION_TOKENS:
+                selections = self.custom_random_selections if current_text == "Random" and self.custom_random_enabled else [current_text]
+                agents = random_agent_pool(selections, self.owned_agent_handler.all_agents)
+                if not agents:
+                    self.set_status_message("No owned agents in the random pool. Choose agents or roles in the agent menu.")
+                    return
+                self.agent = self.uuid_handler.agent_converter_reversed(random.choice(agents))
+            else:
+                self.agent = self.uuid_handler.agent_converter_reversed(current_text)
+            if not self.agent:
+                self.set_status_message("The selected agent could not be resolved.")
+                return
             await instalock_agent(self.agent, self.valo_rank.handler)
         finally:
             self.lock_agent_button.setEnabled(True)
-            self.notify_top_bar_bindings()
 
     def safe_load_players(self, data):
         QTimer.singleShot(0, lambda: self.load_players(data))
@@ -6885,7 +6347,6 @@ class ValorantStatsWindow(QMainWindow):
     def run_dodge_button(self):
         if self.dodge_button.isEnabled():
             self.dodge_button.setEnabled(False)
-            self.notify_top_bar_bindings()
             asyncio.create_task(self._dodge_async())
 
     async def _dodge_async(self):
@@ -6893,23 +6354,9 @@ class ValorantStatsWindow(QMainWindow):
             await self.dodge_game.dodge_func(self.valo_rank.handler)
         finally:
             self.dodge_button.setEnabled(True)
-            self.notify_top_bar_bindings()
 
     def run_valo_stats(self, prematch_id=None, match_id=None, party_id=None, map_instalock=None):
-        if prematch_id:
-            self.cancel_pending_hydration()
-            self._start_refresh_task(
-                self.refresh_pregame_lightweight(prematch_id=prematch_id, map_instalock=map_instalock)
-            )
-            return
-        active_pregame_id = getattr(getattr(self.valo_rank, "handler", None), "prematch_id", None)
-        if self._hydration_match_id and active_pregame_id and not match_id and not party_id:
-            self._start_refresh_task(
-                self.refresh_pregame_lightweight(prematch_id=active_pregame_id, map_instalock=map_instalock)
-            )
-            return
-        self.cancel_pending_hydration()
-        self._start_refresh_task(
+        asyncio.create_task(
             self.refresh_data(
                 prematch_id=prematch_id,
                 match_id=match_id,
@@ -6918,138 +6365,25 @@ class ValorantStatsWindow(QMainWindow):
             )
         )
 
-    def _start_refresh_task(self, coro):
-        if self._refresh_task and not self._refresh_task.done():
-            self._refresh_task.cancel()
-        self._refresh_task = asyncio.create_task(coro)
-
-    def cancel_pending_hydration(self):
-        if self._hydration_task and not self._hydration_task.done():
-            self._hydration_task.cancel()
-        self._hydration_task = None
-        self._hydration_match_id = None
-
-    def schedule_delayed_hydration(self, match_id):
-        if not match_id or match_id in self._hydrated_match_ids:
-            return
-        self.cancel_pending_hydration()
-        self._hydration_match_id = match_id
-        self._hydration_delay_ready_match_ids.discard(match_id)
-        self._hydration_task = asyncio.create_task(self._delayed_hydration(match_id))
-
-    async def _delayed_hydration(self, match_id):
-        try:
-            await asyncio.sleep(61)
-            self._hydration_delay_ready_match_ids.add(match_id)
-            await self._maybe_run_delayed_hydration(match_id)
-        except asyncio.CancelledError:
-            return
-
-    async def _maybe_run_delayed_hydration(self, match_id):
-        if not should_run_delayed_hydration(
-            match_id=match_id,
-            hydration_match_id=self._hydration_match_id,
-            last_match_id=self.valo_rank.last_match_id,
-            hydrated_match_ids=self._hydrated_match_ids,
-            delay_ready_match_ids=self._hydration_delay_ready_match_ids,
-            coregame_ready_match_ids=self._hydration_coregame_ready_match_ids,
-            running_match_ids=self._hydration_running_match_ids,
-        ):
-            return
-
-        self._hydration_running_match_ids.add(match_id)
-        try:
-            await self.run_full_stat_hydration(match_id)
-        finally:
-            self._hydration_running_match_ids.discard(match_id)
-
-    async def run_full_stat_hydration(self, match_id):
-        if match_id in self._hydrated_match_ids or self.valo_rank.last_match_id != match_id:
-            return
-        self.refresh_button.setEnabled(False)
-        self.load_more_matches_button.setEnabled(False)
-        hydrated = False
-        try:
-            hydrated = await self.valo_rank.hydrate_match_stats()
-            if hydrated:
-                self._hydrated_match_ids.add(match_id)
-                self._hydration_delay_ready_match_ids.discard(match_id)
-                self._hydration_coregame_ready_match_ids.discard(match_id)
-                self.safe_load_players(self.valo_rank.frontend_data)
-                self.update_metadata()
-                self._hydration_match_id = None
-        except Exception as exc:
-            print(f"Delayed hydration failed: {exc}")
-        finally:
-            self.refresh_button.setEnabled(True)
-            self.load_more_matches_button.setEnabled(hydrated)
-
-    async def refresh_pregame_lightweight(self, prematch_id=None, map_instalock=None):
-        if not self.refresh_button.isEnabled():
-            return
-        self.refresh_button.setEnabled(False)
-        self.load_more_matches_button.setEnabled(False)
-        try:
-            print("Fetching lightweight pregame roster...")
-            await self.valo_rank.pregame_roster(prematch_id=prematch_id, map_instalock=map_instalock)
-            match_id = self.valo_rank.last_match_id
-            self.safe_load_players(self.valo_rank.frontend_data)
-            self.update_metadata()
-            self.schedule_delayed_hydration(match_id)
-            if self.update_co_play_history_after_live_match():
-                self.persist_agent_lock_state()
-        except Exception as exc:
-            print(f"Pregame refresh failed: {exc}")
-            QMessageBox.warning(
-                self,
-                "Refresh Failed",
-                f"ValScanner couldn't refresh player data.\n\n{exc}",
-            )
-        finally:
-            self.refresh_button.setEnabled(True)
-
-    async def refresh_core_game_basics(self, match_id=None):
-        try:
-            await self.valo_rank.core_game_basics(match_id=match_id)
-            self.safe_load_players(self.valo_rank.frontend_data)
-            self.update_metadata()
-            coregame_match_id = match_id or self.valo_rank.last_match_id
-            self._hydration_coregame_ready_match_ids.add(coregame_match_id)
-            await self._maybe_run_delayed_hydration(coregame_match_id)
-        except Exception as exc:
-            print(f"Core-game basics refresh failed: {exc}")
-
     def run_load_more_matches_button(self):
-        if not getattr(self.valo_rank, "full_stats_hydrated", False):
-            self.load_more_matches_button.setEnabled(False)
-            self.notify_top_bar_bindings()
-            return
         if self.load_more_matches_button.isEnabled():
             self.load_more_matches_button.setEnabled(False)
-            self.notify_top_bar_bindings()
             asyncio.create_task(self.run_load_more_matches())
 
     async def run_load_more_matches(self):
         self.refresh_button.setEnabled(False)
-        self.notify_top_bar_bindings()
         try:
             await self.valo_rank.load_more_matches()
             self.safe_load_players(self.valo_rank.frontend_data)
         finally:
             self.refresh_button.setEnabled(True)
-            self.load_more_matches_button.setEnabled(getattr(self.valo_rank, "full_stats_hydrated", False))
-            self.notify_top_bar_bindings()
+            self.load_more_matches_button.setEnabled(True)
 
     async def refresh_data(self, prematch_id=None, match_id=None, party_id=None, map_instalock=None):
         if not self.refresh_button.isEnabled():
             return
 
-        if prematch_id:
-            await self.refresh_pregame_lightweight(prematch_id=prematch_id, map_instalock=map_instalock)
-            return
-
         self.refresh_button.setEnabled(False)
-        self.notify_top_bar_bindings()
         try:
             print("Fetching latest Valorant stats...")
             handler = LockfileHandler()
@@ -7072,18 +6406,15 @@ class ValorantStatsWindow(QMainWindow):
             print("? Data fetched. Refreshing table...")
             self.safe_load_players(self.valo_rank.frontend_data)
             self.update_metadata()
-            self.load_more_matches_button.setEnabled(getattr(self.valo_rank, "full_stats_hydrated", False))
-            self.notify_top_bar_bindings()
         except Exception as exc:
             print(f"Refresh failed: {exc}")
             QMessageBox.warning(
                 self,
                 "Refresh Failed",
-                f"ValScanner couldn't refresh player data.\n\n{exc}",
+                f"{APP_NAME} couldn't refresh player data.\n\n{exc}",
             )
         finally:
             self.refresh_button.setEnabled(True)
-            self.notify_top_bar_bindings()
 
     def update_co_play_history_after_live_match(self):
         handler = getattr(self.valo_rank, "handler", None)
@@ -7100,47 +6431,57 @@ class ValorantStatsWindow(QMainWindow):
         )
 
     def load_players(self, players):
+        self.left_players = []
+        self.right_players = []
         self.schedule_player_cosmetic_prefetch(players)
-        gs = getattr(self.valo_rank, "gs", None)
-        gamemode = gs[0] if isinstance(gs, (list, tuple)) and len(gs) > 0 else None
-        player_iterable, self.left_players, self.right_players = self.window_state.split_players(
-            players,
-            gamemode=gamemode,
-        )
-        self.update_starting_side_label(player_iterable)
 
-        if not player_iterable:
-            self.populate_team_layout(self.left_scroll_area, self.left_layout, [])
-            self.populate_team_layout(self.right_scroll_area, self.right_layout, [])
+        if not players:
+            self.populate_team_layout(self.left_scroll_area, self.left_layout, [], "STARTING SIDE: DEFENSE")
+            self.populate_team_layout(self.right_scroll_area, self.right_layout, [], "STARTING SIDE: ATTACK")
             self.update_metadata()
-            self.notify_qml_probe_bindings()
             QTimer.singleShot(0, self.schedule_remote_player_icons_load)
             return
 
-        self.populate_team_layout(self.left_scroll_area, self.left_layout, self.left_players)
-        self.populate_team_layout(self.right_scroll_area, self.right_layout, self.right_players)
+        player_iterable = players.values() if isinstance(players, dict) else players
+        for i, player in enumerate(player_iterable):
+            is_deathmatch = len(self.valo_rank.gs) > 0 and self.valo_rank.gs[0] == "Deathmatch"
+
+            if is_deathmatch:
+                if str(i / 2)[2] == "0":
+                    self.left_players.append(player)
+                else:
+                    self.right_players.append(player)
+            else:
+                team = player.get("team")
+                if team == "Red":
+                    self.left_players.append(player)
+                elif team == "Blue":
+                    self.right_players.append(player)
+
+        self.populate_team_layout(
+            self.left_scroll_area, self.left_layout, self.left_players, "STARTING SIDE: DEFENSE"
+        )
+        self.populate_team_layout(
+            self.right_scroll_area, self.right_layout, self.right_players, "STARTING SIDE: ATTACK"
+        )
         self.update_metadata()
-        self.notify_qml_probe_bindings()
         QTimer.singleShot(0, self.refresh_player_row_heights)
         QTimer.singleShot(0, self.schedule_remote_player_icons_load)
 
-    def update_starting_side_label(self, players):
-        label_text = self.window_state.starting_side_label_text(players, getattr(self, "puuid", None))
-        if label_text:
-            self.starting_side_label.setText(label_text)
-        else:
-            self.starting_side_label.clear()
-        self.notify_top_bar_bindings()
-
-    def populate_team_layout(self, scroll_area, layout, players):
+    def populate_team_layout(self, scroll_area, layout, players, empty_message):
         self.clear_layout(layout)
         if not players:
             layout.addStretch(1)
+            placeholder = QLabel(empty_message)
+            placeholder.setObjectName("emptyState")
+            placeholder.setAlignment(Qt.AlignCenter)
+            placeholder.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            layout.addWidget(placeholder)
             layout.addStretch(1)
             return
 
         for player in players:
-            layout.addWidget(self.create_player_row_for_renderer(player))
+            layout.addWidget(self.create_player_row(player))
         layout.addStretch(1)
         self.update_team_row_heights(scroll_area, layout)
 
@@ -7157,7 +6498,6 @@ class ValorantStatsWindow(QMainWindow):
 
         self.gamemode_value.setText(gamemode)
         self.server_value.setText(server)
-        self.notify_top_bar_bindings()
 
 
 class ReasonInputPopup(QDialog):
@@ -7348,24 +6688,12 @@ def create_activation_server(server_name):
 
 
 async def main():
-    killswitch_decision = await check_killswitch()
-    if killswitch_decision.blocked:
-        QMessageBox.critical(None, "ValScanner Unavailable", killswitch_decision.reason)
-        return None
-
-    xmpp_killswitch_decision = await check_xmpp_killswitch()
-
+    seed_runtime_resources()
     await refresh_valorant_api_jsons()
     check_for_updates()
 
     window = ValorantStatsWindow([])
-    if xmpp_killswitch_decision.blocked:
-        await window.startup_coordinator.disable_party_detection_for_session()
-    else:
-        await window.startup_coordinator.ensure_riot_with_mitm()
-    handler = LockfileHandler()
-    if handler.puuid and await window.enforce_remote_ban_policy(handler.puuid):
-        return None
+    await window.startup_coordinator.ensure_riot_with_mitm()
     await window.bootstrap_startup()
     await window.wait_for_initial_assets()
     window.finish_initial_window_setup()
@@ -7379,8 +6707,14 @@ if __name__ == "__main__":
         sys.exit(0)
 
     app = QApplication(sys.argv)
+    app.setApplicationName(APP_NAME)
+    app.setApplicationDisplayName(APP_NAME)
+    app.setOrganizationName(APP_NAME)
+    if sys.platform == "win32":
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_NAME)
     app.setQuitOnLastWindowClosed(False)
-    app.setWindowIcon(QIcon(resource_path("assets/logoone.png")))
+    app.setWindowIcon(application_icon())
     activation_server = create_activation_server(APP_INSTANCE_KEY)
     loop = qasync.QEventLoop(app)
     asyncio.set_event_loop(loop)

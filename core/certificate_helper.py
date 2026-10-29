@@ -7,6 +7,7 @@ from pathlib import Path
 import requests
 
 from core.SharedValues import localhostPfxUrl
+from core.app_identity import APP_NAME
 
 
 CERTIFICATE_CACHE_DAYS = 20
@@ -76,15 +77,15 @@ def ensure_localhost_certificate_files():
 def _certificate_cache_dir() -> Path:
     local_app_data = os.environ.get("LOCALAPPDATA")
     if local_app_data:
-        return Path(local_app_data) / "ValScanner" / "certificates"
-    return Path.home() / ".valscanner" / "certificates"
+        return Path(local_app_data) / APP_NAME / "certificates"
+    return Path.home() / f".{APP_NAME.lower()}" / "certificates"
 
 
 def _download_pfx() -> bytes:
     try:
         response = requests.get(
             localhostPfxUrl,
-            headers={"User-Agent": "ValScanner"},
+            headers={"User-Agent": APP_NAME},
             timeout=15,
         )
         response.raise_for_status()

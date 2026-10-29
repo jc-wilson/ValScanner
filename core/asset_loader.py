@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
 from core.http_session import SharedSession
+from core.resource_cache import download_image, valid_image
 
 _SKIN_ASSET_INDEX = None
 _BUDDY_ASSET_INDEX = None
@@ -35,10 +36,11 @@ def _load_metadata_json(path, url):
     try:
         with open(path, "r", encoding="utf-8") as handle:
             return json.load(handle)
-    except FileNotFoundError:
+    except (OSError, ValueError):
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         payload = response.json()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2)
         return payload
@@ -63,6 +65,9 @@ def _get_skin_asset_index():
         for chroma in skin.get("chromas", []):
             chroma_uuid = _normalize_asset_id(chroma.get("uuid"))
             chroma_icon = chroma.get("displayIcon") or chroma.get("fullRender") or skin_icon
+            # The API's standard Warden chroma icon is currently a placeholder.
+            if skin.get("displayName") == "Standard Warden" and skin_icon:
+                chroma_icon = skin_icon
             if chroma_uuid and chroma_icon:
                 index[chroma_uuid] = chroma_icon
 
@@ -109,13 +114,7 @@ def buddy_asset_path(asset_id, cache_dir=None):
 
 
 def _download_asset_file(url, path):
-    try:
-        data = requests.get(url, timeout=8).content
-        with open(path, "wb") as handle:
-            handle.write(data)
-        return True
-    except Exception:
-        return False
+    return download_image(url, path)
 
 
 def _download_asset_jobs(download_jobs, threads):
@@ -185,7 +184,7 @@ async def _ensure_asset_files(asset_ids, index_loader, path_builder, label, thre
     for asset_id in dict.fromkeys(normalized_ids):
         path = path_builder(asset_id)
         file_map[asset_id] = path
-        if os.path.exists(path):
+        if valid_image(path):
             continue
         missing_ids.append(asset_id)
 
@@ -272,7 +271,7 @@ async def download_and_cache_agent_icons(cache_dir=None):
             pixmap = _load_pixmap_from_file(file_path, width=134, height=134)
             if pixmap is not None:
                 icons[name] = pixmap
-            continue
+                continue
 
         download_jobs.append((icon_url, file_path))
 
@@ -333,7 +332,7 @@ async def download_and_cache_map_icons(cache_dir=None):
             pixmap = _load_pixmap_from_file(file_path)
             if pixmap is not None:
                 icons[map_uuid] = pixmap
-            continue
+                continue
 
         download_jobs.append((icon_url, file_path))
 
@@ -387,7 +386,7 @@ async def download_and_cache_rank_icons(cache_dir=None):
             pixmap = _load_pixmap_from_file(file_path)
             if pixmap is not None:
                 icons[name] = pixmap
-            continue
+                continue
 
         download_jobs.append((icon_url, file_path))
 
@@ -427,7 +426,7 @@ async def download_and_cache_buddies(cache_dir=None, threads=40):
         if buddy_uuid and base_icon:
             base_path = buddy_asset_path(buddy_uuid, cache_dir)
             file_map[buddy_uuid] = base_path
-            if buddy_uuid not in pixmaps and not os.path.exists(base_path):
+            if buddy_uuid not in pixmaps and not valid_image(base_path):
                 download_jobs.append((base_icon, base_path))
 
     print(f"{len(download_jobs)} icons to download (uncached).")
@@ -467,7 +466,7 @@ async def download_and_cache_skins(cache_dir=None, threads=40):
         if skin_uuid and base_icon:
             base_path = skin_asset_path(skin_uuid, cache_dir)
             file_map[skin_uuid] = base_path
-            if skin_uuid not in pixmaps and not os.path.exists(base_path):
+            if skin_uuid not in pixmaps and not valid_image(base_path):
                 download_jobs.append((base_icon, base_path))
 
         for chroma in skin.get("chromas", []):
@@ -476,7 +475,7 @@ async def download_and_cache_skins(cache_dir=None, threads=40):
             if chroma_uuid and icon:
                 chroma_path = skin_asset_path(chroma_uuid, cache_dir)
                 file_map[chroma_uuid] = chroma_path
-                if chroma_uuid not in pixmaps and not os.path.exists(chroma_path):
+                if chroma_uuid not in pixmaps and not valid_image(chroma_path):
                     download_jobs.append((icon, chroma_path))
 
     print(f"{len(download_jobs)} icons to download (uncached).")

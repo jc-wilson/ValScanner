@@ -1,6 +1,7 @@
 ﻿import asyncio
 
 from core.local_api import LockfileHandler
+from core.app_identity import APP_NAME
 from core.mitm import (
     RiotMitmService,
     get_running_game_processes,
@@ -40,6 +41,15 @@ class AppStartupCoordinator:
         self.party_detection_forced_disabled = True
         return await self._keep_party_detection_disabled()
 
+    async def _start_party_detection(self):
+        try:
+            await self.mitm_service.start()
+        except (OSError, RuntimeError) as exc:
+            await self.disable_party_detection_for_session()
+            self.set_status(f"Party detection unavailable: {exc}. Other features remain available.")
+            return False
+        return True
+
     async def initialize(self):
         if self.party_detection_forced_disabled:
             return await self._keep_party_detection_disabled()
@@ -70,7 +80,8 @@ class AppStartupCoordinator:
         self.restart_required = False
         self.party_detection_enabled = True
         self.set_status("Starting party detection...")
-        await self.mitm_service.start()
+        if not await self._start_party_detection():
+            return False
         await self.ensure_riot_started()
         return True
 
@@ -94,7 +105,8 @@ class AppStartupCoordinator:
         self.party_detection_enabled = True
         self.restart_required = False
         self.set_status("Starting Riot Client with party detection...")
-        await self.mitm_service.start()
+        if not await self._start_party_detection():
+            return False
         await self.ensure_riot_started()
         return True
 
@@ -116,7 +128,8 @@ class AppStartupCoordinator:
             return await self._keep_party_detection_disabled()
 
         self.set_status("Restarting Riot Client and Valorant for party detection...")
-        await self.mitm_service.start()
+        if not await self._start_party_detection():
+            return False
         await self.mitm_service.restart_riot_client()
         self.restart_required = False
         self.party_detection_enabled = True
@@ -149,7 +162,7 @@ class AppStartupCoordinator:
 
         if should_background:
             self.mitm_service.mark_background_hold(True)
-            self.set_status("ValScanner will finish closing after Riot Client exits.")
+            self.set_status(f"{APP_NAME} will finish closing after Riot Client exits.")
             return {
                 "background_helper": True,
                 "running_processes": list(running_processes),

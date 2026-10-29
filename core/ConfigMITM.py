@@ -1,5 +1,7 @@
 import base64
+import errno
 import json
+import socket
 from functools import partial
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -23,6 +25,16 @@ GEO_PAS_URL = 'https://riot-geo.pas.si.riotgames.com/pas/v1/service/chat'
     We then send back the modified response back to the riot client"""
 
 
+class LocalHTTPServer(HTTPServer):
+    # HTTPServer's SO_REUSEADDR can let two Windows instances share a live port.
+    allow_reuse_address = False
+
+    def server_bind(self):
+        if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 class ConfigMITM:
     def __init__(self, host=str, http_port=int, xmpp_port=int) -> None:
         """Initiates the attributes"""
@@ -35,7 +47,13 @@ class ConfigMITM:
         self.upstream_chat_host = None
         self.upstream_chat_port = None
         handler = partial(self.RequestHandler, self)
-        self.server = HTTPServer((self.host, self.http_port), handler)
+        try:
+            self.server = LocalHTTPServer((self.host, self.http_port), handler)
+        except OSError as exc:
+            if exc.errno not in (errno.EADDRINUSE, 10048, 10013) and getattr(exc, 'winerror', None) not in (10048, 10013):
+                raise
+            self.server = LocalHTTPServer((self.host, 0), handler)
+        self.http_port = self.server.server_address[1]
 
     def start(self) -> None:
         """Starts the server -> None"""

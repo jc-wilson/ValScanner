@@ -1,16 +1,18 @@
 import json
+import math
 import os
 import sys
 import tempfile
 
 from core.presence_mode import DEFAULT_PRESENCE_MODE, normalize_presence_mode
+from core.agent_selection import normalize_random_selections
 
 APP_STATE_VERSION = 6
 APP_STATE_RELATIVE_PATH = os.path.join("agent_selection", "app_state.json")
 LEGACY_MAP_SELECTION_RELATIVE_PATH = os.path.join("agent_selection", "map_agent_selection.json")
+DEFAULT_INSTALOCK_DELAY_SECONDS = 6.66
+MAX_INSTALOCK_DELAY_SECONDS = 3600.0
 DEFAULT_THEME_NAME = "midnight"
-DEFAULT_THEME_SURFACE_MODE = "transparent"
-VALID_THEME_SURFACE_MODES = {"transparent", "opaque"}
 VALID_THEME_NAMES = {
     "midnight",
     "sandstorm",
@@ -63,10 +65,12 @@ def default_app_state(map_uuids=None, base_path=None):
     return {
         "version": APP_STATE_VERSION,
         "selected_theme": DEFAULT_THEME_NAME,
-        "theme_surface_mode": DEFAULT_THEME_SURFACE_MODE,
         "presence_mode": DEFAULT_PRESENCE_MODE,
         "selected_standard_agent": "Random",
+        "custom_random_enabled": False,
+        "custom_random_selections": [],
         "auto_lock_enabled": False,
+        "instalock_delay_seconds": DEFAULT_INSTALOCK_DELAY_SECONDS,
         "map_lock_enabled": False,
         "queue_snipe_enabled": False,
         "queue_snipe_selected_friend": None,
@@ -100,18 +104,21 @@ def _normalize_map_agent_selection(selection_data, map_uuids):
     return normalized
 
 
+def normalize_instalock_delay(value):
+    try:
+        delay = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return DEFAULT_INSTALOCK_DELAY_SECONDS
+    if not math.isfinite(delay):
+        return DEFAULT_INSTALOCK_DELAY_SECONDS
+    return round(min(MAX_INSTALOCK_DELAY_SECONDS, max(0.0, delay)), 2)
+
+
 def _normalize_selected_theme(theme_name):
     normalized_theme = str(theme_name or DEFAULT_THEME_NAME).strip().lower()
     if normalized_theme in VALID_THEME_NAMES:
         return normalized_theme
     return DEFAULT_THEME_NAME
-
-
-def normalize_theme_surface_mode(surface_mode):
-    normalized_mode = str(surface_mode or DEFAULT_THEME_SURFACE_MODE).strip().lower()
-    if normalized_mode in VALID_THEME_SURFACE_MODES:
-        return normalized_mode
-    return DEFAULT_THEME_SURFACE_MODE
 
 
 def _normalize_queue_snipe_friend(friend_data):
@@ -220,10 +227,12 @@ def normalize_app_state(state_data, map_uuids=None, base_path=None):
     normalized_state = {
         "version": APP_STATE_VERSION,
         "selected_theme": _normalize_selected_theme(raw_state.get("selected_theme")),
-        "theme_surface_mode": normalize_theme_surface_mode(raw_state.get("theme_surface_mode")),
         "presence_mode": normalize_presence_mode(raw_state.get("presence_mode")),
         "selected_standard_agent": str(raw_state.get("selected_standard_agent", "Random") or "Random"),
+        "custom_random_enabled": bool(raw_state.get("custom_random_enabled", False)),
+        "custom_random_selections": normalize_random_selections(raw_state.get("custom_random_selections")),
         "auto_lock_enabled": bool(raw_state.get("auto_lock_enabled", False)),
+        "instalock_delay_seconds": normalize_instalock_delay(raw_state.get("instalock_delay_seconds", DEFAULT_INSTALOCK_DELAY_SECONDS)),
         "map_lock_enabled": bool(raw_state.get("map_lock_enabled", False)),
         "queue_snipe_enabled": bool(raw_state.get("queue_snipe_enabled", False)),
         "queue_snipe_selected_friend": normalized_queue_snipe_friend,

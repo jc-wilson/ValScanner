@@ -5,6 +5,7 @@ import threading
 from pathlib import Path
 
 from core.ConfigMITM import ConfigMITM
+from core.app_identity import APP_NAME
 from core.SharedValues import host, port, xmppPort
 from core.XMPPMitm import XmppMITM
 from core.certificate_helper import get_localhost_server_ssl_context
@@ -113,22 +114,29 @@ class RiotMitmService:
 
         self._log_stream = InMemoryLogStream()
         await self._log_stream.write(json.dumps({
-            "type": "ValScanner-xmpp-logger-python",
+            "type": f"{APP_NAME}-xmpp-logger-python",
             "version": "1.0.0",
         }) + "\n")
 
-        self.config_mitm = ConfigMITM(host=self.host, http_port=self.http_port, xmpp_port=self.xmpp_port)
-        self._config_thread = threading.Thread(target=self.config_mitm.start, daemon=True)
-        self._config_thread.start()
-
-        self.xmpp_mitm = XmppMITM(
-            self.xmpp_port,
-            self.config_mitm,
-            self._log_stream,
-            server_ssl_context=server_ssl_context,
-        )
-        self.xmpp_mitm.set_presence_mode(self._presence_mode, broadcast=False)
-        await self.xmpp_mitm.start()
+        try:
+            self.config_mitm = ConfigMITM(host=self.host, http_port=self.http_port, xmpp_port=self.xmpp_port)
+            self.http_port = self.config_mitm.http_port
+            self.xmpp_mitm = XmppMITM(
+                self.xmpp_port,
+                self.config_mitm,
+                self._log_stream,
+                server_ssl_context=server_ssl_context,
+            )
+            self.xmpp_mitm.set_presence_mode(self._presence_mode, broadcast=False)
+            await self.xmpp_mitm.start()
+            self.xmpp_port = self.xmpp_mitm.port
+            self.config_mitm.xmpp_port = self.xmpp_port
+            # Publish config only after the final chat port is known and listening.
+            self._config_thread = threading.Thread(target=self.config_mitm.start, daemon=True)
+            self._config_thread.start()
+        except BaseException:
+            await self.stop()
+            raise
         self._started = True
 
     async def stop(self):
@@ -137,8 +145,14 @@ class RiotMitmService:
             self.xmpp_mitm = None
 
         if self.config_mitm is not None:
-            self.config_mitm.stop()
+            if self._config_thread is not None and self._config_thread.is_alive():
+                await asyncio.to_thread(self.config_mitm.stop)
+                await asyncio.to_thread(self._config_thread.join)
+            else:
+                # shutdown() would block if serve_forever() never started.
+                self.config_mitm.server.server_close()
             self.config_mitm = None
+        self._config_thread = None
 
         if self._log_stream is not None:
             await self._log_stream.flush()

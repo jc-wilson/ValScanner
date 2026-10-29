@@ -3,6 +3,7 @@ from requests import session
 from core.http_session import SharedSession
 from core.detection import MatchDetectionHandler
 from core.valorant_uuid import UUIDHandler
+from core.weapons import WEAPON_ORDER, weapon_name
 import asyncio
 
 class OwnedSkins:
@@ -45,6 +46,7 @@ class OwnedSkins:
                 "Guardian": [],
                 "Phantom": [],
                 "Vandal": [],
+                "Warden": [],
 
                 "Marshal": [],
                 "Outlaw": [],
@@ -73,6 +75,7 @@ class OwnedSkins:
                 "Guardian": [],
                 "Phantom": [],
                 "Vandal": [],
+                "Warden": [],
 
                 "Marshal": [],
                 "Outlaw": [],
@@ -156,10 +159,14 @@ class OwnedSkins:
             self.owned_buddies_uuids.append(buddy["ItemID"])
 
         for skin in self.owned_skins_uuids:
-            self.owned_items["Skins"][uuid_handler.uuid_to_weapon(skin)].append(skin)
+            name = uuid_handler.uuid_to_weapon(skin)
+            if name:
+                self.owned_items["Skins"].setdefault(name, []).append(skin)
 
         for skin in self.owned_skins_variants_uuids:
-            self.owned_items["Variants"][uuid_handler.uuid_to_weapon(skin)].append(skin)
+            name = uuid_handler.uuid_to_weapon(skin)
+            if name:
+                self.owned_items["Variants"].setdefault(name, []).append(skin)
 
         self.owned_items["Buddies"] = self.owned_buddies_uuids
 
@@ -181,84 +188,11 @@ class OwnedSkins:
     async def sort_current_loadout(self):
         await self.get_current_loadout()
 
-        uuid_handler = UUIDHandler()
-        uuid_handler.skin_uuid_function()
-        await uuid_handler.buddy_uuid_function()
-
-        for skin in self.current_loadout_json["Guns"]:
-            self.current_loadout_skins.append(skin["ChromaID"])
-            try:
-                self.current_loadout_buddies.append(skin["CharmLevelID"])
-            except KeyError:
-                self.current_loadout_buddies.append(None)
-
-        def get_skin(index):
-            try:
-                return self.current_loadout_skins[index]
-            except (IndexError, KeyError):
-                return None
-
-        def get_buddy(index):
-            try:
-                return self.current_loadout_buddies[index]
-            except (IndexError, KeyError):
-                return None
-
-        return {
-            "Skins": {
-                "Classic": get_skin(8),
-                "Bandit": get_skin(19),
-                "Shorty": get_skin(11),
-                "Frenzy": get_skin(7),
-                "Ghost": get_skin(9),
-                "Sheriff": get_skin(10),
-
-                "Stinger": get_skin(16),
-                "Spectre": get_skin(15),
-
-                "Bucky": get_skin(6),
-                "Judge": get_skin(5),
-
-                "Bulldog": get_skin(3),
-                "Guardian": get_skin(13),
-                "Phantom": get_skin(4),
-                "Vandal": get_skin(2),
-
-                "Marshal": get_skin(14),
-                "Outlaw": get_skin(18),
-                "Operator": get_skin(12),
-
-                "Ares": get_skin(1),
-                "Odin": get_skin(0),
-
-                "Knife": get_skin(17)
-            },
-            "Buddies": {
-                "Classic": get_buddy(8),
-                "Bandit": get_buddy(19),
-                "Shorty": get_buddy(11),
-                "Frenzy": get_buddy(7),
-                "Ghost": get_buddy(9),
-                "Sheriff": get_buddy(10),
-
-                "Stinger": get_buddy(16),
-                "Spectre": get_buddy(15),
-
-                "Bucky": get_buddy(6),
-                "Judge": get_buddy(5),
-
-                "Bulldog": get_buddy(3),
-                "Guardian": get_buddy(13),
-                "Phantom": get_buddy(4),
-                "Vandal": get_buddy(2),
-
-                "Marshal": get_buddy(14),
-                "Outlaw": get_buddy(18),
-                "Operator": get_buddy(12),
-
-                "Ares": get_buddy(1),
-                "Odin": get_buddy(0),
-
-                "Knife": get_skin(17)
-            }
-        }
+        skins = {name: None for name in WEAPON_ORDER}
+        buddies = {name: None for name in WEAPON_ORDER}
+        for gun in (self.current_loadout_json or {}).get("Guns", []):
+            name = weapon_name(gun.get("ID"))
+            if name:
+                skins[name] = gun.get("ChromaID") or gun.get("SkinID")
+                buddies[name] = gun.get("CharmLevelID")
+        return {"Skins": skins, "Buddies": buddies}

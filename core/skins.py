@@ -1,6 +1,7 @@
 import aiohttp
 import asyncio
 from core.valorant_uuid import UUIDHandler
+from core.weapons import WEAPON_ORDER, weapon_name
 
 
 class SkinHandler:
@@ -32,36 +33,29 @@ class SkinHandler:
             pass
 
     def convert_skins(self, puuid):
-        skin_uuids = []
-        buddy_uuids = []
+        skins = {}
+        buddies = {}
+        items = {}
         if self.skins:
-            for player in self.skins["Loadouts"]:
-                if player["Loadout"]["Subject"] == puuid:
-                    for weapons in player["Loadout"]["Items"]:
-                        skin_uuids.append(
-                            player["Loadout"]["Items"][weapons]["Sockets"]["3ad1b2b2-acdb-4524-852f-954a76ddae0a"][
-                                "Item"]["ID"])
-                        try:
-                            buddy_uuids.append(
-                                player["Loadout"]["Items"][weapons]["Sockets"]["dd3bf334-87f3-40bd-b043-682a57a8dc3a"][
-                                    "Item"]["ID"])
-                        except KeyError:
-                            buddy_uuids.append("")
-
+            for player in self.skins.get("Loadouts", []):
+                loadout = player.get("Loadout", {})
+                if loadout.get("Subject") == puuid:
+                    items = loadout.get("Items", {})
+                    break
         elif self.skins_pre:
-            for player in self.skins_pre["Loadouts"]:
-                if player["Subject"] == puuid:
-                    for weapons in player["Items"]:
-                        skin_uuids.append(
-                            player["Items"][weapons]["Sockets"]["3ad1b2b2-acdb-4524-852f-954a76ddae0a"]["Item"]["ID"])
-                        try:
-                            buddy_uuids.append(
-                                player["Items"][weapons]["Sockets"]["dd3bf334-87f3-40bd-b043-682a57a8dc3a"]["Item"]["ID"])
-                        except KeyError:
-                            buddy_uuids.append("")
-
-        self.converted_skins[puuid] = skin_uuids
-        self.converted_buddies[puuid] = buddy_uuids
+            for player in self.skins_pre.get("Loadouts", []):
+                if player.get("Subject") == puuid:
+                    items = player.get("Items", {})
+                    break
+        for weapon_id, item in items.items():
+            name = weapon_name(weapon_id)
+            if not name:
+                continue
+            sockets = item.get("Sockets", {})
+            skins[name] = sockets.get("3ad1b2b2-acdb-4524-852f-954a76ddae0a", {}).get("Item", {}).get("ID")
+            buddies[name] = sockets.get("dd3bf334-87f3-40bd-b043-682a57a8dc3a", {}).get("Item", {}).get("ID")
+        self.converted_skins[puuid] = skins
+        self.converted_buddies[puuid] = buddies
 
     async def assign_skins(self, puuid, match_uuid, match_id_header, region, shard, session):
         async with self._lock:
@@ -70,44 +64,7 @@ class SkinHandler:
 
         self.convert_skins(puuid)
 
-        # Helper to safely get index or return default skin UUID if missing
-        def get_skin(index):
-            try:
-                return self.converted_skins[puuid][index]
-            except (IndexError, KeyError):
-                return None
-
-        def get_buddy(index):
-            try:
-                return self.converted_buddies[puuid][index]
-            except (IndexError, KeyError):
-                return None
-
         return {
-            "Classic": [get_skin(1), get_buddy(1)],
-            "Bandit": [get_skin(3), get_buddy(3)],
-            "Shorty": [get_skin(4), get_buddy(4)],
-            "Frenzy": [get_skin(5), get_buddy(5)],
-            "Ghost": [get_skin(0), get_buddy(0)],
-            "Sheriff": [get_skin(16), get_buddy(16)],
-
-            "Stinger": [get_skin(19), get_buddy(19)],
-            "Spectre": [get_skin(6), get_buddy(6)],
-
-            "Bucky": [get_skin(11), get_buddy(11)],
-            "Judge": [get_skin(17), get_buddy(17)],
-
-            "Bulldog": [get_skin(14), get_buddy(14)],
-            "Guardian": [get_skin(7), get_buddy(7)],
-            "Phantom": [get_skin(18), get_buddy(18)],
-            "Vandal": [get_skin(12), get_buddy(12)],
-
-            "Marshal": [get_skin(15), get_buddy(15)],
-            "Outlaw": [get_skin(9), get_buddy(9)],
-            "Operator": [get_skin(13), get_buddy(13)],
-
-            "Ares": [get_skin(8), get_buddy(8)],
-            "Odin": [get_skin(10), get_buddy(10)],
-
-            "Knife": [get_skin(2), get_buddy(2)]
+            name: [self.converted_skins[puuid].get(name), self.converted_buddies[puuid].get(name)]
+            for name in WEAPON_ORDER
         }

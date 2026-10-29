@@ -5,6 +5,7 @@ import json
 from datetime import datetime
 import time
 from core.http_session import SharedSession
+from core.agent_selection import HUSH_UUID
 
 
 def get_external_path(relative_path):
@@ -51,6 +52,14 @@ class UUIDHandler:
 
             with open(self.agent_uuids_path) as a:
                 self.agent_uuids = json.load(a)
+
+        # Older on-disk metadata must still recognise newly released Hush.
+        if not any(agent.get("uuid") == HUSH_UUID for agent in self.agent_uuids["data"]):
+            self.agent_uuids["data"].append({
+                "uuid": HUSH_UUID, "displayName": "Hush", "isPlayableCharacter": True,
+                "role": {"displayName": "Duelist"},
+                "displayIcon": f"https://media.valorant-api.com/agents/{HUSH_UUID}/displayicon.png",
+            })
 
     def agent_converter(self, uuid):
         result = []
@@ -140,11 +149,13 @@ class UUIDHandler:
 
     def uuid_to_weapon(self, uuid):
         name = self.skin_converter(uuid)
+        if not name:
+            return None
         weapons = [
             "Classic", "Bandit", "Shorty", "Frenzy", "Ghost", "Sheriff",
             "Stinger", "Spectre",
             "Bucky", "Judge",
-            "Bulldog", "Guardian", "Phantom", "Vandal",
+            "Bulldog", "Guardian", "Phantom", "Vandal", "Warden",
             "Marshal", "Outlaw", "Operator",
             "Ares", "Odin",
             "Knife",

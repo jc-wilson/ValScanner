@@ -2,29 +2,27 @@ import aiohttp
 from core.detection import MatchDetectionHandler
 from core.valorant_uuid import UUIDHandler
 from core.http_session import SharedSession
+from core.agent_selection import AGENT_NAMES, SELECTION_TOKENS, ROLE_AGENTS
 
 class OwnedAgents:
     def __init__(self):
-        self.agents = [
-            "Astra", "Breach", "Brimstone", "Chamber", "Clove", "Cypher",
-            "Deadlock", "Fade", "Gekko", "Harbor", "Iso", "Jett", "KAY/O",
-            "Killjoy", "Miks", "Neon", "Omen", "Phoenix", "Raze", "Reyna", "Sage",
-            "Skye", "Sova", "Tejo", "Veto", "Viper", "Vyse", "Waylay", "Yoru",
-            "Random", "Duelist", "Initiator", "Controller", "Sentinel"
-        ]
+        # Hush occupies the portrait slot previously used by Random.
+        self.agents = [name for name in AGENT_NAMES if name != "Hush"] + ["Hush"] + SELECTION_TOKENS
         self.owned_agents = None
         self.all_agents = ["Brimstone", "Jett", "Phoenix", "Sage", "Sova"]
         self.combo = None
 
-        self.duelists = ["Iso", "Jett", "Neon", "Phoenix", "Raze", "Reyna", "Waylay", "Yoru"]
-        self.initiators = ["Breach", "Fade", "Gekko", "KAY/O", "Skye", "Sova", "Tejo"]
-        self.controllers = ["Astra", "Brimstone", "Clove", "Harbor", "Miks", "Omen", "Viper"]
-        self.sentinels = ["Chamber", "Cypher", "Deadlock", "Killjoy", "Sage", "Veto", "Vyse"]
+        self.duelists = ROLE_AGENTS["Duelist"]
+        self.initiators = ROLE_AGENTS["Initiator"]
+        self.controllers = ROLE_AGENTS["Controller"]
+        self.sentinels = ROLE_AGENTS["Sentinel"]
+        self.refresh_pools()
 
-        self.owned_duelists = []
-        self.owned_initiators = []
-        self.owned_controllers = []
-        self.owned_sentinels = []
+    def refresh_pools(self):
+        self.all_agents = sorted({name for name in self.all_agents if isinstance(name, str) and name in AGENT_NAMES})
+        self.combo = self.all_agents + SELECTION_TOKENS
+        for role, names in ROLE_AGENTS.items():
+            setattr(self, "owned_" + role.lower() + "s", [name for name in names if name in self.all_agents])
 
     async def owned_agents_func(self):
         uuid_handler = UUIDHandler()
@@ -39,9 +37,7 @@ class OwnedAgents:
             or not handler.shard
             or str(handler.shard).lower() == "none"
         ):
-            self.all_agents.sort()
-            self.combo = self.all_agents.copy()
-            self.combo.extend(["Random", "Duelist", "Initiator", "Controller", "Sentinel"])
+            self.refresh_pools()
             return False
 
         session = SharedSession.get()
@@ -51,28 +47,10 @@ class OwnedAgents:
         ) as response:
             self.owned_agents = await response.json(content_type=None)
 
+        self.all_agents = ["Brimstone", "Jett", "Phoenix", "Sage", "Sova"]
         for agent in self.owned_agents["Entitlements"]:
-            self.all_agents.append(uuid_handler.agent_converter(agent["ItemID"]))
-
-        self.all_agents.sort()
-
-        self.combo = self.all_agents.copy()
-        self.combo.extend(["Random", "Duelist", "Initiator", "Controller", "Sentinel"])
-
-        for agent in self.duelists:
-            if agent in self.all_agents:
-                self.owned_duelists.append(agent)
-
-        for agent in self.initiators:
-            if agent in self.all_agents:
-                self.owned_initiators.append(agent)
-
-        for agent in self.controllers:
-            if agent in self.all_agents:
-                self.owned_controllers.append(agent)
-
-        for agent in self.sentinels:
-            if agent in self.all_agents:
-                self.owned_sentinels.append(agent)
-
+            name = uuid_handler.agent_converter(agent["ItemID"])
+            if isinstance(name, str) and name in AGENT_NAMES:
+                self.all_agents.append(name)
+        self.refresh_pools()
         return True

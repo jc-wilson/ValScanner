@@ -1,7 +1,8 @@
 import asyncio
 import random
 
-from core.app_state import load_map_agent_selection
+from core.app_state import load_map_agent_selection, load_app_state
+from core.agent_selection import random_agent_pool
 from core.http_session import SharedSession
 from core.owned_agents import OwnedAgents
 from core.valorant_uuid import UUIDHandler
@@ -43,7 +44,9 @@ async def resolve_selection_to_agent_uuid(selection_value):
         await owned_agent_handler.owned_agents_func()
 
         if selection_value == "Random":
-            pool = owned_agent_handler.all_agents
+            state = load_app_state()
+            selections = state["custom_random_selections"] if state["custom_random_enabled"] else ["Random"]
+            pool = random_agent_pool(selections, owned_agent_handler.all_agents)
         elif selection_value == "Duelist":
             pool = owned_agent_handler.owned_duelists
         elif selection_value == "Initiator":

@@ -1,4 +1,5 @@
 import asyncio
+import errno
 import base64
 import json
 import re
@@ -7,6 +8,7 @@ from datetime import datetime
 from xml.etree import ElementTree
 
 from core.party_tracker import PartyTracker
+from core.app_identity import APP_NAME, CONTACT_ID
 from core.presence_mode import PRESENCE_MODE_OFFLINE, normalize_presence_mode
 
 """This class creates connections to the previously in ConfigMITM modified chat-servers and logs the communication between that
@@ -20,10 +22,10 @@ ROSTER_QUERY_RE = re.compile(
     r"(<query\b[^>]*\bxmlns\s*=\s*(['\"])jabber:iq:riotgames:roster\2[^>]*>)",
     flags=re.IGNORECASE,
 )
-FAKE_PLAYER_PUUID = "41c322a1-b328-495b-a004-5ccd3e45eae8"
+FAKE_PLAYER_PUUID = CONTACT_ID
 DEFAULT_FAKE_PLAYER_DOMAIN = "eu1.pvp.net"
 FAKE_PLAYER_JID = f"{FAKE_PLAYER_PUUID}@{DEFAULT_FAKE_PLAYER_DOMAIN}"
-FAKE_PLAYER_RESOURCE = "RC-ValScanner"
+FAKE_PLAYER_RESOURCE = f"RC-{APP_NAME}"
 
 
 def _find_tag_end(text: str, start_index: int = 0):
@@ -183,11 +185,11 @@ def _build_fake_player_jid(domain: str | None = None):
 def _build_fake_player_roster_item(jid: str | None = None):
     fake_player_jid = jid or FAKE_PLAYER_JID
     return (
-        f"<item jid='{fake_player_jid}' name='ValScanner Offline' subscription='both' puuid='{FAKE_PLAYER_PUUID}'>"
-        "<group priority='9999'>ValScanner</group>"
+        f"<item jid='{fake_player_jid}' name='{APP_NAME} Offline' subscription='both' puuid='{FAKE_PLAYER_PUUID}'>"
+        f"<group priority='9999'>{APP_NAME}</group>"
         "<state>online</state>"
-        "<id name='ValScanner Offline' tagline='...'/>"
-        "<platforms><riot name='ValScanner Offline' tagline='...'/></platforms>"
+        f"<id name='{APP_NAME} Offline' tagline='...'/>"
+        f"<platforms><riot name='{APP_NAME} Offline' tagline='...'/></platforms>"
         "</item>"
     )
 
@@ -303,7 +305,7 @@ def _build_fake_roster_push(remove: bool = False, jid: str | None = None):
         _build_fake_player_roster_item(fake_player_jid)
     )
     return (
-        "<iq type='set' id='valscanner-roster-sync'>"
+        f"<iq type='set' id='{APP_NAME}-roster-sync'>"
         "<query xmlns='jabber:iq:riotgames:roster'>"
         f"{roster_item}"
         "</query>"
@@ -330,8 +332,8 @@ def _build_fake_player_presence(version: str | None = None, available: bool = Tr
         "partyOwnerMatchScoreEnemyTeam": 0,
         "premierPresenceData": {
             "rosterId": "",
-            "rosterName": "ValScanner is active. Ignore any version mismatch warnings.",
-            "rosterTag": "ValScanner Active",
+            "rosterName": f"{APP_NAME} is active. Ignore any version mismatch warnings.",
+            "rosterTag": f"{APP_NAME} Active",
             "rosterType": "VCT",
             "division": 0,
             "score": 0,
@@ -359,7 +361,7 @@ def _build_fake_player_presence(version: str | None = None, available: bool = Tr
             "isPartyCrossPlayEnabled": False,
             "isPlayerCrossPlayEnabled": False,
             "partyPrecisePlatformTypes": 1,
-            "customGameName": "ValScanner Active",
+            "customGameName": f"{APP_NAME} Active",
             "customGameTeam": "",
             "maxPartySize": 5,
             "tournamentId": "",
@@ -380,7 +382,7 @@ def _build_fake_player_presence(version: str | None = None, available: bool = Tr
     }).encode("utf-8")).decode("utf-8")
 
     return (
-        f"<presence from='{fake_player_jid}/{FAKE_PLAYER_RESOURCE}' id='valscanner-fake-presence'>"
+        f"<presence from='{fake_player_jid}/{FAKE_PLAYER_RESOURCE}' id='{APP_NAME}-fake-presence'>"
         "<games>"
         f"<keystone><st>chat</st><s.t>{unix_time_milliseconds}</s.t><s.p>keystone</s.p><pty/></keystone>"
         f"<league_of_legends><st>chat</st><s.t>{unix_time_milliseconds}</s.t><s.p>league_of_legends</s.p><s.c>live</s.c><p>{{&quot;pty&quot;:true}}</p></league_of_legends>"
@@ -417,15 +419,20 @@ class XmppMITM:
         self._valorant_version = None
 
     async def start(self) -> None:
-        """Starts the XMPP server to listen to all hosts on port 35478 -> None"""
+        """Bind the preferred port, or let the OS choose a free port if occupied."""
 
         print("Starting XMPP server...")
-        self.server = await asyncio.start_server(
-            self.handle_client,
-            "0.0.0.0",
-            self.port,
-            ssl=self.server_ssl_context,
-        )
+        try:
+            self.server = await asyncio.start_server(
+                self.handle_client, "0.0.0.0", self.port, ssl=self.server_ssl_context,
+            )
+        except OSError as exc:
+            if exc.errno not in (errno.EADDRINUSE, 10048, 10013) and getattr(exc, "winerror", None) not in (10048, 10013):
+                raise
+            self.server = await asyncio.start_server(
+                self.handle_client, "0.0.0.0", 0, ssl=self.server_ssl_context,
+            )
+        self.port = self.server.sockets[0].getsockname()[1]
         print("Started XMPP Server!")
         self._shutting_down = False
         self._serve_task = asyncio.create_task(self.server.serve_forever())

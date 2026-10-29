@@ -1,0 +1,4 @@
+-r requirements.txt
+cryptography==48.0.0
+pyinstaller==6.19.0
+pyinstaller-hooks-contrib==2026.3

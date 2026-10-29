@@ -1,3 +1,5 @@
+import copy
+from core.weapons import weapon_name, preset_to_weapon_skins
 from core.http_session import SharedSession
 from core.detection import MatchDetectionHandler
 
@@ -35,21 +37,20 @@ class PlayerLoadout:
     async def modify_loadout(self, desired_skins, owned_levels, uuid_handler):
         await self.get_loadout()
 
-        owned_levels = owned_levels["Skins"]
-        owned_levels = [level for sublist in owned_levels.values() for level in sublist]
-
-        for skin in desired_skins:
-            self.IDs.append(uuid_handler.loadout_uuid_function(skin, owned_levels))
-
-        self.modified_loadout = self.current_loadout.copy()
-
-        self.modified_loadout.pop("Subject")
-        self.modified_loadout.pop("Version")
-
-        for index, gun in enumerate(self.modified_loadout["Guns"]):
-            gun["SkinID"] = self.IDs[index][0]
-            gun["SkinLevelID"] = self.IDs[index][1]
-            gun["ChromaID"] = self.IDs[index][2]
+        if not self.current_loadout:
+            return
+        owned_levels = [level for levels in owned_levels["Skins"].values() for level in levels]
+        selections = preset_to_weapon_skins(desired_skins, uuid_handler)
+        self.modified_loadout = copy.deepcopy(self.current_loadout)
+        self.modified_loadout.pop("Subject", None)
+        self.modified_loadout.pop("Version", None)
+        for gun in self.modified_loadout["Guns"]:
+            selected = selections.get(weapon_name(gun.get("ID")))
+            if not selected:
+                continue
+            skin_id, level_id, chroma_id = uuid_handler.loadout_uuid_function(selected, owned_levels)
+            if skin_id and level_id and chroma_id:
+                gun.update(SkinID=skin_id, SkinLevelID=level_id, ChromaID=chroma_id)
 
         await self.put_loadout()
 

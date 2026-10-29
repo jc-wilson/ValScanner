@@ -205,7 +205,7 @@ class PartyTracker:
             metadata = self._get_player_metadata_by_puuid(puuid)
             player_metadata[id(player)] = metadata
 
-            if metadata:
+            if metadata and not player.get("xmpp_name_resolved"):
                 game_name = str(metadata.get("game_name", "") or "").strip()
                 game_tag = str(metadata.get("game_tag", "") or "").strip()
                 if game_name and game_tag:
