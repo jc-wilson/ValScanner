@@ -163,7 +163,10 @@ class PartyTracker:
                 break
 
             stanza_type, end_index = min(candidates, key=lambda item: item[1])
-            stanza = buffer[:end_index]
+            # Messages and self-closing stanzas may precede this stanza. Do
+            # not let their <id> or <item> fields supply this player's name.
+            starts = list(re.finditer(rf"<{stanza_type}\b[^>]*(?<!/)>", buffer[:end_index]))
+            stanza = buffer[starts[-1].start():end_index] if starts else ""
             buffer = buffer[end_index:]
             if stanza_type == "presence" and self._process_presence_stanza(stanza):
                 updated = True
@@ -421,12 +424,7 @@ class PartyTracker:
 
     def _process_presence_roster_items(self, stanza: str, payload, party_room_id="", pid="") -> bool:
         updated = False
-        for item_match in re.finditer(r"<item\b([^>]*)>(.*?)</item>", stanza, flags=re.IGNORECASE | re.DOTALL):
-            attrs = self._parse_xml_attrs(item_match.group(1))
-            friend = self._normalize_roster_item(attrs, item_match.group(2))
-            if not friend:
-                continue
-
+        for friend in self._roster_items(stanza):
             if self._store_known_friend(friend):
                 updated = True
 
@@ -452,24 +450,22 @@ class PartyTracker:
             return False
 
         updated = False
-        consumed_spans = []
-        for item_match in re.finditer(r"<item\b([^>]*)>(.*?)</item>", stanza, flags=re.IGNORECASE | re.DOTALL):
-            consumed_spans.append(item_match.span())
-            attrs = self._parse_xml_attrs(item_match.group(1))
-            friend = self._normalize_roster_item(attrs, item_match.group(2))
-            if friend and self._store_known_friend(friend):
-                updated = True
-
-        for item_match in re.finditer(r"<item\b([^>]*)/>", stanza, flags=re.IGNORECASE):
-            span = item_match.span()
-            if any(start <= span[0] and span[1] <= end for start, end in consumed_spans):
-                continue
-            attrs = self._parse_xml_attrs(item_match.group(1))
-            friend = self._normalize_roster_item(attrs, "")
-            if friend and self._store_known_friend(friend):
+        for friend in self._roster_items(stanza):
+            if self._store_known_friend(friend):
                 updated = True
 
         return updated
+
+    def _roster_items(self, stanza: str):
+        # Match self-closing items first, so an item's identity cannot be
+        # taken from the body of the next paired item.
+        for match in re.finditer(
+            r"<item\b([^>]*?)(?:/\s*>|>(.*?)</item>)",
+            stanza, flags=re.IGNORECASE | re.DOTALL,
+        ):
+            friend = self._normalize_roster_item(self._parse_xml_attrs(match.group(1)), match.group(2) or "")
+            if friend:
+                yield friend
 
     def _normalize_presence_entry(self, entry):
         if not isinstance(entry, dict):

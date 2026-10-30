@@ -360,6 +360,21 @@ class PregameEnemyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(self.rank.frontend_data), set(self.allies))
         self.assertTrue(all(puuid not in self.rank.player_teams for puuid in self.enemies))
 
+    async def test_requeue_cannot_assign_previous_opponents_name_to_self(self):
+        tracker = self.rank.party_tracker
+        tracker.feed_chunk(1, """<iq><query xmlns='jabber:iq:riotgames:roster'>
+            <item jid='ally-1@eu.pvp.net' name='Me' tagline='SELF'/>
+            <item jid='enemy-1@eu.pvp.net'><id name='PreviousEnemy' tagline='OLD'/></item>
+            </query></iq>""")
+        await self.refresh()
+        self.assertEqual(self.rank.frontend_data["ally-1"]["name"], "Me#SELF")
+        self.assertEqual(self.rank.frontend_data["enemy-1"]["name"], "PreviousEnemy#OLD")
+        self.match_id = "next-match"
+        self.set_loadout_players(self.allies)
+        await self.refresh()
+        self.assertEqual(self.rank.frontend_data["ally-1"]["name"], "Me#SELF")
+        self.assertNotIn("enemy-1", self.rank.frontend_data)
+
     async def test_automatic_match_detection_uses_same_pregame_path(self):
         self.assertTrue(await self.rank.valo_stats())
         self.assert_two_teams()

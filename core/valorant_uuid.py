@@ -2,6 +2,7 @@ import os
 import sys
 import requests
 import json
+import re
 from datetime import datetime
 import time
 from core.http_session import SharedSession
@@ -229,14 +230,15 @@ class UUIDHandler:
             result = result.replace("EPISODE", "e")
             result = result.replace("ACT", "a")
             result = result.replace("//", "")
-            result = result + " "
-            for num in self.rom_to_int:
-                if result.find(f" {num} ") > -1:
-                    result = result.replace(num, self.rom_to_int[num])
+            # Convert whole Roman-numeral tokens only: replacing every "V"
+            # for ACT V also corrupts the year prefix in "V26".
+            result = re.sub(
+                r"\b(?:VI|IV|III|II|V|I)\b",
+                lambda match: self.rom_to_int[match.group(0)],
+                result,
+            )
 
         result = result.replace(" ", "")
-        if result == "525a5":
-            result = "v25a5"
 
         return result
 
